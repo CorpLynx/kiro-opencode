@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { describe, expect, it, vi } from "vitest"
 import { apiRegion, decodeRefresh, encodeRefresh, fromStored, isExpired, toStored, type KiroCredentials } from "../src/auth/credentials.js"
-import { importFromCli, importFromIde } from "../src/auth/import.js"
+import { cliDbCandidates, importFromCli, importFromIde } from "../src/auth/import.js"
 import { TokenManager } from "../src/auth/manager.js"
 import { KiroAuthError, pollDeviceToken, refreshCredentials, startDeviceAuthorization } from "../src/auth/oidc.js"
 
@@ -131,6 +131,15 @@ describe("importers", () => {
     expect(await importFromIde({ home })).toBeUndefined() // registration file missing
     writeFileSync(join(dir, "abc.json"), JSON.stringify({ clientId: "cid", clientSecret: "sec" }))
     expect(await importFromIde({ home })).toMatchObject({ authMethod: "idc", clientId: "cid", clientSecret: "sec", region: "us-east-1", oidcRegion: "eu-west-1" })
+  })
+
+  it("knows where kiro-cli keeps its store on each OS", () => {
+    expect(cliDbCandidates("/h", "linux", {})).toEqual(["/h/.local/share/kiro-cli/data.sqlite3"])
+    expect(cliDbCandidates("/h", "linux", { XDG_DATA_HOME: "/x" })[0]).toBe("/x/kiro-cli/data.sqlite3")
+    expect(cliDbCandidates("/h", "darwin", {})).toEqual(["/h/Library/Application Support/kiro-cli/data.sqlite3"])
+    const win = cliDbCandidates("C:/Users/me", "win32", { LOCALAPPDATA: "C:/Users/me/AppData/Local" })
+    expect(win[0]).toBe("C:/Users/me/AppData/Local/kiro-cli/data.sqlite3")
+    expect(win[1]).toBe("C:/Users/me/AppData/Roaming/kiro-cli/data.sqlite3")
   })
 
   it("reads a kiro-cli SQLite session and its selected profile", async () => {

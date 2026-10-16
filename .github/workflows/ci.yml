@@ -14,10 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm install
+      - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run pack:check
 
   e2e:
     runs-on: ubuntu-latest
@@ -26,7 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm ci
       - run: npm install -g opencode-ai@1.19.3
       - run: sudo apt-get install -y tmux # for the TUI tracker checks
       - run: OPENCODE_BIN=$(command -v opencode) npm run test:e2e

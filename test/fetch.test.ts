@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { toStored, type KiroCredentials } from "../src/auth/credentials.js"
 import { TokenManager } from "../src/auth/manager.js"
 import { createKiroFetch } from "../src/fetch.js"
-import { concat, text } from "./helpers/eventstream.js"
+import { concat, event, exception, text } from "./helpers/eventstream.js"
 
 const creds: KiroCredentials = { accessToken: "tok1", refreshToken: "r", expiresAt: 9e12, authMethod: "social", region: "us-east-1" }
 const chat = (over: object = {}, signal?: AbortSignal) => ({
@@ -194,5 +194,51 @@ describe("createKiroFetch", () => {
     expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ sessionID: "ses_abc", modelId: "claude-sonnet-4.5" }))
     // the tag is ours: it must not leak to Kiro
     expect(JSON.stringify((transport.mock.calls[0] as any)[1].headers)).not.toContain("ses_abc")
+  })
+
+  it("retries a transient failure that arrives before any output", async () => {
+    const flaky = () => new Response(concat(exception("InternalServerException", "hiccup")) as BodyInit, { status: 200 })
+    const { kiro, transport, sleep } = harness([flaky, ok])
+    const res = await kiro(URL_, chat())
+    const out = await res.text()
+    expect(transport).toHaveBeenCalledTimes(2)
+    expect(sleep).toHaveBeenCalledTimes(1)
+    expect(out).toContain('"content":"hello"')
+    expect(out).not.toContain("hiccup")
+  })
+
+  it("does not retry once output has started, or for non-transient failures", async () => {
+    const midway = () => new Response(concat(text("partial"), exception("InternalServerException", "boom")) as BodyInit)
+    const h1 = harness([midway, ok])
+    expect(await (await h1.kiro(URL_, chat())).text()).toContain("Kiro stopped mid-response. boom.")
+    expect(h1.transport).toHaveBeenCalledTimes(1)
+
+    const invalid = () => new Response(concat(exception("ValidationException", "bad input")) as BodyInit)
+    const h2 = harness([invalid, ok])
+    expect(await (await h2.kiro(URL_, chat())).text()).toContain("Kiro rejected the request.")
+    expect(h2.transport).toHaveBeenCalledTimes(1)
+  })
+
+  it("gives up retrying stream failures after maxRetries", async () => {
+    const flaky = () => new Response(concat(exception("ThrottlingException", "slow down")) as BodyInit)
+    const { kiro, transport } = harness([flaky, flaky, flaky, flaky])
+    expect(await (await kiro(URL_, chat())).text()).toContain("ThrottlingException")
+    expect(transport).toHaveBeenCalledTimes(3) // first try + maxRetries (2)
+  })
+
+  it("answers certainly-oversized prompts locally with the overflow error", async () => {
+    let stored = { type: "oauth", ...toStored(creds) }
+    const tokens = new TokenManager({ load: async () => stored, save: async (s) => void (stored = { type: "oauth", ...s }) })
+    const transport = vi.fn(async () => ok())
+    const kiro = createKiroFetch({ tokens, fetch: transport as any, contextWindow: () => 1000 })
+    const big = await kiro(URL_, chat({ messages: [{ role: "user", content: "x".repeat(6000) }] }))
+    expect(big.status).toBe(400)
+    expect((await big.json()).error.code).toBe("context_length_exceeded")
+    expect(transport).not.toHaveBeenCalled()
+
+    // images don't count against the text budget
+    const image = { type: "image_url", image_url: { url: `data:image/png;base64,${"A".repeat(20_000)}` } }
+    const withImage = await kiro(URL_, chat({ messages: [{ role: "user", content: [{ type: "text", text: "look" }, image] }] }))
+    expect(withImage.status).toBe(200)
   })
 })

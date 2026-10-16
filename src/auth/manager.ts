@@ -10,6 +10,8 @@ export interface TokenManagerOptions {
   now?: () => number
   /** Fallback profile ARN (e.g. from KIRO_PROFILE_ARN) for sessions that don't carry one. */
   profileArn?: string
+  /** Told about every refresh attempt (diagnostics). */
+  onRefresh?: (outcome: { ok: boolean; method: string; code?: string; persisted?: boolean }) => void
 }
 
 /**
@@ -47,15 +49,24 @@ export class TokenManager {
   }
 
   private async refresh(from: string, creds: KiroCredentials): Promise<KiroCredentials> {
-    const next = await refreshCredentials(creds, { fetch: this.opts.fetch, now: this.opts.now })
+    let next: KiroCredentials
+    try {
+      next = await refreshCredentials(creds, { fetch: this.opts.fetch, now: this.opts.now })
+    } catch (err) {
+      this.opts.onRefresh?.({ ok: false, method: creds.authMethod, code: (err as KiroAuthError).code })
+      throw err
+    }
     this.latest = { from, creds: next }
+    let persisted = false
     try {
       const stored = toStored(next)
       await this.opts.save(stored)
       this.latest = { from: stored.refresh, creds: next }
+      persisted = true
     } catch {
       /* keep serving from memory; the next refresh will try to persist again */
     }
+    this.opts.onRefresh?.({ ok: true, method: creds.authMethod, persisted })
     return next
   }
 }

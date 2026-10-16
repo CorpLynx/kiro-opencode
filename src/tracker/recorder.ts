@@ -38,7 +38,9 @@ export class UsageRecorder {
 
   saveAccount(usage: KiroUsage) {
     try {
-      writeAccount(this.dir, usage, this.now())
+      // The tracker only shows plan and credits; keep the account's email out of the file.
+      const { email: _email, ...rest } = usage
+      writeAccount(this.dir, rest, this.now())
       this.lastAccount = this.now()
     } catch {
       /* best effort */

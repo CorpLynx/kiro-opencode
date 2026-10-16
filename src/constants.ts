@@ -26,8 +26,9 @@ const override = (name: string) => process.env[name]?.replace(/\/+$/, "") || und
  * `KIRO_API_ENDPOINT` (chat + usage API) and `KIRO_AUTH_ENDPOINT` (OIDC + desktop token refresh).
  */
 export const oidcEndpoint = (region: string) => override("KIRO_AUTH_ENDPOINT") ?? `https://oidc.${region}.amazonaws.com`
-export const socialRefreshEndpoint = (region: string) =>
-  `${override("KIRO_AUTH_ENDPOINT") ?? `https://prod.${region}.auth.desktop.kiro.dev`}/refreshToken`
+/** Kiro's desktop auth service (Google / GitHub sessions). */
+export const socialAuthBase = (region: string) => override("KIRO_AUTH_ENDPOINT") ?? `https://prod.${region}.auth.desktop.kiro.dev`
+export const socialRefreshEndpoint = (region: string) => `${socialAuthBase(region)}/refreshToken`
 export const apiEndpoint = (region: string) => override("KIRO_API_ENDPOINT") ?? `https://q.${region}.amazonaws.com`
 
 /**

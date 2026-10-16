@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { chunksToCompletion, chunksToSSE, ThinkingSplitter, toChatChunks } from "../src/transform/response.js"
+import { chunksToCompletion, chunksToSSE, describeStreamError, ThinkingSplitter, toChatChunks } from "../src/transform/response.js"
 import { concat, contextUsage, exception, event, text, toolUse, streamOf } from "./helpers/eventstream.js"
 
 const req = (over: object = {}) => ({
@@ -67,10 +67,24 @@ describe("toChatChunks", () => {
     expect(chunks.at(-1)!.error!.message).toMatch(/mid-message/)
   })
 
+  it("reports Kiro's own token counts when it sends them", async () => {
+    const tokens = event("metadataEvent", {
+      tokenUsage: { uncachedInputTokens: 900, cacheReadInputTokens: 4000, cacheWriteInputTokens: 100, outputTokens: 42, totalTokens: 5042 },
+    })
+    const usage = (await collect(concat(text("hi"), contextUsage(50), tokens), {}, 7)).at(-1)!.usage
+    expect(usage).toEqual({ prompt_tokens: 5000, completion_tokens: 42, total_tokens: 5042, prompt_tokens_details: { cached_tokens: 4000 } })
+
+    const plain = event("metadataEvent", { tokenUsage: { inputTokens: 1234, outputTokens: 5 } })
+    expect((await collect(concat(text("hi"), plain))).at(-1)!.usage).toEqual({ prompt_tokens: 1234, completion_tokens: 5, total_tokens: 1239 })
+  })
+
   it("reports exceptions as an error chunk", async () => {
     const chunks = await collect(concat(text("partial"), exception("ThrottlingException", "too fast")))
     const err = chunks.find((c) => c.error)!
-    expect(err.error).toMatchObject({ message: "too fast", code: "ThrottlingException" })
+    expect(err.error).toMatchObject({ code: "ThrottlingException" })
+    expect(err.error!.message).toBe(
+      "Kiro stopped mid-response. too fast. Kiro is rate-limiting requests; wait a moment and try again. (ThrottlingException)",
+    )
     expect(chunks.at(-1)).toBe(err)
   })
 })
@@ -112,6 +126,15 @@ describe("usage reporting", () => {
   })
 })
 
+describe("describeStreamError", () => {
+  it("explains known failures and still names the exception", () => {
+    expect(describeStreamError("InternalServerException", "Encountered an unexpected error")).toBe(
+      "Kiro stopped mid-response. Encountered an unexpected error. A temporary Kiro service error; try again. (InternalServerException)",
+    )
+    expect(describeStreamError("WeirdException", "WeirdException")).toBe("Kiro stopped mid-response. (WeirdException)")
+  })
+})
+
 describe("ThinkingSplitter", () => {
   it("passes text through when disabled", () => {
     expect(new ThinkingSplitter(false).push("<thinking>x</thinking>")).toEqual([{ text: "<thinking>x</thinking>" }])
@@ -130,7 +153,7 @@ describe("serialisation", () => {
     expect(raw).toContain('"content":"hi"')
 
     const err = await new Response(chunksToSSE(toChatChunks(streamOf(exception("X", "boom")), { request: req() }))).text()
-    expect(err).toContain('data: {"error":{"message":"boom"')
+    expect(err).toContain('data: {"error":{"message":"Kiro stopped mid-response. boom. (X)"}}')
   })
 
   it("aggregates a non-streaming completion", async () => {

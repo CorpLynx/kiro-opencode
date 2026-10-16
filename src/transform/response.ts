@@ -1,4 +1,13 @@
-import { EventStreamDecoder, toKiroEvent, type KiroEvent } from "./eventstream.js"
+import {
+  EventStreamDecoder,
+  frameType,
+  KNOWN_EVENT_TYPES,
+  payloadKeys,
+  toKiroEvent,
+  type EventStreamMessage,
+  type KiroEvent,
+  type TokenUsage,
+} from "./eventstream.js"
 import type { TransformedRequest } from "./request.js"
 
 export interface ChunkContext {
@@ -8,6 +17,8 @@ export interface ChunkContext {
   signal?: AbortSignal
   /** Called once per response with what Kiro reported (credits charged, context used). */
   onUsage?: (usage: TurnUsage) => void
+  /** Opt-in diagnostics: receives one summary of the stream's shape when it ends. */
+  debug?: (event: string, data: Record<string, unknown>) => void
 }
 
 export interface TurnUsage {
@@ -19,6 +30,7 @@ interface Usage {
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
+  prompt_tokens_details?: { cached_tokens: number }
 }
 
 export interface ChatChunk {
@@ -89,7 +101,11 @@ export class ThinkingSplitter {
   }
 }
 
-async function* kiroEvents(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<KiroEvent> {
+async function* kiroEvents(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+  onFrame?: (msg: EventStreamMessage) => void,
+): AsyncGenerator<KiroEvent> {
   const decoder = new EventStreamDecoder()
   const reader = body.getReader()
   let finished = false
@@ -102,6 +118,7 @@ async function* kiroEvents(body: ReadableStream<Uint8Array>, signal?: AbortSigna
         break
       }
       for (const msg of decoder.push(value)) {
+        onFrame?.(msg)
         const ev = toKiroEvent(msg)
         if (ev) yield ev
       }
@@ -116,12 +133,39 @@ async function* kiroEvents(body: ReadableStream<Uint8Array>, signal?: AbortSigna
 
 const estimateTokens = (chars: number) => Math.ceil(chars / 4)
 
+const HINTS: Record<string, string> = {
+  ThrottlingException: "Kiro is rate-limiting requests; wait a moment and try again.",
+  ServiceQuotaExceededException: "This Kiro account has used up its quota.",
+  InternalServerException: "A temporary Kiro service error; try again.",
+  ServiceUnavailableException: "Kiro is temporarily unavailable; try again.",
+  ModelStreamErrorException: "The model's stream failed; try again.",
+  ValidationException: "Kiro rejected the request.",
+  AccessDeniedException: "Kiro denied access; check the account's subscription and profile.",
+  stream_error: "The connection to Kiro dropped; try again.",
+}
+
+/** Failures worth retrying automatically, if they happen before any output reached the user. */
+export const RETRYABLE_STREAM_ERRORS = new Set([
+  "ThrottlingException",
+  "InternalServerException",
+  "ServiceUnavailableException",
+  "ModelStreamErrorException",
+  "stream_error",
+])
+
+/** A message that stands on its own, since opencode shows it verbatim. */
+export function describeStreamError(code: string, message: string): string {
+  const hint = HINTS[code]
+  const detail = message && message !== code ? message.replace(/\.?$/, ".") : ""
+  return `Kiro stopped mid-response. ${detail}${hint && hint !== detail ? ` ${hint}` : ""} (${code})`.replace(/\s+/g, " ")
+}
+
 /** Convert Kiro's event stream into OpenAI `chat.completion.chunk` objects. */
 export async function* toChatChunks(
   body: ReadableStream<Uint8Array>,
   ctx: ChunkContext,
 ): AsyncGenerator<ChatChunk> {
-  const tally: Tally = { seen: false, credits: 0 }
+  const tally: Tally = { seen: false, credits: 0, frames: {}, unknown: {}, outcome: "cancelled", started: Date.now() }
   try {
     yield* chatChunks(body, ctx, tally)
   } finally {
@@ -133,6 +177,17 @@ export async function* toChatChunks(
         /* usage tracking must never break the response */
       }
     }
+    ctx.debug?.("stream", {
+      model: ctx.request.modelId,
+      outcome: tally.outcome,
+      ms: Date.now() - tally.started,
+      frames: tally.frames,
+      ...(Object.keys(tally.unknown).length && { unknownFrames: tally.unknown }),
+      credits: tally.credits,
+      contextPct: tally.contextPct,
+      tokens: tally.tokens,
+      ...(tally.error && { error: tally.error }),
+    })
   }
 }
 
@@ -140,6 +195,14 @@ interface Tally {
   seen: boolean
   credits: number
   contextPct?: number
+  tokens?: TokenUsage
+  /** Count of every frame type received (debug). */
+  frames: Record<string, number>
+  /** Field names seen in frame types we don't handle (debug). */
+  unknown: Record<string, string[]>
+  outcome: "complete" | "error" | "cancelled"
+  error?: { code: string; message: string }
+  started: number
 }
 
 async function* chatChunks(
@@ -182,8 +245,18 @@ async function* chatChunks(
     }
   }
 
+  const onFrame = ctx.debug
+    ? (msg: EventStreamMessage) => {
+        const type = frameType(msg)
+        tally.frames[type] = (tally.frames[type] ?? 0) + 1
+        if (!KNOWN_EVENT_TYPES.has(type) && msg.headers[":message-type"] === "event" && !tally.unknown[type]) {
+          tally.unknown[type] = payloadKeys(msg)
+        }
+      }
+    : undefined
+
   try {
-    for await (const ev of kiroEvents(body, ctx.signal)) {
+    for await (const ev of kiroEvents(body, ctx.signal, onFrame)) {
       tally.seen = true
       switch (ev.type) {
         case "text":
@@ -223,27 +296,31 @@ async function* chatChunks(
           contextPct = tally.contextPct = ev.percentage
           break
         case "error":
+          tally.outcome = "error"
+          tally.error = { code: ev.code, message: ev.message }
           yield* start()
           yield {
             ...chunk({}, "error"),
-            error: { message: ev.message, type: ev.code, code: ev.code },
+            error: { message: describeStreamError(ev.code, ev.message), type: ev.code, code: ev.code },
           }
           return
         case "metering":
           tally.credits += ev.usage
           break
+        case "tokens":
+          tally.tokens = ev.usage // a later report supersedes an earlier one
+          break
       }
     }
   } catch (err) {
     if (ctx.signal?.aborted) return
+    const detail = err instanceof Error ? err.message : String(err)
+    tally.outcome = "error"
+    tally.error = { code: "stream_error", message: detail }
     yield* start()
     yield {
       ...chunk({}, "error"),
-      error: {
-        message: `Kiro stream interrupted: ${err instanceof Error ? err.message : String(err)}`,
-        type: "stream_error",
-        code: "stream_error",
-      },
+      error: { message: describeStreamError("stream_error", detail), type: "stream_error", code: "stream_error" },
     }
     return
   }
@@ -251,17 +328,32 @@ async function* chatChunks(
   yield* start()
   yield* parts(splitter.flush())
 
-  const completion = estimateTokens(outputChars)
-  const prompt =
-    contextPct != null && ctx.contextWindow
-      ? Math.max(0, Math.round((contextPct / 100) * ctx.contextWindow) - completion)
-      : estimateTokens(ctx.request.inputChars)
-
+  tally.outcome = "complete"
   yield chunk({}, toolIndex.size > 0 ? "tool_calls" : "stop")
-  yield {
-    ...chunk({}),
-    choices: [],
-    usage: { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion },
+  yield { ...chunk({}), choices: [], usage: usageFor(tally, outputChars, contextPct, ctx) }
+}
+
+/**
+ * Token usage for the response: Kiro's own counts (`metadataEvent`) when it sent them,
+ * otherwise an estimate from its context-usage percentage, otherwise from character counts.
+ */
+function usageFor(tally: Tally, outputChars: number, contextPct: number | undefined, ctx: ChunkContext): Usage {
+  const t = tally.tokens
+  const completion = t?.outputTokens ?? estimateTokens(outputChars)
+  const cached = t?.cacheReadInputTokens ?? 0
+  const prompt =
+    t?.uncachedInputTokens !== undefined
+      ? t.uncachedInputTokens + cached + (t.cacheWriteInputTokens ?? 0)
+      : t?.inputTokens !== undefined
+        ? t.inputTokens
+        : contextPct != null && ctx.contextWindow
+          ? Math.max(0, Math.round((contextPct / 100) * ctx.contextWindow) - completion)
+          : estimateTokens(ctx.request.inputChars)
+  return {
+    prompt_tokens: prompt,
+    completion_tokens: completion,
+    total_tokens: prompt + completion,
+    ...(cached > 0 && { prompt_tokens_details: { cached_tokens: cached } }),
   }
 }
 
@@ -279,8 +371,9 @@ export function chunksToSSE(chunks: AsyncGenerator<ChatChunk>, signal?: AbortSig
           controller.close()
           return
         }
-        // An error chunk is surfaced as a bare `{error}` payload, which the AI SDK turns into a thrown error.
-        controller.enqueue(enc.encode(sse(value.error ? { error: value.error } : value)))
+        // An error chunk is surfaced as a bare `{error}` payload, which the AI SDK turns into a thrown
+        // error. opencode prints that object as JSON, so it carries just the (self-explanatory) message.
+        controller.enqueue(enc.encode(sse(value.error ? { error: { message: value.error.message } } : value)))
       } catch (err) {
         controller.error(err)
       }

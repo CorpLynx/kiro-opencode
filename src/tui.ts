@@ -3,6 +3,8 @@
  *
  *  - sidebar:    "Kiro" box with a context bar, this session's credits and the account's credits left
  *  - prompt row: compact "58% · 3.21 cr" next to the model name
+ *  - a warning toast when the account's credits run low (once per allowance period)
+ *  - a "Kiro usage" command (`/kiro`) that opens the full figures in a dialog
  *
  * Built with OpenTUI's element API rather than JSX, so it needs no JSX build step; the host
  * supplies `@opentui/solid` and `solid-js` at runtime. Data comes from the files the server
@@ -10,12 +12,25 @@
  */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import { createElement, effect, insert, insertNode, setProp } from "@opentui/solid"
-import { createMemo, createRoot, createSignal, type Accessor } from "solid-js"
-import { accountLine, bar, chipText, formatCredits, formatPct, level, type Level } from "./tracker/format.js"
+import { createEffect, createMemo, createRoot, createSignal, type Accessor } from "solid-js"
+import {
+  accountLine,
+  bar,
+  chipText,
+  detailText,
+  formatCredits,
+  formatPct,
+  level,
+  lowCredit,
+  type Level,
+} from "./tracker/format.js"
 import { readAccount, readSession, usageDir } from "./tracker/store.js"
 
 const POLL_MS = 1500
 const BAR_WIDTH = 14
+/** Warn when this fraction of the allowance or less is left (plugin option `lowCredits`). */
+const DEFAULT_LOW_CREDITS = 0.1
+const WARNED_KEY = "opencode-kiro-provider.lowCreditWarned"
 
 type Node = ReturnType<typeof createElement>
 type Color = TuiPluginApi["theme"]["current"]["text"]
@@ -56,11 +71,54 @@ const tui: TuiPlugin = async (api, options) => {
     createMemo(() => (tick(), readSession(dir, sessionID)), undefined, {
       equals: (a, b) => a?.updated === b?.updated,
     })
+  const threshold =
+    typeof options?.lowCredits === "number" && options.lowCredits >= 0 ? options.lowCredits : DEFAULT_LOW_CREDITS
+
   // Shared by every view; owned by a root that lives as long as the plugin.
   const account = createRoot((dispose) => {
     api.lifecycle.onDispose(dispose)
-    return createMemo(() => (tick(), readAccount(dir)), undefined, { equals: (a, b) => a?.updated === b?.updated })
+    const snapshot = createMemo(() => (tick(), readAccount(dir)), undefined, {
+      equals: (a, b) => a?.updated === b?.updated,
+    })
+
+    // Low-credit warning: once per allowance period and level (low, then empty), across restarts.
+    createEffect(() => {
+      const low = threshold > 0 ? lowCredit(snapshot(), threshold) : undefined
+      if (!low || !api.kv.ready || api.kv.get<string>(WARNED_KEY) === low.key) return
+      api.kv.set(WARNED_KEY, low.key)
+      const resets = low.resetsAt ? ` They reset on ${low.resetsAt}.` : ""
+      api.ui.toast({
+        variant: low.empty ? "error" : "warning",
+        title: low.empty ? "Kiro credits used up" : "Kiro credits running low",
+        message: `${formatCredits(low.left)} of ${formatCredits(low.limit)} credits left on your Kiro account.${resets}`,
+        duration: 10_000,
+      })
+    })
+    return snapshot
   })
+
+  // "Kiro usage" in the command palette and as /kiro.
+  const showUsage = () => {
+    const route = api.route.current
+    const sessionID = route.name === "session" ? (route.params as { sessionID?: string } | undefined)?.sessionID : undefined
+    bump()
+    api.ui.dialog.replace(() =>
+      api.ui.DialogAlert({
+        title: "Kiro usage",
+        message: detailText(sessionID ? readSession(dir, sessionID) : undefined, readAccount(dir)),
+        onConfirm: () => api.ui.dialog.clear(),
+      }),
+    )
+  }
+  const command = {
+    title: "Kiro usage",
+    value: "kiro.usage",
+    description: "Context, credits and account quota for Kiro sessions",
+    category: "Kiro",
+    slash: { name: "kiro" },
+    onSelect: showUsage,
+  }
+  if (api.command?.register) api.lifecycle.onDispose(api.command.register(() => [command]))
 
   function sidebar(sessionID: string) {
     const usage = session(sessionID)

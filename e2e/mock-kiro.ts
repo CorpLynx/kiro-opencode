@@ -12,6 +12,7 @@ const port = Number(process.argv[2] ?? 18765)
 const log = process.argv[3] ?? "requests.jsonl"
 let devicePolls = 0
 let overflowServed = false
+let creditsUsed = Number(process.env.MOCK_CREDITS_USED ?? 42)
 
 const json = (res: ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { "content-type": "application/json" })
@@ -51,14 +52,35 @@ createServer((req, res) => {
         if (body.grantType === "refresh_token") return json(res, 200, { accessToken: "idc-refreshed", expiresIn: 3600 })
         if (devicePolls++ === 0) return json(res, 400, { error: "authorization_pending" })
         return json(res, 200, { accessToken: "device-access", refreshToken: "device-refresh", expiresIn: 3600 })
+      case "/__mock/credits": // test control: set the account's used credits
+        creditsUsed = Number(url.searchParams.get("used") ?? creditsUsed)
+        return json(res, 200, { creditsUsed })
+      case "/oauth/token": // Google / GitHub sign-in code exchange
+        if (!body.code || !body.code_verifier || !String(body.redirect_uri).startsWith("http://localhost:3128/oauth/callback")) {
+          return json(res, 400, { message: "bad exchange" })
+        }
+        return json(res, 200, { accessToken: "social-access", refreshToken: "social-refresh", expiresIn: 3600, profileArn: "arn:aws:codewhisperer:us-east-1:1:profile/SOCIAL" })
       case "/refreshToken":
         return json(res, 200, { accessToken: "social-refreshed", refreshToken: "social-rotated", expiresIn: 3600 })
       case "/getUsageLimits":
         return json(res, 200, {
           userInfo: { email: "dev@example.com" },
           subscriptionInfo: { subscriptionTitle: "KIRO PRO" },
-          usageBreakdownList: [{ displayName: "Credits", currentUsage: 42, usageLimit: 1000 }],
+          usageBreakdownList: [
+            { displayName: "Credits", currentUsage: creditsUsed, usageLimit: 1000 },
+          ],
         })
+      case "/ListAvailableModels":
+        // Two pages, so pagination is exercised.
+        return url.searchParams.get("nextToken") === "page-2"
+          ? json(res, 200, { models: [{ modelId: "claude-opus-9", modelName: "Claude Opus 9", tokenLimits: { maxInputTokens: 500000, maxOutputTokens: 64000 } }] })
+          : json(res, 200, {
+              models: [
+                { modelId: "auto", modelName: "Auto", supportedInputTypes: ["TEXT", "IMAGE"], tokenLimits: { maxInputTokens: 200000, maxOutputTokens: 32000 } },
+                { modelId: "claude-sonnet-4.5", modelName: "Claude Sonnet 4.5", supportedInputTypes: ["TEXT", "IMAGE"], tokenLimits: { maxInputTokens: 200000, maxOutputTokens: 64000 } },
+              ],
+              nextToken: "page-2",
+            })
       case "/generateAssistantResponse": {
         const cur = body.conversationState.currentMessage.userInputMessage
         const results = cur.userInputMessageContext?.toolResults

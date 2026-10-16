@@ -25,7 +25,7 @@ export function formatPct(pct: number): string {
 }
 
 export function formatCredits(n: number): string {
-  if (n >= 100) return Math.round(n).toLocaleString("en-US")
+  if (n >= 100 || Number.isInteger(n)) return Math.round(n).toLocaleString("en-US")
   return n.toFixed(2)
 }
 
@@ -49,4 +49,49 @@ export function chipText(session: SessionUsage | undefined): string {
   if (session.contextPct !== undefined) parts.push(formatPct(session.contextPct))
   parts.push(`${formatCredits(session.credits)} cr`)
   return parts.join(" · ")
+}
+
+/**
+ * Whether the account's main allowance is low enough to warn about. `key` identifies the
+ * allowance period, so a warning is shown once per period rather than on every launch.
+ */
+export function lowCredit(
+  account: AccountSnapshot | undefined,
+  threshold: number,
+): { key: string; left: number; limit: number; empty: boolean; resetsAt?: string } | undefined {
+  const b = mainBucket(account)
+  if (!b || b.limit <= 0) return undefined
+  const left = Math.max(0, b.limit - b.used)
+  if (left / b.limit > threshold) return undefined
+  return { key: `${b.name}|${b.limit}|${b.resetsAt ?? ""}|${left === 0 ? "empty" : "low"}`, left, limit: b.limit, empty: left === 0, resetsAt: b.resetsAt }
+}
+
+function ago(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000))
+  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`
+}
+
+/** Plain-text body of the "Kiro usage" dialog. */
+export function detailText(session: SessionUsage | undefined, account: AccountSnapshot | undefined, now = Date.now()): string {
+  // Rows are laid out once all labels are known, so values line up after the longest one.
+  const out: (string | [string, string])[] = []
+  const row = (label: string, value: string): [string, string] => [label, value]
+  if (session) {
+    out.push("This session")
+    if (session.contextPct !== undefined) out.push(row("Context", `${formatPct(session.contextPct)} of the model's window`))
+    out.push(row("Credits", `${formatCredits(session.credits)} over ${session.turns} ${session.turns === 1 ? "request" : "requests"}`))
+    if (session.model) out.push(row("Model", session.model))
+  } else {
+    out.push("No Kiro usage recorded for this session yet.")
+  }
+  if (account?.buckets.length) {
+    out.push("", `Account${account.plan ? ` (${account.plan})` : ""}`)
+    for (const b of account.buckets) {
+      const left = Math.max(0, b.limit - b.used)
+      out.push(row(b.name, `${formatCredits(left)} / ${formatCredits(b.limit)} left${b.resetsAt ? ` · resets ${b.resetsAt}` : ""}`))
+    }
+    out.push("", `Account figures updated ${ago(now - account.updated)}.`)
+  }
+  const width = Math.max(0, ...out.filter((r) => Array.isArray(r)).map((r) => r[0].length)) + 2
+  return out.map((r) => (Array.isArray(r) ? `  ${r[0].padEnd(width)}${r[1]}` : r)).join("\n")
 }

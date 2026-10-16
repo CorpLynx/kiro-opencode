@@ -50,10 +50,16 @@ describe("KiroPlugin", () => {
     expect(k.options).toMatchObject({ timeout: 1000, baseURL: expect.any(String) })
   })
 
-  it("offers Builder ID, Identity Center and import login methods", async () => {
+  it("offers Builder ID, Identity Center, Google, GitHub and import login methods", async () => {
     const hooks = await KiroPlugin(input().input)
     expect(hooks.auth!.provider).toBe("kiro")
-    expect(hooks.auth!.methods.map((m) => m.type)).toEqual(["oauth", "oauth", "oauth"])
+    expect(hooks.auth!.methods.map((m) => m.label)).toEqual([
+      "AWS Builder ID (browser device login)",
+      "AWS IAM Identity Center (organization login)",
+      "Google account (browser sign-in, experimental)",
+      "GitHub account (browser sign-in, experimental)",
+      "Import existing login (Kiro IDE or kiro-cli)",
+    ])
     const idc = hooks.auth!.methods[1] as any
     expect(idc.prompts.map((p: any) => p.key)).toEqual(["startUrl", "region", "profileArn"])
     expect(idc.prompts[0].validate("http://insecure")).toBeTruthy()
@@ -77,7 +83,7 @@ describe("KiroPlugin", () => {
     try {
       const { input: i, log } = input()
       const hooks = await KiroPlugin(i)
-      const res: any = await (hooks.auth!.methods[2] as any).authorize()
+      const res: any = await (hooks.auth!.methods[4] as any).authorize()
       expect(await res.callback()).toEqual({ type: "failed" })
       expect(log).toHaveBeenCalled()
     } finally {
@@ -122,5 +128,42 @@ describe("KiroPlugin", () => {
     expect(mod.id).toBe("opencode-kiro-provider")
     expect(mod.server).toBe(KiroPlugin)
     expect("tui" in mod).toBe(false) // a module may export server() or tui(), never both
+  })
+
+  it("discovers models after login and offers them from the next launch", async () => {
+    fetchSpy.mockImplementation(async (url: any) =>
+      String(url).includes("ListAvailableModels")
+        ? new Response(JSON.stringify({ models: [{ modelId: "claude-opus-9", modelName: "Claude Opus 9", tokenLimits: { maxInputTokens: 500_000 } }] }))
+        : new Response(JSON.stringify({ usageBreakdownList: [] })),
+    )
+    const hooks = await KiroPlugin(input().input)
+    const auth = { type: "oauth", ...toStored({ accessToken: "a", refreshToken: "r", expiresAt: 9e12, authMethod: "social", region: "us-east-1" }) }
+    await hooks.auth!.loader!(async () => auth as any, { models: {} } as any)
+    const { readModelCache } = await import("../src/models.js")
+    const { usageDir } = await import("../src/tracker/store.js")
+    await vi.waitFor(() => expect(readModelCache(usageDir())).toBeDefined())
+
+    const next = await KiroPlugin(input().input) // a later launch
+    const config: any = {}
+    await next.config!(config)
+    expect(Object.keys(config.provider.kiro.models)).toEqual(["claude-opus-9"])
+    expect(config.provider.kiro.models["claude-opus-9"]).toMatchObject({ name: "Claude Opus 9 (Kiro)", limit: { context: 500_000 } })
+
+    const off = await KiroPlugin(input().input, { modelDiscovery: false })
+    const config2: any = {}
+    await off.config!(config2)
+    expect(Object.keys(config2.provider.kiro.models)).toContain("claude-sonnet-5")
+  })
+
+  it("keeps thinking off for opencode's background title requests", async () => {
+    const hooks = await KiroPlugin(input().input)
+    const run = async (agent: string, providerID = "kiro") => {
+      const output = { temperature: 0, topP: 1, topK: 0, maxOutputTokens: undefined, options: { reasoningEffort: "low", other: 1 } as Record<string, any> }
+      await hooks["chat.params"]!({ agent, provider: { info: { id: providerID } } } as any, output)
+      return output.options
+    }
+    expect(await run("title")).toEqual({ other: 1 })
+    expect(await run("build")).toEqual({ reasoningEffort: "low", other: 1 }) // a user's chosen variant stands
+    expect(await run("title", "openai")).toEqual({ reasoningEffort: "low", other: 1 })
   })
 })

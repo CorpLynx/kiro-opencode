@@ -111,7 +111,49 @@ export type KiroEvent =
   | { type: "toolUse"; toolUseId: string; name?: string; input: string; stop: boolean }
   | { type: "contextUsage"; percentage: number }
   | { type: "metering"; usage: number }
+  | { type: "tokens"; usage: TokenUsage }
   | { type: "error"; code: string; message: string }
+
+/** Real token counts, from `metadataEvent.tokenUsage` (every field optional). */
+export interface TokenUsage {
+  inputTokens?: number
+  uncachedInputTokens?: number
+  cacheReadInputTokens?: number
+  cacheWriteInputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+}
+
+/** Event types we read, or knowingly ignore; anything else is worth a line in the debug log. */
+export const KNOWN_EVENT_TYPES = new Set([
+  "assistantResponseEvent",
+  "reasoningContentEvent",
+  "toolUseEvent",
+  "contextUsageEvent",
+  "meteringEvent",
+  "metadataEvent",
+  "messageMetadataEvent",
+  "followupPromptEvent",
+  "supplementaryWebLinksEvent",
+  "codeReferenceEvent",
+  "citationEvent",
+])
+
+/** `:event-type`, or the exception type for error frames. */
+export function frameType(msg: EventStreamMessage): string {
+  const t = msg.headers[":event-type"] ?? msg.headers[":exception-type"] ?? msg.headers[":message-type"]
+  return typeof t === "string" ? t : "unknown"
+}
+
+/** Top-level field names of a frame's JSON payload (never the values). */
+export function payloadKeys(msg: EventStreamMessage): string[] {
+  try {
+    const data = JSON.parse(decoder.decode(msg.payload))
+    return data && typeof data === "object" ? Object.keys(data).sort() : []
+  } catch {
+    return []
+  }
+}
 
 export function toKiroEvent(msg: EventStreamMessage): KiroEvent | undefined {
   const messageType = msg.headers[":message-type"]
@@ -146,6 +188,22 @@ export function toKiroEvent(msg: EventStreamMessage): KiroEvent | undefined {
         : undefined
     case "meteringEvent":
       return typeof data.usage === "number" ? { type: "metering", usage: data.usage } : undefined
+    case "metadataEvent": {
+      const u = data.tokenUsage
+      if (!u || typeof u !== "object") return undefined
+      const usage: TokenUsage = {}
+      for (const key of [
+        "inputTokens",
+        "uncachedInputTokens",
+        "cacheReadInputTokens",
+        "cacheWriteInputTokens",
+        "outputTokens",
+        "totalTokens",
+      ] as const) {
+        if (typeof u[key] === "number" && Number.isFinite(u[key])) usage[key] = u[key]
+      }
+      return Object.keys(usage).length ? { type: "tokens", usage } : undefined
+    }
     default:
       return undefined // followups, citations, metadata… not needed for chat completion
   }

@@ -67,14 +67,21 @@ export async function importFromIde(opts: ImportOptions = {}): Promise<KiroCrede
   return creds
 }
 
-function cliDbCandidates(home: string): string[] {
-  const xdg = process.env.XDG_DATA_HOME
-  return platform() === "darwin"
-    ? [join(home, "Library", "Application Support", "kiro-cli", "data.sqlite3")]
-    : [
-        ...(xdg ? [join(xdg, "kiro-cli", "data.sqlite3")] : []),
-        join(home, ".local", "share", "kiro-cli", "data.sqlite3"),
-      ]
+/** Where kiro-cli keeps its SQLite store: the OS's local data directory, as Rust's `dirs` crate resolves it. */
+export function cliDbCandidates(
+  home: string,
+  os: NodeJS.Platform = platform(),
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const file = (dir: string) => join(dir, "kiro-cli", "data.sqlite3")
+  if (os === "darwin") return [file(join(home, "Library", "Application Support"))]
+  if (os === "win32") {
+    return [
+      file(env.LOCALAPPDATA || join(home, "AppData", "Local")),
+      file(env.APPDATA || join(home, "AppData", "Roaming")),
+    ]
+  }
+  return [...(env.XDG_DATA_HOME ? [file(env.XDG_DATA_HOME)] : []), file(join(home, ".local", "share"))]
 }
 
 /** Read keys from one table of kiro-cli's SQLite store using whichever built-in driver the runtime has. */

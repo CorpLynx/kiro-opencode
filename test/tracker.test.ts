@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, utimesSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
-import { accountLine, bar, chipText, formatCredits, formatPct, level, mainBucket } from "../src/tracker/format.js"
+import { accountLine, bar, chipText, detailText, formatCredits, formatPct, level, lowCredit, mainBucket } from "../src/tracker/format.js"
 import { UsageRecorder } from "../src/tracker/recorder.js"
 import { pruneSessions, readAccount, readSession, recordTurn, usageDir, writeAccount } from "../src/tracker/store.js"
 
@@ -62,7 +62,7 @@ describe("formatting", () => {
 
   it("formats percentages and credits", () => {
     expect([formatPct(0), formatPct(0.3), formatPct(57.6), formatPct(140)]).toEqual(["0%", "<1%", "58%", "100%"])
-    expect([formatCredits(0), formatCredits(3.214), formatCredits(1234.6)]).toEqual(["0.00", "3.21", "1,235"])
+    expect([formatCredits(0), formatCredits(50), formatCredits(3.214), formatCredits(1234.6)]).toEqual(["0", "50", "3.21", "1,235"])
   })
 
   it("headlines the paid allowance over a free trial", () => {
@@ -81,8 +81,55 @@ describe("formatting", () => {
 
   it("builds the compact prompt-row text", () => {
     expect(chipText({ credits: 3.2, turns: 4, contextPct: 57.6, updated: 0 })).toBe("58% · 3.20 cr")
-    expect(chipText({ credits: 1, turns: 1, updated: 0 })).toBe("1.00 cr")
+    expect(chipText({ credits: 1, turns: 1, updated: 0 })).toBe("1 cr")
     expect(chipText(undefined)).toBe("")
+  })
+})
+
+describe("low-credit check", () => {
+  const acct = (used: number, limit = 1000) => ({ updated: 0, buckets: [{ name: "Credits", used, limit, resetsAt: "2026-11-01" }] })
+  it("flags the main allowance at or below the threshold, once per period and level", () => {
+    expect(lowCredit(acct(800), 0.1)).toBeUndefined()
+    expect(lowCredit(acct(900), 0.1)).toMatchObject({ left: 100, limit: 1000, empty: false })
+    const low = lowCredit(acct(950), 0.1)!
+    const empty = lowCredit(acct(1000), 0.1)!
+    expect(empty.empty).toBe(true)
+    expect(low.key).not.toBe(empty.key) // running out entirely warns again
+    expect(lowCredit(acct(950), 0.1)!.key).toBe(low.key)
+    expect(lowCredit(undefined, 0.1)).toBeUndefined()
+    expect(lowCredit(acct(0, 0), 0.1)).toBeUndefined()
+  })
+})
+
+describe("detailText", () => {
+  it("lays out session and account figures", () => {
+    const text = detailText(
+      { credits: 2.59, turns: 7, contextPct: 63, model: "claude-sonnet-5", updated: 0 },
+      {
+        updated: 1_000,
+        plan: "KIRO PRO",
+        buckets: [
+          { name: "Credits", used: 42, limit: 1000, resetsAt: "2026-11-01" },
+          { name: "Credits (free trial)", used: 10, limit: 500 },
+        ],
+      },
+      91_000,
+    )
+    expect(text).toBe(
+      [
+        "This session",
+        "  Context               63% of the model's window",
+        "  Credits               2.59 over 7 requests",
+        "  Model                 claude-sonnet-5",
+        "",
+        "Account (KIRO PRO)",
+        "  Credits               958 / 1,000 left · resets 2026-11-01",
+        "  Credits (free trial)  490 / 500 left",
+        "",
+        "Account figures updated 2m ago.",
+      ].join("\n"),
+    )
+    expect(detailText(undefined, undefined)).toBe("No Kiro usage recorded for this session yet.")
   })
 })
 
@@ -103,6 +150,16 @@ describe("UsageRecorder", () => {
     now += 61_000
     await rec.refreshAccount()
     expect(fetchAccount).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps the account email out of the snapshot", () => {
+    const dir = tmp()
+    new UsageRecorder({ dir, fetchAccount: async () => ({ buckets: [] }) }).saveAccount({
+      email: "dev@example.com",
+      plan: "PRO",
+      buckets: [],
+    })
+    expect(readAccount(dir)).toEqual({ plan: "PRO", buckets: [], updated: expect.any(Number) })
   })
 
   it("swallows failures and skips turns without a session", async () => {

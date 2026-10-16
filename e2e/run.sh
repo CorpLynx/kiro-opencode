@@ -58,7 +58,12 @@ d=$(home models 3600000)
 expect "provider registers its models" "$(oc "$d" models kiro)" "kiro/claude-sonnet-4.5"
 
 d=$(home hello 3600000); : >"$LOG"
-expect "plain chat streams text" "$(oc "$d" run 'say hello')" "Hello from mock Kiro."
+expect "plain chat streams text" "$(KIRO_DEBUG=1 oc "$d" run 'say hello')" "Hello from mock Kiro."
+for _ in $(seq 20); do [ -s "$d/state/opencode/kiro/models.json" ] && break; sleep 0.5; done
+expect "models: discovered list is offered on the next launch" "$(oc "$d" models kiro)" "kiro/claude-opus-9"
+dbg=$(cat "$d/state/opencode/kiro/debug.log" 2>/dev/null)
+expect "debug: request and stream are logged" "$dbg" '"event":"stream"'
+if grep -q "say hello\|seed-access\|Hello from mock" <<<"$dbg"; then fail "debug: log holds no prompt, reply or token" "    found content in debug.log"; else pass "debug: log holds no prompt, reply or token"; fi
 
 d=$(home bash 3600000); : >"$LOG"
 expect "tool call round trip (bash)" "$(oc "$d" run 'please use the tool to echo hi')" "Tool said: hi"
@@ -98,7 +103,7 @@ for _ in $(seq 10); do
   [ "$(curl -s -m 30 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$SERVE_PORT/provider/auth?directory=$WORK/project")" = 200 ] && break
   sleep 1
 done
-api() { curl -s -m 120 -X POST -H 'content-type: application/json' -d '{"method":0}' "http://127.0.0.1:$SERVE_PORT/provider/kiro/oauth/$1?directory=$WORK/project"; }
+api() { curl -s -m 120 -X POST -H 'content-type: application/json' -d "{\"method\":${2:-0}}" "http://127.0.0.1:$SERVE_PORT/provider/kiro/oauth/$1?directory=$WORK/project"; }
 expect "login: authorize returns the verification URL" "$(api authorize)" "verify?code=ABCD-EFGH"
 expect "login: callback succeeds after polling" "$(api callback)" "true"
 expect "login: credentials stored with client registration" "$(node -e '
@@ -106,12 +111,23 @@ expect "login: credentials stored with client registration" "$(node -e '
   import(process.argv[1]).then(({ fromStored }) => console.log(JSON.stringify(fromStored(a))))' \
   "$ROOT/dist/auth/credentials.js" "$d/data/opencode/auth.json" 2>&1)" '"clientSecret":"csec"'
 
+# Google sign-in: authorize, play the browser's redirect to localhost:3128, then complete.
+out=$(api authorize 2)
+expect "google: authorize returns the Kiro sign-in URL" "$out" "signin_methods=google"
+state=$(node -e 'const u=new URL(JSON.parse(process.argv[1]).url); console.log(u.searchParams.get("state"))' "$out" 2>/dev/null)
+( sleep 1; curl -s -m 10 -o /dev/null "http://localhost:3128/oauth/callback?login_option=google&code=abc&state=$state" ) &
+expect "google: callback succeeds after the redirect" "$(api callback 2)" "true"
+expect "google: social session stored" "$(node -e '
+  const a = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")).kiro
+  import(process.argv[1]).then(({ fromStored }) => console.log(JSON.stringify(fromStored(a))))' \
+  "$ROOT/dist/auth/credentials.js" "$d/data/opencode/auth.json" 2>&1)" '"accessToken":"social-access"'
+
 # The TUI tracker, in a real opencode TUI inside tmux. Uses the `./server` + `./tui` entries.
 if command -v tmux >/dev/null; then
   d=$(home tui 3600000)
   mkdir -p "$d/config/opencode" "$WORK/tui-project"
   echo "{ \"plugin\": [\"file://$ROOT/dist/tui.js\"] }" >"$d/config/opencode/tui.json"
-  echo "{ \"plugin\": [\"file://$ROOT/dist/server.js\"], \"model\": \"kiro/claude-sonnet-4.5\" }" >"$WORK/tui-project/opencode.json"
+  echo "{ \"plugin\": [[\"file://$ROOT/dist/server.js\", { \"accountRefreshSeconds\": 0 }]], \"model\": \"kiro/claude-sonnet-4.5\" }" >"$WORK/tui-project/opencode.json"
   tmux new-session -d -s "$TMUX_SESSION" -x 200 -y 50 -c "$WORK/tui-project" \
     "env XDG_CONFIG_HOME=$d/config XDG_DATA_HOME=$d/data XDG_CACHE_HOME=$d/cache XDG_STATE_HOME=$d/state \
      KIRO_API_ENDPOINT=$KIRO_API_ENDPOINT KIRO_AUTH_ENDPOINT=$KIRO_AUTH_ENDPOINT TERM=xterm-256color '$OC'; sleep 300"
@@ -126,6 +142,20 @@ if command -v tmux >/dev/null; then
   expect_re "tui: sidebar session credits" "$out" "[0-9.]+ credits · [0-9]+ requests?"
   expect "tui: sidebar account credits" "$out" "958 / 1,000 left on account"
   expect_re "tui: prompt-row usage" "$out" "[0-9]+% · [0-9.]+ cr"
+
+  # Low balance: the next account refresh should raise a warning toast.
+  curl -s -m 5 -o /dev/null "$KIRO_API_ENDPOINT/__mock/credits?used=950"
+  tmux send-keys -t "$TMUX_SESSION" "say hello again"; sleep 0.5; tmux send-keys -t "$TMUX_SESSION" Enter
+  waitfor "credits running low" 90
+  expect "tui: low-credit warning" "$(screen)" "50 of 1,000 credits left on your Kiro account."
+
+  # /kiro opens the usage dialog.
+  tmux send-keys -t "$TMUX_SESSION" "/kiro"; sleep 1.5; tmux send-keys -t "$TMUX_SESSION" Enter
+  waitfor "This session" 20
+  out=$(screen)
+  expect "tui: /kiro dialog" "$out" "Kiro usage"
+  expect_re "tui: /kiro dialog figures" "$out" "Credits +[0-9.]+ over [0-9]+ requests"
+  curl -s -m 5 -o /dev/null "$KIRO_API_ENDPOINT/__mock/credits?used=42"
   tmux kill-session -t "$TMUX_SESSION" 2>/dev/null
 else
   echo "  SKIP tui tracker (tmux not installed)"
