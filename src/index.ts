@@ -3,9 +3,18 @@ import { toStored, type KiroCredentials } from "./auth/credentials.js"
 import { importKiroCredentials } from "./auth/import.js"
 import { TokenManager } from "./auth/manager.js"
 import { pollDeviceToken, refreshCredentials, startDeviceAuthorization } from "./auth/oidc.js"
-import { BUILDER_ID_START_URL, DEFAULT_REGION, PROVIDER_ID, PROVIDER_NAME, VIRTUAL_BASE_URL, normalizeRegion } from "./constants.js"
+import {
+  BUILDER_ID_START_URL,
+  DEFAULT_REGION,
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  SESSION_HEADER,
+  VIRTUAL_BASE_URL,
+  normalizeRegion,
+} from "./constants.js"
 import { createKiroFetch } from "./fetch.js"
 import { DEFAULT_MODELS, contextWindowFor } from "./models.js"
+import { UsageRecorder } from "./tracker/recorder.js"
 import { fetchUsage, formatUsage } from "./usage.js"
 
 type AuthMethod = AuthHook["methods"][number]
@@ -22,6 +31,8 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
   const defaultRegion = normalizeRegion(typeof options?.region === "string" ? options.region : DEFAULT_REGION)
   const profileArn =
     (typeof options?.profileArn === "string" && options.profileArn) || process.env.KIRO_PROFILE_ARN || undefined
+  // Feeds the TUI usage tracker; `"tracker": false` in the plugin options turns it off.
+  const trackUsage = options?.tracker !== false
 
   const log = (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) => {
     client.app.log({ body: { service: PROVIDER_ID, level, message, extra } }).catch(() => {})
@@ -48,6 +59,7 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
 
   /** Set once opencode has loaded the provider with Kiro credentials. */
   let activeTokens: TokenManager | undefined
+  let recorder: UsageRecorder | undefined
 
   // Declared without the `tool()` helper so the plugin has no runtime dependency on zod.
   const usageTool: ToolDefinition = {
@@ -58,7 +70,9 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
       const title = "Kiro usage"
       if (!activeTokens) return { title, output: "Kiro is not signed in. Run `opencode auth login` and choose Kiro." }
       try {
-        return { title, output: formatUsage(await fetchUsage(await activeTokens.get(), { signal: ctx.abort })) }
+        const usage = await fetchUsage(await activeTokens.get(), { signal: ctx.abort })
+        recorder?.saveAccount(usage)
+        return { title, output: formatUsage(usage) }
       } catch (err) {
         return { title, output: `Could not fetch Kiro usage: ${err instanceof Error ? err.message : String(err)}` }
       }
@@ -129,6 +143,12 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
   const hooks: Hooks = {
     tool: { kiro_usage: usageTool },
 
+    /** Tag Kiro requests with their session so per-session usage can be tracked. */
+    async "chat.headers"(input, output) {
+      const providerID = input.provider?.info?.id ?? (input.model as { providerID?: string } | undefined)?.providerID
+      if (trackUsage && providerID === PROVIDER_ID) output.headers[SESSION_HEADER] = input.sessionID
+    },
+
     /**
      * Declare the provider so it shows up without a models.dev entry. User config wins:
      * anything set under `provider.kiro` in opencode.json is layered on top of our defaults.
@@ -170,6 +190,10 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
           },
           profileArn,
         }))
+        if (trackUsage) {
+          recorder = new UsageRecorder({ fetchAccount: async () => fetchUsage(await tokens.get()), log })
+          void recorder.refreshAccount()
+        }
         return {
           apiKey: "kiro-oauth", // placeholder: the AI SDK insists on one; our fetch supplies the real bearer token
           baseURL: VIRTUAL_BASE_URL,
@@ -177,6 +201,7 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
             tokens,
             log,
             contextWindow: (id) => contextWindowFor(id, provider.models as any),
+            onUsage: recorder && ((u) => recorder!.turn(u)),
           }),
         }
       },

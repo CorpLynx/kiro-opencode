@@ -6,7 +6,7 @@
  */
 import { appendFileSync } from "node:fs"
 import { createServer, type ServerResponse } from "node:http"
-import { concat, contextUsage, exception, text, toolUse } from "../test/helpers/eventstream.ts"
+import { concat, contextUsage, event, exception, text, toolUse } from "../test/helpers/eventstream.ts"
 
 const port = Number(process.argv[2] ?? 18765)
 const log = process.argv[3] ?? "requests.jsonl"
@@ -17,9 +17,14 @@ const json = (res: ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { "content-type": "application/json" })
   res.end(JSON.stringify(body))
 }
-const stream = (res: ServerResponse, ...frames: Uint8Array[]) => {
+/**
+ * Every response ends like Kiro's do: a credit charge, then context usage. Usage grows with the
+ * conversation (and drops after compaction shortens it), ~12% per earlier turn.
+ */
+const stream = (res: ServerResponse, historyTurns: number, ...frames: Uint8Array[]) => {
+  const pct = Math.min(95, 3 + 12 * historyTurns)
   res.writeHead(200, { "content-type": "application/vnd.amazon.eventstream" })
-  res.end(Buffer.from(concat(...frames, contextUsage(2))))
+  res.end(Buffer.from(concat(...frames, event("meteringEvent", { unit: "credit", unitPlural: "credits", usage: 0.37 }), contextUsage(pct))))
 }
 
 createServer((req, res) => {
@@ -59,27 +64,29 @@ createServer((req, res) => {
         const results = cur.userInputMessageContext?.toolResults
         const agentRequest = Boolean(cur.userInputMessageContext?.tools) // title generation sends no tools
         const content: string = cur.content
-        if (results?.length) return stream(res, text("Tool said: "), text(results[0].content[0].text.slice(0, 300)))
+        const turns = Math.floor((body.conversationState.history?.length ?? 0) / 2)
+        if (results?.length) return stream(res, turns, text("Tool said: "), text(results[0].content[0].text.slice(0, 300)))
         if (/explode/.test(content)) {
-          return stream(res, text("partial answer "), exception("InternalServerException", "Mock Kiro blew up mid-stream"))
+          return stream(res, turns, text("partial answer "), exception("InternalServerException", "Mock Kiro blew up mid-stream"))
         }
         if (/overflow/.test(content) && agentRequest && !overflowServed) {
           overflowServed = true
           return json(res, 400, { message: "Input is too long.", reason: "CONTENT_LENGTH_EXCEEDS_THRESHOLD" })
         }
         if (/check my kiro usage/i.test(content) && agentRequest) {
-          return stream(res, toolUse("u1", "kiro_usage", ""), toolUse("u1", "kiro_usage", "", true))
+          return stream(res, turns, toolUse("u1", "kiro_usage", ""), toolUse("u1", "kiro_usage", "", true))
         }
         if (/use the tool/i.test(content) && agentRequest) {
           return stream(
             res,
+            turns,
             toolUse("b1", "bash", ""),
             toolUse("b1", "bash", '{"command":"echo hi",'),
             toolUse("b1", "bash", '"description":"Echo hi"}'),
             toolUse("b1", "bash", "", true),
           )
         }
-        return stream(res, text("Hello from mock Kiro."))
+        return stream(res, turns, text("Hello from mock Kiro."))
       }
       default:
         return json(res, 404, { message: "not found" })

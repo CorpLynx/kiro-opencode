@@ -6,6 +6,13 @@ export interface ChunkContext {
   /** Used to turn Kiro's context-usage percentage into a token count. */
   contextWindow?: number
   signal?: AbortSignal
+  /** Called once per response with what Kiro reported (credits charged, context used). */
+  onUsage?: (usage: TurnUsage) => void
+}
+
+export interface TurnUsage {
+  credits: number
+  contextPct?: number
 }
 
 interface Usage {
@@ -114,6 +121,32 @@ export async function* toChatChunks(
   body: ReadableStream<Uint8Array>,
   ctx: ChunkContext,
 ): AsyncGenerator<ChatChunk> {
+  const tally: Tally = { seen: false, credits: 0 }
+  try {
+    yield* chatChunks(body, ctx, tally)
+  } finally {
+    // Credits are charged even when a response errors or is cancelled, so always report.
+    if (tally.seen && ctx.onUsage) {
+      try {
+        ctx.onUsage({ credits: tally.credits, contextPct: tally.contextPct })
+      } catch {
+        /* usage tracking must never break the response */
+      }
+    }
+  }
+}
+
+interface Tally {
+  seen: boolean
+  credits: number
+  contextPct?: number
+}
+
+async function* chatChunks(
+  body: ReadableStream<Uint8Array>,
+  ctx: ChunkContext,
+  tally: Tally,
+): AsyncGenerator<ChatChunk> {
   const id = `chatcmpl-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
   const created = Math.floor(Date.now() / 1000)
   const model = ctx.request.modelId
@@ -151,6 +184,7 @@ export async function* toChatChunks(
 
   try {
     for await (const ev of kiroEvents(body, ctx.signal)) {
+      tally.seen = true
       switch (ev.type) {
         case "text":
           yield* start()
@@ -186,7 +220,7 @@ export async function* toChatChunks(
           break
         }
         case "contextUsage":
-          contextPct = ev.percentage
+          contextPct = tally.contextPct = ev.percentage
           break
         case "error":
           yield* start()
@@ -196,6 +230,7 @@ export async function* toChatChunks(
           }
           return
         case "metering":
+          tally.credits += ev.usage
           break
       }
     }

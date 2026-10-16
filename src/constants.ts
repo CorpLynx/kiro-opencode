@@ -30,6 +30,12 @@ export const socialRefreshEndpoint = (region: string) =>
   `${override("KIRO_AUTH_ENDPOINT") ?? `https://prod.${region}.auth.desktop.kiro.dev`}/refreshToken`
 export const apiEndpoint = (region: string) => override("KIRO_API_ENDPOINT") ?? `https://q.${region}.amazonaws.com`
 
+/**
+ * Set by the plugin's `chat.headers` hook so the fetch layer knows which opencode session
+ * a request belongs to (for the usage tracker). Never forwarded to Kiro.
+ */
+export const SESSION_HEADER = "x-opencode-kiro-session"
+
 /** The "baseURL" handed to the AI SDK. Never contacted directly: our fetch intercepts everything. */
 export const VIRTUAL_BASE_URL = "https://kiro.invalid/v1"
 

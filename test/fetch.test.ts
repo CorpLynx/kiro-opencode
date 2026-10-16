@@ -182,4 +182,17 @@ describe("createKiroFetch", () => {
     expect(JSON.parse(init.body).profileArn).toBe("arn:aws:codewhisperer:eu-central-1:1:profile/NEW")
     expect(url).toBe("https://q.eu-central-1.amazonaws.com/generateAssistantResponse") // region follows the ARN
   })
+
+  it("tags usage with the session from the plugin's header", async () => {
+    const onUsage = vi.fn()
+    let stored = { type: "oauth", ...toStored(creds) }
+    const tokens = new TokenManager({ load: async () => stored, save: async (s) => void (stored = { type: "oauth", ...s }) })
+    const transport = vi.fn(async () => ok())
+    const kiro = createKiroFetch({ tokens, fetch: transport as any, onUsage })
+    const res = await kiro(URL_, { ...chat(), headers: { "x-opencode-kiro-session": "ses_abc" } })
+    await res.text()
+    expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ sessionID: "ses_abc", modelId: "claude-sonnet-4.5" }))
+    // the tag is ours: it must not leak to Kiro
+    expect(JSON.stringify((transport.mock.calls[0] as any)[1].headers)).not.toContain("ses_abc")
+  })
 })

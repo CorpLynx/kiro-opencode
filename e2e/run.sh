@@ -10,7 +10,8 @@ PORT=${MOCK_PORT:-18765}
 SERVE_PORT=$((PORT + 25))
 WORK=$(mktemp -d)
 LOG=$WORK/requests.jsonl
-trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$WORK"' EXIT
+TMUX_SESSION=kiro-e2e-$$
+trap 'tmux kill-session -t "$TMUX_SESSION" 2>/dev/null; kill $(jobs -p) 2>/dev/null; rm -rf "$WORK"' EXIT
 
 (cd "$ROOT" && npm run build >/dev/null) || { echo "build failed" >&2; exit 1; }
 node --experimental-strip-types --no-warnings "$ROOT/e2e/mock-kiro.ts" "$PORT" "$LOG" >"$WORK/mock.log" 2>&1 &
@@ -45,6 +46,10 @@ oc() { # home, args...
 expect() { # name, haystack, needle
   if grep -qF -- "$3" <<<"$2"; then pass "$1"; else fail "$1" "    expected to find: $3
     got: $(tail -5 <<<"$2" | sed 's/^/      /')"; fi
+}
+expect_re() { # name, haystack, extended regex
+  if grep -qE -- "$3" <<<"$2"; then pass "$1"; else fail "$1" "    expected to match: $3
+    got: $(tail -8 <<<"$2" | sed 's/^/      /')"; fi
 }
 
 echo "opencode $("$OC" --version) / plugin $(node -p "require('$ROOT/package.json').version")"
@@ -100,6 +105,31 @@ expect "login: credentials stored with client registration" "$(node -e '
   const a = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")).kiro
   import(process.argv[1]).then(({ fromStored }) => console.log(JSON.stringify(fromStored(a))))' \
   "$ROOT/dist/auth/credentials.js" "$d/data/opencode/auth.json" 2>&1)" '"clientSecret":"csec"'
+
+# The TUI tracker, in a real opencode TUI inside tmux. Uses the `./server` + `./tui` entries.
+if command -v tmux >/dev/null; then
+  d=$(home tui 3600000)
+  mkdir -p "$d/config/opencode" "$WORK/tui-project"
+  echo "{ \"plugin\": [\"file://$ROOT/dist/tui.js\"] }" >"$d/config/opencode/tui.json"
+  echo "{ \"plugin\": [\"file://$ROOT/dist/server.js\"], \"model\": \"kiro/claude-sonnet-4.5\" }" >"$WORK/tui-project/opencode.json"
+  tmux new-session -d -s "$TMUX_SESSION" -x 200 -y 50 -c "$WORK/tui-project" \
+    "env XDG_CONFIG_HOME=$d/config XDG_DATA_HOME=$d/data XDG_CACHE_HOME=$d/cache XDG_STATE_HOME=$d/state \
+     KIRO_API_ENDPOINT=$KIRO_API_ENDPOINT KIRO_AUTH_ENDPOINT=$KIRO_AUTH_ENDPOINT TERM=xterm-256color '$OC'; sleep 300"
+  screen() { tmux capture-pane -p -t "$TMUX_SESSION"; }
+  waitfor() { for _ in $(seq "$2"); do screen | grep -qE "$1" && return 0; sleep 1; done; return 1; }
+  waitfor "Ask anything" 90
+  tmux send-keys -t "$TMUX_SESSION" "say hello"; sleep 0.5; tmux send-keys -t "$TMUX_SESSION" Enter
+  waitfor "credits · [0-9]+ request" 90
+  sleep 2
+  out=$(screen)
+  expect_re "tui: sidebar context bar" "$out" "[█░]+ [0-9]+% context"
+  expect_re "tui: sidebar session credits" "$out" "[0-9.]+ credits · [0-9]+ requests?"
+  expect "tui: sidebar account credits" "$out" "958 / 1,000 left on account"
+  expect_re "tui: prompt-row usage" "$out" "[0-9]+% · [0-9.]+ cr"
+  tmux kill-session -t "$TMUX_SESSION" 2>/dev/null
+else
+  echo "  SKIP tui tracker (tmux not installed)"
+fi
 
 echo
 if [ "$failures" -eq 0 ]; then echo "all e2e checks passed"; else echo "$failures e2e check(s) failed"; exit 1; fi

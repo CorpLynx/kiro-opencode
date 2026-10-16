@@ -10,16 +10,23 @@ your Kiro credits.
 
 ## Install
 
-Add the plugin to `opencode.json` (project) or `~/.config/opencode/opencode.json` (global):
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-kiro-provider"]
-}
+```sh
+opencode plugin opencode-kiro-provider
 ```
 
-For a local checkout: `npm install && npm run build`, then use `"plugin": ["file:///path/to/kiro-opencode/dist/index.js"]`.
+That registers both halves of the plugin: the provider (in `opencode.json`) and the usage tracker
+(in `tui.json`). To do it by hand, add the package to both files (project or `~/.config/opencode/`):
+
+```jsonc
+// opencode.json
+{ "plugin": ["opencode-kiro-provider"] }
+
+// tui.json: optional, for the usage tracker
+{ "plugin": ["opencode-kiro-provider"] }
+```
+
+For a local checkout run `npm install && npm run build`, then point `opencode.json` at
+`file:///path/to/kiro-opencode/dist/server.js` and `tui.json` at `file:///path/to/kiro-opencode/dist/tui.js`.
 
 ## Sign in
 
@@ -36,7 +43,33 @@ opencode auth login      # choose "Kiro"
 Then pick a model with `/models` (e.g. `kiro/claude-sonnet-4.5`). Credentials live in opencode's normal
 `auth.json`; access tokens are refreshed automatically and the rotated refresh token is written back.
 
-### Credits
+### Usage tracker
+
+With the TUI half installed (opencode 1.19+), Kiro sessions get a live tracker:
+
+![Kiro usage tracker in the opencode sidebar and prompt row](docs/tracker.png)
+
+<sub>The real opencode 1.19 TUI, driven by the e2e mock server, so the figures are the mock's.</sub>
+
+```
+Kiro                                  ← sidebar
+█████████░░░░░ 63% context            ← green / yellow ≥ 60% / red ≥ 85%
+2.59 credits · 7 requests             ← charged to this session
+958 / 1,000 left on account
+
+┃  Build · Claude Sonnet 4.5 (Kiro)                  63% · 2.59 cr      ← beside the prompt
+```
+
+* **Context** is Kiro's own context-usage figure for the latest response.
+* **Credits** are what Kiro metered for each response in this session, summed. That includes opencode's
+  background requests (title generation, compaction).
+* **Account** credits left are refreshed at most once a minute while you work (and whenever `kiro_usage` runs).
+
+It updates as responses complete. Sessions on other providers show nothing. The provider writes the figures
+to small files under opencode's state directory (`~/.local/state/opencode/kiro/`), which the TUI reads.
+`["opencode-kiro-provider", { "tracker": false }]` in `opencode.json` stops recording; in `tui.json` it hides the views.
+
+### Credits tool
 
 The plugin adds a `kiro_usage` tool, so you can ask *"how many Kiro credits do I have left?"*. It reports
 used and remaining credits (and free-trial credits) for the signed-in account.
@@ -79,7 +112,10 @@ opencode ──(@ai-sdk/openai-compatible, OpenAI chat format)──▶ plugin f
 ```
 
 * `config` hook declares the `kiro` provider and its models (it has no models.dev entry).
-* `tool` hook adds `kiro_usage` (calls Kiro's `getUsageLimits`).
+* `tool` hook adds `kiro_usage` (calls Kiro's `getUsageLimits`); `chat.headers` tags each Kiro request
+  with its session so per-session credits can be tracked.
+* A separate `./tui` entry registers the tracker views in the `sidebar_content` and `session_prompt_right`
+  slots, using OpenTUI's element API (no JSX build step; the host supplies `@opentui/solid` and `solid-js`).
 * `auth` hook provides the login methods and a `loader` that returns a custom `fetch`. That fetch converts
   OpenAI requests to Kiro's `conversationState` (history pairing, tool schemas, images, system prompt),
   authenticates and refreshes the token, retries 429/5xx with backoff, and converts the binary event stream
@@ -109,13 +145,15 @@ OPENCODE_BIN=$(command -v opencode) npm run test:e2e
 
 The e2e suite (`e2e/run.sh` + `e2e/mock-kiro.ts`) covers model listing, streaming chat, a tool-call round
 trip, the `kiro_usage` tool, thinking variants, token refresh and persistence, mid-stream errors, context-overflow
-compaction, and the device login through opencode's HTTP API.
+compaction, the device login through opencode's HTTP API, and (when `tmux` is installed) the TUI tracker
+rendered in a real opencode TUI.
 
 Layout:
 
 | Path | Purpose |
 | --- | --- |
-| `src/index.ts` | Plugin entry: `config`, `auth` and `tool` hooks |
+| `src/index.ts`, `src/server.ts` | Provider plugin: `config`, `auth`, `tool` and `chat.headers` hooks |
+| `src/tui.ts`, `src/tracker/` | TUI usage tracker; the usage files it shares with the provider |
 | `src/auth/` | Credential encoding, OIDC device flow + refresh, Kiro IDE / kiro-cli import, token manager |
 | `src/transform/` | OpenAI ⇄ Kiro request/response translation and the AWS event-stream decoder |
 | `src/fetch.ts` | The custom `fetch`: auth, retries, error mapping |

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { chunksToCompletion, chunksToSSE, ThinkingSplitter, toChatChunks } from "../src/transform/response.js"
 import { concat, contextUsage, exception, event, text, toolUse, streamOf } from "./helpers/eventstream.js"
 
@@ -72,6 +72,43 @@ describe("toChatChunks", () => {
     const err = chunks.find((c) => c.error)!
     expect(err.error).toMatchObject({ message: "too fast", code: "ThrottlingException" })
     expect(chunks.at(-1)).toBe(err)
+  })
+})
+
+describe("usage reporting", () => {
+  const meter = (usage: number) => event("meteringEvent", { unit: "credit", usage })
+
+  it("tallies Kiro's credit charges and context figure once per response", async () => {
+    const onUsage = vi.fn()
+    for await (const _ of toChatChunks(streamOf(concat(text("a"), meter(0.25), meter(0.5), contextUsage(42))), { request: req(), onUsage })) {
+    }
+    expect(onUsage).toHaveBeenCalledTimes(1)
+    expect(onUsage).toHaveBeenCalledWith({ credits: 0.75, contextPct: 42 })
+  })
+
+  it("still reports when the response ends in an error or is abandoned", async () => {
+    const onUsage = vi.fn()
+    for await (const _ of toChatChunks(streamOf(concat(meter(0.1), exception("X", "boom"))), { request: req(), onUsage })) {
+    }
+    expect(onUsage).toHaveBeenLastCalledWith({ credits: 0.1, contextPct: undefined })
+
+    const gen = toChatChunks(streamOf(concat(text("a"), text("b"), meter(0.2))), { request: req(), onUsage })
+    await gen.next()
+    await gen.next()
+    await gen.return(undefined)
+    expect(onUsage).toHaveBeenCalledTimes(2)
+  })
+
+  it("never lets a failing tracker break the response", async () => {
+    const chunks = []
+    for await (const c of toChatChunks(streamOf(concat(text("ok"))), {
+      request: req(),
+      onUsage: () => {
+        throw new Error("disk full")
+      },
+    }))
+      chunks.push(c)
+    expect(chunks.at(-1)!.usage).toBeDefined()
   })
 })
 

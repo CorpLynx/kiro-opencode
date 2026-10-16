@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest"
 import { toStored } from "../src/auth/credentials.js"
 import { KiroPlugin } from "../src/index.js"
 
@@ -7,6 +10,18 @@ const input = () => {
   const log = vi.fn(async () => ({}))
   return { input: { client: { auth: { set }, app: { log } } } as any, set, log }
 }
+
+// The provider loader refreshes account usage in the background and the tracker writes files:
+// keep both inside the sandbox (temp state dir, no real network).
+let fetchSpy: MockInstance<typeof fetch>
+beforeEach(() => {
+  vi.stubEnv("XDG_STATE_HOME", mkdtempSync(join(tmpdir(), "kiro-plugin-state-")))
+  fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ usageBreakdownList: [] })))
+})
+afterEach(() => {
+  fetchSpy.mockRestore()
+  vi.unstubAllEnvs()
+})
 
 describe("KiroPlugin", () => {
   it("registers the provider and models via the config hook", async () => {
@@ -78,13 +93,34 @@ describe("KiroPlugin", () => {
 
     const auth = { type: "oauth", ...toStored({ accessToken: "a", refreshToken: "r", expiresAt: 9e12, authMethod: "social", region: "us-east-1" }) }
     await hooks.auth!.loader!(async () => auth as any, { models: {} } as any)
-    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ usageBreakdownList: [{ displayName: "Credits", currentUsage: 1, usageLimit: 50 }] })),
+    fetchSpy.mockImplementation(
+      async () => new Response(JSON.stringify({ usageBreakdownList: [{ displayName: "Credits", currentUsage: 1, usageLimit: 50 }] })),
     )
-    try {
-      expect((await usage.execute({}, ctx) as any).output).toContain("Credits: 1 / 50 used, 49 left")
-    } finally {
-      spy.mockRestore()
+    expect((await usage.execute({}, ctx) as any).output).toContain("Credits: 1 / 50 used, 49 left")
+    // the tool also refreshes the snapshot the TUI tracker shows
+    const { readAccount, usageDir } = await import("../src/tracker/store.js")
+    expect(readAccount(usageDir())?.buckets[0]).toMatchObject({ used: 1, limit: 50 })
+  })
+
+  it("tags only Kiro requests with the session id", async () => {
+    const hooks = await KiroPlugin(input().input)
+    const run = async (providerID: string) => {
+      const output = { headers: {} as Record<string, string> }
+      await hooks["chat.headers"]!({ sessionID: "ses_1", provider: { info: { id: providerID } } } as any, output)
+      return output.headers
     }
+    expect(await run("kiro")).toEqual({ "x-opencode-kiro-session": "ses_1" })
+    expect(await run("anthropic")).toEqual({})
+    const off = await KiroPlugin(input().input, { tracker: false })
+    const output = { headers: {} as Record<string, string> }
+    await off["chat.headers"]!({ sessionID: "s", provider: { info: { id: "kiro" } } } as any, output)
+    expect(output.headers).toEqual({})
+  })
+
+  it("ships a server entry in opencode's module format", async () => {
+    const mod = (await import("../src/server.js")).default
+    expect(mod.id).toBe("opencode-kiro-provider")
+    expect(mod.server).toBe(KiroPlugin)
+    expect("tui" in mod).toBe(false) // a module may export server() or tui(), never both
   })
 })

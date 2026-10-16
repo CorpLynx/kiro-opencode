@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto"
 import { platform, release } from "node:os"
-import { apiEndpoint, KIRO_VERSION } from "./constants.js"
+import { apiEndpoint, KIRO_VERSION, SESSION_HEADER } from "./constants.js"
 import { apiRegion, type KiroCredentials } from "./auth/credentials.js"
 import type { TokenManager } from "./auth/manager.js"
 import { KiroAuthError } from "./auth/oidc.js"
 import { transformRequest, type OpenAIRequest } from "./transform/request.js"
-import { chunksToCompletion, chunksToSSE, toChatChunks } from "./transform/response.js"
+import { chunksToCompletion, chunksToSSE, toChatChunks, type TurnUsage } from "./transform/response.js"
 
 export interface KiroFetchOptions {
   tokens: TokenManager
@@ -15,6 +15,8 @@ export interface KiroFetchOptions {
   log?: (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) => void
   maxRetries?: number
   sleep?: (ms: number) => Promise<void>
+  /** Reports what Kiro charged for each response, tagged with the opencode session. */
+  onUsage?: (usage: TurnUsage & { sessionID?: string; modelId: string }) => void
 }
 
 function userAgent() {
@@ -88,6 +90,9 @@ export function createKiroFetch(opts: KiroFetchOptions): typeof fetch {
       return errorResponse(400, "Kiro provider expects a JSON chat completion request", "invalid_request_error")
     }
     const signal = init?.signal ?? undefined
+    const sessionID =
+      new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).get(SESSION_HEADER) ??
+      undefined
 
     let creds: KiroCredentials
     try {
@@ -165,6 +170,7 @@ export function createKiroFetch(opts: KiroFetchOptions): typeof fetch {
       request: transformed,
       contextWindow: opts.contextWindow?.(transformed.modelId),
       signal,
+      onUsage: opts.onUsage && ((u) => opts.onUsage!({ ...u, sessionID, modelId: transformed.modelId })),
     })
     if (!transformed.stream) {
       try {
