@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto"
 import { platform, release } from "node:os"
 import { apiEndpoint, KIRO_VERSION } from "./constants.js"
+import { apiRegion, type KiroCredentials } from "./auth/credentials.js"
 import type { TokenManager } from "./auth/manager.js"
+import { KiroAuthError } from "./auth/oidc.js"
 import { transformRequest, type OpenAIRequest } from "./transform/request.js"
 import { chunksToCompletion, chunksToSSE, toChatChunks } from "./transform/response.js"
 
@@ -15,8 +17,6 @@ export interface KiroFetchOptions {
   sleep?: (ms: number) => Promise<void>
 }
 
-const regionFromArn = (arn?: string) => arn?.split(":")[3] || undefined
-
 function userAgent() {
   const os = `${platform()}#${release()}`
   return `aws-sdk-js/1.0.27 ua/2.1 os/${os} lang/js md/nodejs#${process.versions.node} api/codewhispererstreaming#1.0.27 m/E KiroIDE-${KIRO_VERSION}`
@@ -27,6 +27,18 @@ function errorResponse(status: number, message: string, code: string, extra?: He
     status,
     headers: { "content-type": "application/json", ...extra },
   })
+}
+
+/** A token that can't be obtained or refreshed becomes a 401 the user can act on, not a crash. */
+function authFailure(err: unknown, log: NonNullable<KiroFetchOptions["log"]>): Response {
+  const message = err instanceof Error ? err.message : String(err)
+  log("error", "Kiro authentication failed", { error: message })
+  if (!(err instanceof KiroAuthError && err.fatal)) {
+    // Network trouble or a transient refresh failure: the session itself may still be fine.
+    return errorResponse(503, `Could not refresh the Kiro session: ${message}`, "authentication_unavailable")
+  }
+  const hint = /opencode auth login/.test(message) ? "" : " Run `opencode auth login` and choose Kiro."
+  return errorResponse(401, `${message}${hint}`, "authentication_error")
 }
 
 /** Translate a failed Kiro response into an OpenAI-style error opencode can display. */
@@ -44,7 +56,8 @@ async function mapError(res: Response): Promise<Response> {
   const extra = retryAfter ? { "retry-after": retryAfter } : undefined
 
   if (reason === "CONTENT_LENGTH_EXCEEDS_THRESHOLD" || /input is too long|content length exceeds/i.test(raw)) {
-    return errorResponse(400, "Input is too long: prompt exceeds the model's context window", "context_length_exceeded")
+    // Worded to match opencode's context-overflow patterns, so it compacts the session and retries.
+    return errorResponse(400, "Prompt is too long: the request exceeds the context window of this Kiro model", "context_length_exceeded")
   }
   if (res.status === 401 || res.status === 403) {
     return errorResponse(res.status, `Kiro rejected the credentials: ${raw}. Re-run \`opencode auth login\`.`, "authentication_error", extra)
@@ -68,23 +81,46 @@ export function createKiroFetch(opts: KiroFetchOptions): typeof fetch {
     }
 
     const raw = init?.body ?? (input instanceof Request ? await input.text() : undefined)
-    if (typeof raw !== "string") return errorResponse(400, "Unsupported request body", "invalid_request_error")
-    const request = JSON.parse(raw) as OpenAIRequest
+    let request: OpenAIRequest
+    try {
+      request = JSON.parse(typeof raw === "string" ? raw : "")
+    } catch {
+      return errorResponse(400, "Kiro provider expects a JSON chat completion request", "invalid_request_error")
+    }
     const signal = init?.signal ?? undefined
 
-    let creds = await opts.tokens.get()
+    let creds: KiroCredentials
+    try {
+      creds = await opts.tokens.get()
+    } catch (err) {
+      return authFailure(err, log)
+    }
     const transformed = transformRequest(request, { profileArn: creds.profileArn })
-    const payload = JSON.stringify(transformed.body)
+    // A refresh can hand us a profile ARN the first attempt didn't have.
+    const payload = () =>
+      JSON.stringify(creds.profileArn ? { ...transformed.body, profileArn: creds.profileArn } : transformed.body)
+
+    /** Back off without outliving an abort. */
+    const pause = (ms: number) =>
+      new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) return reject(signal.reason)
+        const onAbort = () => reject(signal!.reason)
+        signal?.addEventListener("abort", onAbort, { once: true })
+        sleep(ms).then(() => {
+          signal?.removeEventListener("abort", onAbort)
+          resolve()
+        })
+      })
 
     let refreshedOnAuthError = false
     let res: Response
     for (let attempt = 0; ; attempt++) {
-      const endpoint = `${apiEndpoint(regionFromArn(creds.profileArn) ?? creds.region)}/generateAssistantResponse`
+      const endpoint = `${apiEndpoint(apiRegion(creds))}/generateAssistantResponse`
       try {
         res = await transport(endpoint, {
           method: "POST",
           signal,
-          body: payload,
+          body: payload(),
           headers: {
             authorization: `Bearer ${creds.accessToken}`,
             "content-type": "application/json",
@@ -99,21 +135,25 @@ export function createKiroFetch(opts: KiroFetchOptions): typeof fetch {
       } catch (err) {
         if (signal?.aborted || attempt >= maxRetries) throw err
         log("warn", "Kiro request failed, retrying", { attempt, error: String(err) })
-        await sleep(backoff(attempt))
+        await pause(backoff(attempt))
         continue
       }
 
       if ((res.status === 401 || res.status === 403) && !refreshedOnAuthError) {
         refreshedOnAuthError = true
         await res.body?.cancel().catch(() => {})
-        creds = await opts.tokens.get(creds.accessToken)
+        try {
+          creds = await opts.tokens.get(creds.accessToken)
+        } catch (err) {
+          return authFailure(err, log)
+        }
         continue
       }
       if ((res.status === 429 || res.status >= 500) && res.status !== 501 && attempt < maxRetries) {
         const wait = retryAfterMs(res) ?? backoff(attempt)
         log("warn", `Kiro returned ${res.status}, retrying`, { attempt, wait })
         await res.body?.cancel().catch(() => {})
-        await sleep(wait)
+        await pause(wait)
         continue
       }
       break

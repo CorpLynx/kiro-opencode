@@ -69,4 +69,22 @@ describe("KiroPlugin", () => {
       process.env.HOME = prev
     }
   })
+
+  it("exposes a kiro_usage tool that works once the provider is loaded", async () => {
+    const hooks = await KiroPlugin(input().input)
+    const usage = hooks.tool!.kiro_usage!
+    const ctx = { abort: new AbortController().signal } as any
+    expect(await usage.execute({}, ctx)).toMatchObject({ title: "Kiro usage", output: expect.stringMatching(/not signed in/) })
+
+    const auth = { type: "oauth", ...toStored({ accessToken: "a", refreshToken: "r", expiresAt: 9e12, authMethod: "social", region: "us-east-1" }) }
+    await hooks.auth!.loader!(async () => auth as any, { models: {} } as any)
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ usageBreakdownList: [{ displayName: "Credits", currentUsage: 1, usageLimit: 50 }] })),
+    )
+    try {
+      expect((await usage.execute({}, ctx) as any).output).toContain("Credits: 1 / 50 used, 49 left")
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })

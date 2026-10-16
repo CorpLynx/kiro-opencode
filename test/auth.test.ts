@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { describe, expect, it, vi } from "vitest"
-import { decodeRefresh, encodeRefresh, fromStored, isExpired, toStored, type KiroCredentials } from "../src/auth/credentials.js"
+import { apiRegion, decodeRefresh, encodeRefresh, fromStored, isExpired, toStored, type KiroCredentials } from "../src/auth/credentials.js"
 import { importFromCli, importFromIde } from "../src/auth/import.js"
 import { TokenManager } from "../src/auth/manager.js"
 import { KiroAuthError, pollDeviceToken, refreshCredentials, startDeviceAuthorization } from "../src/auth/oidc.js"
@@ -30,6 +30,12 @@ describe("credentials", () => {
     expect(decodeRefresh("plain-token")).toMatchObject({ refreshToken: "plain-token", authMethod: "social", region: "us-east-1" })
     expect(decodeRefresh(encodeRefresh({ ...creds(), region: "nonsense" })).region).toBe("us-east-1")
   })
+  it("routes API calls to the profile ARN's region", () => {
+    expect(apiRegion({ region: "us-east-1", profileArn: "arn:aws:codewhisperer:eu-central-1:1:profile/P" })).toBe("eu-central-1")
+    expect(apiRegion({ region: "us-east-1" })).toBe("us-east-1")
+    expect(apiRegion({ region: "us-east-1", profileArn: "garbage" })).toBe("us-east-1")
+  })
+
   it("flags tokens inside the expiry skew as expired", () => {
     expect(isExpired(creds({ expiresAt: 1_000_000 + 60_000 }), 1_000_000)).toBe(true)
     expect(isExpired(creds({ expiresAt: 1_000_000 + 10 * 60_000 }), 1_000_000)).toBe(false)
@@ -60,7 +66,20 @@ describe("device flow", () => {
     let t = 0
     const result = await pollDeviceToken(auth, { fetch: f, sleep: async (ms) => void waits.push(ms), now: () => (t += 1) })
     expect(waits).toEqual([1000, 1000, 6000]) // slow_down adds 5s
-    expect(result).toMatchObject({ accessToken: "at", refreshToken: "rt", authMethod: "idc", clientId: "cid", region: "us-west-2" })
+    // OIDC stays in the Identity Center region; the API region defaults until a profile ARN says otherwise.
+    expect(result).toMatchObject({ accessToken: "at", refreshToken: "rt", authMethod: "idc", clientId: "cid", region: "us-east-1", oidcRegion: "us-west-2" })
+  })
+
+  it("keeps polling through a dropped connection", async () => {
+    const auth = { deviceCode: "d", clientId: "c", clientSecret: "s", intervalSec: 1, expiresInSec: 600, region: "us-east-1" } as any
+    const replies: (() => Response)[] = [
+      () => {
+        throw new TypeError("fetch failed")
+      },
+      () => json({ accessToken: "at", refreshToken: "rt" }),
+    ]
+    const out = await pollDeviceToken(auth, { fetch: (async () => replies.shift()!()) as any, sleep: async () => {} })
+    expect(out.accessToken).toBe("at")
   })
 
   it("stops on denial and expiry", async () => {
@@ -111,7 +130,7 @@ describe("importers", () => {
     writeFileSync(join(dir, "kiro-auth-token.json"), JSON.stringify({ accessToken: "a", refreshToken: "r", expiresAt: "2030-01-01T00:00:00Z", authMethod: "IdC", region: "eu-west-1", clientIdHash: "abc" }))
     expect(await importFromIde({ home })).toBeUndefined() // registration file missing
     writeFileSync(join(dir, "abc.json"), JSON.stringify({ clientId: "cid", clientSecret: "sec" }))
-    expect(await importFromIde({ home })).toMatchObject({ authMethod: "idc", clientId: "cid", clientSecret: "sec", region: "eu-west-1" })
+    expect(await importFromIde({ home })).toMatchObject({ authMethod: "idc", clientId: "cid", clientSecret: "sec", region: "us-east-1", oidcRegion: "eu-west-1" })
   })
 
   it("reads a kiro-cli SQLite session and its selected profile", async () => {
@@ -124,7 +143,7 @@ describe("importers", () => {
     put("auth_kv", "kirocli:odic:device-registration", { client_id: "cid", client_secret: "sec", region: "us-east-1" })
     put("state", "api.codewhisperer.profile", { arn: "arn:aws:codewhisperer:us-east-1:1:profile/P", profile_name: "p" })
     db.close()
-    expect(await importFromCli({ home, cliDbPath: path })).toMatchObject({ authMethod: "idc", accessToken: "a", clientId: "cid", clientSecret: "sec", profileArn: "arn:aws:codewhisperer:us-east-1:1:profile/P" })
+    expect(await importFromCli({ home, cliDbPath: path })).toMatchObject({ authMethod: "idc", accessToken: "a", clientId: "cid", clientSecret: "sec", region: "us-east-1", oidcRegion: "us-east-1", profileArn: "arn:aws:codewhisperer:us-east-1:1:profile/P" })
     expect(await importFromCli({ home, cliDbPath: join(home, "missing.sqlite3") })).toBeUndefined()
   })
 })
@@ -173,5 +192,21 @@ describe("TokenManager", () => {
   it("fails clearly when not logged in", async () => {
     const mgr = new TokenManager({ load: async () => ({ type: "api" }), save: async () => {} })
     await expect(mgr.get()).rejects.toMatchObject({ code: "not_logged_in" })
+  })
+})
+
+describe("endpoint overrides", () => {
+  it("routes auth and API calls through KIRO_AUTH_ENDPOINT / KIRO_API_ENDPOINT", async () => {
+    const { apiEndpoint, oidcEndpoint, socialRefreshEndpoint } = await import("../src/constants.js")
+    vi.stubEnv("KIRO_AUTH_ENDPOINT", "http://127.0.0.1:9/")
+    vi.stubEnv("KIRO_API_ENDPOINT", "http://127.0.0.1:8")
+    try {
+      expect(oidcEndpoint("us-east-1")).toBe("http://127.0.0.1:9")
+      expect(socialRefreshEndpoint("us-east-1")).toBe("http://127.0.0.1:9/refreshToken")
+      expect(apiEndpoint("eu-west-1")).toBe("http://127.0.0.1:8")
+    } finally {
+      vi.unstubAllEnvs()
+    }
+    expect(oidcEndpoint("eu-west-1")).toBe("https://oidc.eu-west-1.amazonaws.com")
   })
 })

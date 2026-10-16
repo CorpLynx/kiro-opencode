@@ -60,6 +60,13 @@ describe("toChatChunks", () => {
     expect(d.filter((x) => x.content).map((x) => x.content).join("")).toBe("Answer")
   })
 
+  it("reports a stream cut off mid-frame as an error", async () => {
+    const whole = concat(text("ok"), text("never finished"))
+    const chunks = await collect(whole.slice(0, whole.length - 5))
+    expect(chunks.at(-1)!.error).toMatchObject({ code: "stream_error" })
+    expect(chunks.at(-1)!.error!.message).toMatch(/mid-message/)
+  })
+
   it("reports exceptions as an error chunk", async () => {
     const chunks = await collect(concat(text("partial"), exception("ThrottlingException", "too fast")))
     const err = chunks.find((c) => c.error)!

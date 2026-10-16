@@ -19,12 +19,16 @@ export const CLIENT_NAME = "Kiro IDE"
 /** Refresh a token this long before it actually expires. */
 export const EXPIRY_SKEW_MS = 2 * 60 * 1000
 
-export const oidcEndpoint = (region: string) => `https://oidc.${region}.amazonaws.com`
+const override = (name: string) => process.env[name]?.replace(/\/+$/, "") || undefined
+
+/**
+ * Endpoint overrides, for corporate proxies and for local mock servers in tests:
+ * `KIRO_API_ENDPOINT` (chat + usage API) and `KIRO_AUTH_ENDPOINT` (OIDC + desktop token refresh).
+ */
+export const oidcEndpoint = (region: string) => override("KIRO_AUTH_ENDPOINT") ?? `https://oidc.${region}.amazonaws.com`
 export const socialRefreshEndpoint = (region: string) =>
-  `https://prod.${region}.auth.desktop.kiro.dev/refreshToken`
-/** `KIRO_API_ENDPOINT` redirects API calls (corporate proxies, local mock servers in tests). */
-export const apiEndpoint = (region: string) =>
-  process.env.KIRO_API_ENDPOINT?.replace(/\/+$/, "") || `https://q.${region}.amazonaws.com`
+  `${override("KIRO_AUTH_ENDPOINT") ?? `https://prod.${region}.auth.desktop.kiro.dev`}/refreshToken`
+export const apiEndpoint = (region: string) => override("KIRO_API_ENDPOINT") ?? `https://q.${region}.amazonaws.com`
 
 /** The "baseURL" handed to the AI SDK. Never contacted directly: our fetch intercepts everything. */
 export const VIRTUAL_BASE_URL = "https://kiro.invalid/v1"

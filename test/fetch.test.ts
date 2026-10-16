@@ -81,7 +81,11 @@ describe("createKiroFetch", () => {
     const { kiro } = harness([() => fail(400, { message: "Input is too long.", reason: "CONTENT_LENGTH_EXCEEDS_THRESHOLD" })])
     const res = await kiro(URL_, chat())
     expect(res.status).toBe(400)
-    expect((await res.json()).error.code).toBe("context_length_exceeded")
+    const { error } = await res.json()
+    expect(error.code).toBe("context_length_exceeded")
+    // opencode detects overflow by message; these are two of its patterns
+    expect(error.message).toMatch(/prompt is too long/i)
+    expect(error.message).toMatch(/exceeds the context window/i)
   })
 
   it("does not retry client errors, and rejects other endpoints", async () => {
@@ -100,5 +104,82 @@ describe("createKiroFetch", () => {
     })
     await expect(kiro(URL_, chat({}, ac.signal))).rejects.toThrow(/abort/i)
     expect(transport).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects malformed request bodies", async () => {
+    const { kiro, transport } = harness([])
+    expect((await kiro(URL_, { method: "POST", body: "not json" })).status).toBe(400)
+    expect(transport).not.toHaveBeenCalled()
+  })
+
+  it("turns a dead refresh token into a 401 with a login hint", async () => {
+    const tokens = new TokenManager({
+      load: async () => ({ type: "oauth", ...toStored({ ...creds, expiresAt: 0 }) }),
+      save: async () => {},
+      fetch: (async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 })) as any,
+    })
+    const res = await createKiroFetch({ tokens, fetch: vi.fn() as any })(URL_, chat())
+    expect(res.status).toBe(401)
+    expect((await res.json()).error.message).toMatch(/opencode auth login/)
+  })
+
+  it("reports a network failure during refresh as retryable, not as a logout", async () => {
+    const tokens = new TokenManager({
+      load: async () => ({ type: "oauth", ...toStored({ ...creds, expiresAt: 0 }) }),
+      save: async () => {},
+      fetch: (async () => {
+        throw new TypeError("fetch failed")
+      }) as any,
+    })
+    const res = await createKiroFetch({ tokens, fetch: vi.fn() as any })(URL_, chat())
+    expect(res.status).toBe(503)
+    expect((await res.json()).error.message).not.toMatch(/auth login/)
+  })
+
+  it("closes the upstream connection when the consumer cancels the stream", async () => {
+    let cancelled = false
+    const upstream = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(concat(text("first")))
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const { kiro } = harness([() => new Response(upstream, { status: 200 })])
+    const res = await kiro(URL_, chat())
+    const reader = res.body!.getReader()
+    await reader.read() // role chunk
+    await reader.read() // "first"
+    await reader.cancel()
+    expect(cancelled).toBe(true)
+  })
+
+  it("stops backing off as soon as the request is aborted", async () => {
+    const ac = new AbortController()
+    let stored = { type: "oauth", ...toStored(creds) }
+    const tokens = new TokenManager({ load: async () => stored, save: async (s) => void (stored = { type: "oauth", ...s }) })
+    const transport = vi.fn(async () => fail(429, {}, { "retry-after": "30" }))
+    const kiro = createKiroFetch({ tokens, fetch: transport as any, sleep: () => new Promise(() => {}) }) // never wakes
+    const pending = kiro(URL_, chat({}, ac.signal))
+    await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1))
+    ac.abort(new DOMException("user cancelled", "AbortError"))
+    await expect(pending).rejects.toThrow(/cancelled/)
+  })
+
+  it("adds a profile ARN learned during a refresh to the retried request", async () => {
+    let stored = { type: "oauth", ...toStored(creds) }
+    const tokens = new TokenManager({
+      load: async () => stored,
+      save: async (s) => void (stored = { type: "oauth", ...s }),
+      fetch: (async () =>
+        new Response(JSON.stringify({ accessToken: "tok2", expiresIn: 3600, profileArn: "arn:aws:codewhisperer:eu-central-1:1:profile/NEW" }))) as any,
+    })
+    const responses = [() => fail(403), ok]
+    const transport = vi.fn(async () => responses.shift()!())
+    await createKiroFetch({ tokens, fetch: transport as any })(URL_, chat())
+    const [url, init] = transport.mock.calls[1] as any
+    expect(JSON.parse(init.body).profileArn).toBe("arn:aws:codewhisperer:eu-central-1:1:profile/NEW")
+    expect(url).toBe("https://q.eu-central-1.amazonaws.com/generateAssistantResponse") // region follows the ARN
   })
 })

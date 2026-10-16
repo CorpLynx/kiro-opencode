@@ -2,7 +2,7 @@ import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { homedir, platform } from "node:os"
 import { join } from "node:path"
-import { normalizeRegion } from "../constants.js"
+import { DEFAULT_REGION, normalizeRegion } from "../constants.js"
 import type { KiroCredentials } from "./credentials.js"
 
 /**
@@ -52,7 +52,9 @@ export async function importFromIde(opts: ImportOptions = {}): Promise<KiroCrede
     refreshToken: t.refreshToken,
     expiresAt: parseExpiry(t.expiresAt),
     authMethod: isIdc ? "idc" : "social",
-    region: normalizeRegion(t.region),
+    // For IdC sessions the cached region is the Identity Center (OIDC) region, not the API region.
+    region: isIdc ? DEFAULT_REGION : normalizeRegion(t.region),
+    ...(isIdc && { oidcRegion: normalizeRegion(t.region) }),
     profileArn: t.profileArn,
   }
   if (isIdc) {
@@ -124,15 +126,14 @@ export async function importFromCli(opts: ImportOptions = {}): Promise<KiroCrede
   }
   if (!token?.refresh_token || !reg?.client_id || !reg?.client_secret) return undefined
 
-  const region = normalizeRegion(token.region ?? reg.region)
   const profileArn = await readCliProfileArn(path)
   return {
     accessToken: token.access_token ?? "",
     refreshToken: token.refresh_token,
     expiresAt: parseExpiry(token.expires_at),
     authMethod: "idc",
-    region,
-    oidcRegion: normalizeRegion(reg.region ?? region),
+    region: DEFAULT_REGION, // API region; apiRegion() prefers the profile ARN's region
+    oidcRegion: normalizeRegion(reg.region ?? token.region),
     clientId: reg.client_id,
     clientSecret: reg.client_secret,
     profileArn,

@@ -36,6 +36,11 @@ opencode auth login      # choose "Kiro"
 Then pick a model with `/models` (e.g. `kiro/claude-sonnet-4.5`). Credentials live in opencode's normal
 `auth.json`; access tokens are refreshed automatically and the rotated refresh token is written back.
 
+### Credits
+
+The plugin adds a `kiro_usage` tool, so you can ask *"how many Kiro credits do I have left?"*. It reports
+used and remaining credits (and free-trial credits) for the signed-in account.
+
 ### Thinking
 
 For Claude models, opencode's reasoning variants (`ctrl+t`, or `--variant high`) switch on Kiro's thinking
@@ -63,7 +68,8 @@ Everything works without configuration. Optional knobs:
   later (the id must be Kiro's own model id) or adjust limits.
 * `profileArn` / `KIRO_PROFILE_ARN`: required by some IAM Identity Center setups. The *Import* method picks it
   up from `kiro-cli` automatically.
-* `KIRO_API_ENDPOINT`: send API calls somewhere else (corporate proxy, local mock server).
+* `KIRO_API_ENDPOINT` / `KIRO_AUTH_ENDPOINT`: send API calls, or OIDC and token-refresh calls, somewhere
+  else (corporate proxy, local mock server).
 
 ## How it works
 
@@ -73,6 +79,7 @@ opencode ──(@ai-sdk/openai-compatible, OpenAI chat format)──▶ plugin f
 ```
 
 * `config` hook declares the `kiro` provider and its models (it has no models.dev entry).
+* `tool` hook adds `kiro_usage` (calls Kiro's `getUsageLimits`).
 * `auth` hook provides the login methods and a `loader` that returns a custom `fetch`. That fetch converts
   OpenAI requests to Kiro's `conversationState` (history pairing, tool schemas, images, system prompt),
   authenticates and refreshes the token, retries 429/5xx with backoff, and converts the binary event stream
@@ -81,9 +88,10 @@ opencode ──(@ai-sdk/openai-compatible, OpenAI chat format)──▶ plugin f
 
 ## Limitations
 
-* Developed against the protocol as implemented by the Kiro IDE; I could not exercise it against live AWS
-  from the development sandbox. It is tested with unit tests and end to end against a mock Kiro server driven
-  by the real opencode binary. Please report breakage with the (redacted) error message.
+* Built against the protocol the Kiro IDE uses, but not yet exercised against live AWS. It is covered by
+  unit tests, and by end-to-end runs of the real opencode binary (1.19) against a mock Kiro server. Those
+  runs cover chat, tool calls, thinking variants, device login, token refresh and persistence, the usage
+  tool, and error handling. Please report breakage with the (redacted) error message.
 * Remote image URLs can't be forwarded (Kiro only accepts inline image bytes).
 * Sampling parameters (temperature, top-p, max tokens) are not supported by Kiro and are ignored.
 * Google/GitHub "social" logins can't be started from opencode; sign in with the Kiro IDE or `kiro-cli`
@@ -94,7 +102,24 @@ opencode ──(@ai-sdk/openai-compatible, OpenAI chat format)──▶ plugin f
 ```sh
 npm install
 npm run typecheck && npm test && npm run build
+
+# End-to-end: drives a real opencode binary against a local mock of Kiro (no AWS calls).
+OPENCODE_BIN=$(command -v opencode) npm run test:e2e
 ```
+
+The e2e suite (`e2e/run.sh` + `e2e/mock-kiro.ts`) covers model listing, streaming chat, a tool-call round
+trip, the `kiro_usage` tool, thinking variants, token refresh and persistence, mid-stream errors, context-overflow
+compaction, and the device login through opencode's HTTP API.
+
+Layout:
+
+| Path | Purpose |
+| --- | --- |
+| `src/index.ts` | Plugin entry: `config`, `auth` and `tool` hooks |
+| `src/auth/` | Credential encoding, OIDC device flow + refresh, Kiro IDE / kiro-cli import, token manager |
+| `src/transform/` | OpenAI ⇄ Kiro request/response translation and the AWS event-stream decoder |
+| `src/fetch.ts` | The custom `fetch`: auth, retries, error mapping |
+| `src/models.ts`, `src/usage.ts` | Model catalogue; credit usage lookup |
 
 Prior art studied for the design: [`opencode-kiro`](https://github.com/NachoFLizaur/opencode-kiro) (MIT, wraps
 `kiro-cli` over ACP) and `opencode-kiro-auth` (GPL-3.0, direct API). This project is an independent MIT

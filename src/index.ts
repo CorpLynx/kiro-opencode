@@ -1,4 +1,4 @@
-import type { AuthHook, Hooks, Plugin, PluginInput, PluginOptions } from "@opencode-ai/plugin"
+import type { AuthHook, Hooks, Plugin, PluginInput, PluginOptions, ToolDefinition } from "@opencode-ai/plugin"
 import { toStored, type KiroCredentials } from "./auth/credentials.js"
 import { importKiroCredentials } from "./auth/import.js"
 import { TokenManager } from "./auth/manager.js"
@@ -6,6 +6,7 @@ import { pollDeviceToken, refreshCredentials, startDeviceAuthorization } from ".
 import { BUILDER_ID_START_URL, DEFAULT_REGION, PROVIDER_ID, PROVIDER_NAME, VIRTUAL_BASE_URL, normalizeRegion } from "./constants.js"
 import { createKiroFetch } from "./fetch.js"
 import { DEFAULT_MODELS, contextWindowFor } from "./models.js"
+import { fetchUsage, formatUsage } from "./usage.js"
 
 type AuthMethod = AuthHook["methods"][number]
 type OAuthMethod = Extract<AuthMethod, { type: "oauth" }>
@@ -43,6 +44,25 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
         }
       },
     }
+  }
+
+  /** Set once opencode has loaded the provider with Kiro credentials. */
+  let activeTokens: TokenManager | undefined
+
+  // Declared without the `tool()` helper so the plugin has no runtime dependency on zod.
+  const usageTool: ToolDefinition = {
+    description:
+      "Show the signed-in Kiro account's credit usage and remaining quota. Use when the user asks about Kiro usage, credits or limits.",
+    args: {},
+    async execute(_args, ctx) {
+      const title = "Kiro usage"
+      if (!activeTokens) return { title, output: "Kiro is not signed in. Run `opencode auth login` and choose Kiro." }
+      try {
+        return { title, output: formatUsage(await fetchUsage(await activeTokens.get(), { signal: ctx.abort })) }
+      } catch (err) {
+        return { title, output: `Could not fetch Kiro usage: ${err instanceof Error ? err.message : String(err)}` }
+      }
+    },
   }
 
   const methods: AuthMethod[] = [
@@ -107,6 +127,8 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
   ]
 
   const hooks: Hooks = {
+    tool: { kiro_usage: usageTool },
+
     /**
      * Declare the provider so it shows up without a models.dev entry. User config wins:
      * anything set under `provider.kiro` in opencode.json is layered on top of our defaults.
@@ -141,13 +163,13 @@ export const KiroPlugin: Plugin = async (input: PluginInput, options?: PluginOpt
           model.cost = { input: 0, output: 0, cache: { read: 0, write: 0 } }
         }
 
-        const tokens = new TokenManager({
+        const tokens = (activeTokens = new TokenManager({
           load: async () => (await getAuth()) as any,
           save: async (stored) => {
             await client.auth.set({ path: { id: PROVIDER_ID }, body: { type: "oauth", ...stored } })
           },
           profileArn,
-        })
+        }))
         return {
           apiKey: "kiro-oauth", // placeholder: the AI SDK insists on one; our fetch supplies the real bearer token
           baseURL: VIRTUAL_BASE_URL,

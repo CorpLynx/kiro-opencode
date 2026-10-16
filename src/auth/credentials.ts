@@ -14,8 +14,9 @@ export interface KiroCredentials {
   expiresAt: number
   /** `idc` = AWS SSO OIDC (Builder ID / IAM Identity Center); `social` = Kiro desktop login (Google/GitHub). */
   authMethod: "idc" | "social"
+  /** Region of Kiro's API (and of the desktop auth service for social logins). */
   region: string
-  /** Region of the OIDC endpoint, when it differs from the API region. */
+  /** Region of the OIDC endpoint (the Identity Center region), when it differs from `region`. */
   oidcRegion?: string
   clientId?: string
   clientSecret?: string
@@ -79,6 +80,15 @@ export function toStored(c: KiroCredentials): StoredOAuth {
 
 export function fromStored(s: StoredOAuth): KiroCredentials {
   return { ...decodeRefresh(s.refresh), accessToken: s.access, expiresAt: s.expires }
+}
+
+/**
+ * Region to send API calls to. Kiro's API is only served from a few regions, and a
+ * profile ARN (arn:aws:codewhisperer:<region>:…) pins the one this account lives in.
+ */
+export function apiRegion(c: Pick<KiroCredentials, "region" | "profileArn">): string {
+  const fromArn = c.profileArn?.split(":")[3]
+  return fromArn ? normalizeRegion(fromArn) : c.region
 }
 
 export function isExpired(c: KiroCredentials, now = Date.now()): boolean {

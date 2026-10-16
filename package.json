@@ -4,7 +4,14 @@
   "description": "opencode plugin that adds Kiro (AWS CodeWhisperer / Amazon Q Developer) as a model provider",
   "license": "MIT",
   "type": "module",
-  "keywords": ["opencode", "opencode-plugin", "kiro", "codewhisperer", "aws", "provider"],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "kiro",
+    "codewhisperer",
+    "aws",
+    "provider"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,7 +21,11 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -22,7 +33,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "test:e2e": "bash e2e/run.sh"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.0.0"

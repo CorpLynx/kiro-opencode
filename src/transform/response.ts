@@ -85,17 +85,24 @@ export class ThinkingSplitter {
 async function* kiroEvents(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<KiroEvent> {
   const decoder = new EventStreamDecoder()
   const reader = body.getReader()
+  let finished = false
   try {
     for (;;) {
       if (signal?.aborted) return
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) {
+        finished = true
+        break
+      }
       for (const msg of decoder.push(value)) {
         const ev = toKiroEvent(msg)
         if (ev) yield ev
       }
     }
+    if (decoder.pending > 0) throw new Error("connection closed mid-message")
   } finally {
+    // Stopping early (abort, consumer gone, error event) must close the upstream connection.
+    if (!finished) await reader.cancel().catch(() => {})
     reader.releaseLock()
   }
 }

@@ -1,5 +1,6 @@
 import {
   BUILDER_ID_START_URL,
+  DEFAULT_REGION,
   CLIENT_NAME,
   KIRO_VERSION,
   OIDC_SCOPES,
@@ -110,24 +111,33 @@ export async function pollDeviceToken(
   while (now() < deadline) {
     await sleep(interval)
     if (opts.signal?.aborted) throw new KiroAuthError("Login cancelled")
-    const { res, data, text } = await postJson(
-      f,
-      `${oidcEndpoint(auth.region)}/token`,
-      {
-        clientId: auth.clientId,
-        clientSecret: auth.clientSecret,
-        deviceCode: auth.deviceCode,
-        grantType: "urn:ietf:params:oauth:grant-type:device_code",
-      },
-      opts.signal,
-    )
+    let reply: Awaited<ReturnType<typeof postJson>>
+    try {
+      reply = await postJson(
+        f,
+        `${oidcEndpoint(auth.region)}/token`,
+        {
+          clientId: auth.clientId,
+          clientSecret: auth.clientSecret,
+          deviceCode: auth.deviceCode,
+          grantType: "urn:ietf:params:oauth:grant-type:device_code",
+        },
+        opts.signal,
+      )
+    } catch (err) {
+      if (opts.signal?.aborted) throw new KiroAuthError("Login cancelled")
+      continue // a dropped connection shouldn't abandon a login the user may be approving right now
+    }
+    const { res, data, text } = reply
     if (data.accessToken && data.refreshToken) {
       return {
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
         expiresAt: now() + (data.expiresIn ?? 3600) * 1000,
         authMethod: "idc",
-        region: auth.region,
+        // The Identity Center region only governs OIDC; the API region follows the profile ARN.
+        region: DEFAULT_REGION,
+        oidcRegion: auth.region,
         clientId: auth.clientId,
         clientSecret: auth.clientSecret,
       }
