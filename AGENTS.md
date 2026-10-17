@@ -1,6 +1,6 @@
 # Agent guide
 
-This repo is a collection of independent tools (`tools/<name>/`) and host-app plugins (`plugins/<host>-<name>/`). See `README.md` for the catalog and layout.
+This repo is a collection of independent tools (`tools/<name>/`), host-app plugins (`plugins/<host>-<name>/`) and patched builds (`builds/<name>/`). See `README.md` for the catalog and layout.
 
 ## Working rules
 
