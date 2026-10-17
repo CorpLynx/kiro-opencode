@@ -1,0 +1,69 @@
+From b3a8047c8d333ac912acbaad1915a305ac62330c Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:35:44 +0000
+Subject: [PATCH 7/8] hardened: managed configuration can't be redirected or
+ bypassed
+
+The managed config directory is always the system one, OPENCODE_PERMISSION
+can no longer loosen permissions after it is applied, and --pure /
+OPENCODE_PURE can't skip plugins (such as a mandated policy plugin).
+---
+ packages/core/src/flag/flag.ts                | 6 ++++--
+ packages/opencode/src/config/managed.ts       | 3 +++
+ packages/opencode/src/effect/runtime-flags.ts | 2 +-
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/packages/core/src/flag/flag.ts b/packages/core/src/flag/flag.ts
+index 7f66a8a..326351f 100644
+--- a/packages/core/src/flag/flag.ts
++++ b/packages/core/src/flag/flag.ts
+@@ -65,11 +65,13 @@ export const Flag = {
+   get OPENCODE_CONFIG_DIR() {
+     return process.env["OPENCODE_CONFIG_DIR"]
+   },
++  // Hardened builds: --pure can't skip managed plugins, and the environment can't loosen permissions
++  // after managed configuration has been applied.
+   get OPENCODE_PURE() {
+-    return truthy("OPENCODE_PURE")
++    return !Hardened.enabled && truthy("OPENCODE_PURE")
+   },
+   get OPENCODE_PERMISSION() {
+-    return process.env["OPENCODE_PERMISSION"]
++    return Hardened.enabled ? undefined : process.env["OPENCODE_PERMISSION"]
+   },
+   get OPENCODE_PLUGIN_META_FILE() {
+     return process.env["OPENCODE_PLUGIN_META_FILE"]
+diff --git a/packages/opencode/src/config/managed.ts b/packages/opencode/src/config/managed.ts
+index 877d30a..b273fe6 100644
+--- a/packages/opencode/src/config/managed.ts
++++ b/packages/opencode/src/config/managed.ts
+@@ -4,6 +4,7 @@ import { existsSync } from "fs"
+ import os from "os"
+ import path from "path"
+ import { Process } from "@/util/process"
++import { Hardened } from "@opencode-ai/core/hardened"
+ 
+ const MANAGED_PLIST_DOMAIN = "ai.opencode.managed"
+ 
+@@ -29,6 +30,8 @@ function systemManagedConfigDir(): string {
+ }
+ 
+ export function managedConfigDir() {
++  // Hardened builds always read the system location, so managed policy can't be pointed elsewhere.
++  if (Hardened.enabled) return systemManagedConfigDir()
+   return process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
+ }
+ 
+diff --git a/packages/opencode/src/effect/runtime-flags.ts b/packages/opencode/src/effect/runtime-flags.ts
+index 85ba1b6..a19cec1 100644
+--- a/packages/opencode/src/effect/runtime-flags.ts
++++ b/packages/opencode/src/effect/runtime-flags.ts
+@@ -18,7 +18,7 @@ const enabledByExperimental = (name: string) =>
+ 
+ export class Service extends ConfigService.Service<Service>()("@opencode/RuntimeFlags", {
+   autoShare: locked(bool("OPENCODE_AUTO_SHARE"), false),
+-  pure: bool("OPENCODE_PURE"),
++  pure: locked(bool("OPENCODE_PURE"), false),
+   disableDefaultPlugins: bool("OPENCODE_DISABLE_DEFAULT_PLUGINS"),
+   disableEmbeddedWebUi: bool("OPENCODE_DISABLE_EMBEDDED_WEB_UI"),
+   disableExternalSkills: locked(bool("OPENCODE_DISABLE_EXTERNAL_SKILLS"), true),

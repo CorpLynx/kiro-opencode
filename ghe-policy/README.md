@@ -120,7 +120,8 @@ from their own config. Pair it with:
 * **GitHub itself:** branch protection and rulesets on GHE. The guard keeps the agent from trying; GHE makes it
   impossible.
 * **A fork, for the rest:** some opencode behaviour (fetching the public model catalogue at startup, the
-  update check) can only be removed in the source.
+  update check) can only be removed in the source: see [`opencode-fork/`](../opencode-fork/), which also stops
+  users from redirecting, loosening or skipping the managed config that loads this plugin.
 
 ## Development
 

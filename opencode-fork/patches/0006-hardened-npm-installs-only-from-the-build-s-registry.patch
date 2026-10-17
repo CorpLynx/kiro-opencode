@@ -1,0 +1,52 @@
+From b0fea14a8b9ccb5474e29b531a68671310bd7a58 Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:35:29 +0000
+Subject: [PATCH 6/8] hardened: npm installs only from the build's registry, or
+ offline
+
+Plugin and provider packages, and the background @opencode-ai/plugin
+install, use the registry fixed at build time; per-user .npmrc registries
+are ignored. With none set, npm runs offline (cache only).
+---
+ packages/core/src/npm-config.ts | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/packages/core/src/npm-config.ts b/packages/core/src/npm-config.ts
+index 896bb84..c554ac5 100644
+--- a/packages/core/src/npm-config.ts
++++ b/packages/core/src/npm-config.ts
+@@ -6,6 +6,7 @@ import Config from "@npmcli/config"
+ // @ts-expect-error npm does not publish types for this internal config API.
+ import { definitions, flatten, nerfDarts, shorthands } from "@npmcli/config/lib/definitions/index.js"
+ import { Effect } from "effect"
++import { Hardened } from "./hardened"
+ 
+ const npmPath = fileURLToPath(new URL("..", import.meta.url))
+ 
+@@ -26,10 +27,24 @@ export const load = (dir: string) =>
+         warn: false,
+       })
+       await config.load()
+-      return config.flat as Record<string, unknown>
++      return harden(config.flat as Record<string, unknown>)
+     },
+     catch: (cause) => cause,
+-  }).pipe(Effect.orElseSucceed(() => ({}) as Record<string, unknown>))
++  }).pipe(Effect.orElseSucceed(() => harden({})))
++
++/**
++ * Hardened builds install packages only from the registry fixed at build time, ignoring any registry a
++ * user's .npmrc names; without one, npm runs offline (local cache only), so installs never reach out.
++ */
++function harden(flat: Record<string, unknown>): Record<string, unknown> {
++  if (!Hardened.enabled) return flat
++  const out: Record<string, unknown> = {}
++  for (const [key, value] of Object.entries(flat)) {
++    if (!key.endsWith(":registry") && key !== "registry") out[key] = value // drop per-scope registries too
++  }
++  if (Hardened.npmRegistry) return { ...out, registry: Hardened.npmRegistry }
++  return { ...out, offline: true, preferOffline: true }
++}
+ 
+ export const registry = (dir: string) =>
+   load(dir).pipe(

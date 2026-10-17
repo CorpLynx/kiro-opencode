@@ -225,6 +225,10 @@ implementation and does not copy code from the GPL project.
 [`ghe-policy/`](ghe-policy/) is a separate plugin, `opencode-ghe-policy`, that makes a GitHub Enterprise
 repository the control plane for opencode: central policy, command guardrails and commit provenance.
 
+[`opencode-fork/`](opencode-fork/) builds a hardened opencode that makes no network calls the organization didn't
+choose (no models.opencode.ai catalogue fetch, update checks, downloads or opencode.ai services), as eight patches
+on a pinned upstream release, with tests that prove it.
+
 ## License
 
 MIT

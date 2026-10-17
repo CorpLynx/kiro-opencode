@@ -1,0 +1,38 @@
+From 1464c210b7fc366778af4288d5ed400e21fb6c1a Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:35:08 +0000
+Subject: [PATCH 5/8] hardened: never proxy the web UI from app.opencode.ai
+
+A server without an embedded UI used to fetch it live from
+app.opencode.ai; hardened builds answer 404 instead.
+---
+ packages/opencode/src/server/shared/ui.ts | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/packages/opencode/src/server/shared/ui.ts b/packages/opencode/src/server/shared/ui.ts
+index d3f2c45..49713ba 100644
+--- a/packages/opencode/src/server/shared/ui.ts
++++ b/packages/opencode/src/server/shared/ui.ts
+@@ -3,6 +3,7 @@ import { Effect, Stream } from "effect"
+ import { HttpBody, HttpClient, HttpClientRequest, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+ import { createHash } from "node:crypto"
+ import { ProxyUtil } from "../proxy-util"
++import { Hardened } from "@opencode-ai/core/hardened"
+ 
+ let embeddedUIPromise: Promise<Record<string, string> | null> | undefined
+ 
+@@ -85,6 +86,14 @@ export function serveUIEffect(
+ 
+     if (embeddedWebUI) return yield* serveEmbeddedUIEffect(path, services.fs, embeddedWebUI)
+ 
++    // Hardened builds never load UI code from app.opencode.ai into the user's browser.
++    if (Hardened.enabled) {
++      return HttpServerResponse.text(
++        "The browser interface is not available in this build. Use the terminal interface, or an approved client.",
++        { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "Content-Security-Policy": csp() } },
++      )
++    }
++
+     const response = yield* services.client.execute(
+       HttpClientRequest.make(request.method)(upstreamURL(path), {
+         headers: ProxyUtil.headers(request.headers, { host: UI_UPSTREAM.host }),

@@ -1,0 +1,42 @@
+From 6de139fbf115ec7cdfc96871e5c95cfcc82b4662 Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:34:12 +0000
+Subject: [PATCH 2/8] hardened: no model catalogue fetch from
+ models.opencode.ai
+
+The embedded snapshot (or an internal mirror fixed at build time) is the
+only source; OPENCODE_MODELS_URL / OPENCODE_DISABLE_MODELS_FETCH from the
+environment can't redirect or re-enable it.
+---
+ packages/core/src/flag/flag.ts | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/packages/core/src/flag/flag.ts b/packages/core/src/flag/flag.ts
+index a0eb78a..2175211 100644
+--- a/packages/core/src/flag/flag.ts
++++ b/packages/core/src/flag/flag.ts
+@@ -1,4 +1,5 @@
+ import { Config } from "effect"
++import { Hardened } from "../hardened"
+ 
+ export function truthy(key: string) {
+   const value = process.env[key]?.toLowerCase()
+@@ -26,7 +27,8 @@ export const Flag = {
+   OPENCODE_DISABLE_TERMINAL_TITLE: truthy("OPENCODE_DISABLE_TERMINAL_TITLE"),
+   OPENCODE_SHOW_TTFD: truthy("OPENCODE_SHOW_TTFD"),
+   OPENCODE_DISABLE_AUTOCOMPACT: truthy("OPENCODE_DISABLE_AUTOCOMPACT"),
+-  OPENCODE_DISABLE_MODELS_FETCH: truthy("OPENCODE_DISABLE_MODELS_FETCH"),
++  // Hardened builds never fetch the catalogue unless an internal mirror was set at build time.
++  OPENCODE_DISABLE_MODELS_FETCH: Hardened.enabled ? !Hardened.modelsUrl : truthy("OPENCODE_DISABLE_MODELS_FETCH"),
+   OPENCODE_DISABLE_MOUSE: truthy("OPENCODE_DISABLE_MOUSE"),
+   OPENCODE_FAKE_VCS: process.env["OPENCODE_FAKE_VCS"],
+   OPENCODE_SERVER_PASSWORD: process.env["OPENCODE_SERVER_PASSWORD"],
+@@ -42,7 +44,7 @@ export const Flag = {
+   ),
+   OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT:
+     copy === undefined ? process.platform === "win32" : truthy("OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"),
+-  OPENCODE_MODELS_URL: process.env["OPENCODE_MODELS_URL"],
++  OPENCODE_MODELS_URL: Hardened.enabled ? Hardened.modelsUrl : process.env["OPENCODE_MODELS_URL"],
+   OPENCODE_MODELS_PATH: process.env["OPENCODE_MODELS_PATH"],
+   OPENCODE_DB: process.env["OPENCODE_DB"],
+ 
