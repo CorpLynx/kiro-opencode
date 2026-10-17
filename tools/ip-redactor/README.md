@@ -37,7 +37,7 @@ pip install ./tools/ip-redactor          # text only, no dependencies
 
 | Extra | Adds | Needs |
 | --- | --- | --- |
-| *(none)* | text, CSV, logs, configs | Python 3.8+ standard library |
+| *(none)* | text, CSV, logs, configs | Python 3.9+ standard library |
 | `office` | `.docx` `.xlsx` `.pptx` `.vsdx` and their macro/template variants, `.odt` `.ods` `.odp` | `lxml` |
 | `pcap` | `.pcap` `.pcapng` | `scapy` |
 | `all` | everything above | |

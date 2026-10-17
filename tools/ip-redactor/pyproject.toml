@@ -7,7 +7,7 @@ name = "ipredact"
 version = "0.3.0"
 description = "Structure-preserving IPv4/IPv6 redaction for configs, logs, Office/Visio files and packet captures"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = []
 
 [project.optional-dependencies]
