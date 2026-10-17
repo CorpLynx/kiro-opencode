@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ipredact"
+version = "0.3.0"
+description = "Structure-preserving IPv4/IPv6 redaction for configs, logs, Office/Visio files and packet captures"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+office = ["lxml>=4.9"]
+pcap = ["scapy>=2.5"]
+all = ["lxml>=4.9", "scapy>=2.5"]
+test = ["lxml>=4.9", "scapy>=2.5", "python-docx>=1.0", "python-pptx>=0.6.21", "openpyxl>=3.1"]
+
+[project.scripts]
+ipredact = "ipredact.cli:main"
+
+[tool.setuptools]
+packages = ["ipredact"]

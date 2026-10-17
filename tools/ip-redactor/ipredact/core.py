@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Structure-preserving IPv4 / IPv6 redaction.
 
 IPv4: the first two octets are rewritten with different numbers and the last
@@ -26,17 +25,10 @@ keyed bit-flip tree in the style of Crypto-PAn. IPv6 keeps the top 3 bits
 ULA stays ULA, and nothing is ever turned into link-local or multicast.
 """
 
-import argparse
-import csv
 import hashlib
 import hmac
-import io
 import ipaddress
-import os
 import re
-import secrets
-import sys
-import tempfile
 
 OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|0?\d?\d)"
 IPV4 = rf"{OCTET}\.{OCTET}\.{OCTET}\.{OCTET}"
@@ -101,10 +93,6 @@ V6_EMBEDS_V4 = (
 LINK_LOCAL16 = (169 << 8) | 254
 
 V6_BITS_CHOICES = (16, 32, 48, 64)
-KEY_ENV = "IPREDACT_KEY"
-MIN_KEY_LEN = 16
-XLSX_EXTS = (".xlsx", ".xlsm")
-UTF16_BOMS = ((b"\xff\xfe", "utf-16-le"), (b"\xfe\xff", "utf-16-be"))
 
 
 def mask_len(value):
@@ -385,253 +373,24 @@ class Redactor:
             return out + (g["zone"] or "") + (f"/{plen}" if plen is not None else "")
         return self._v4_token(m, reverse)
 
-    def redact_text(self, text, reverse=False):
-        text = TOKEN_RE.sub(lambda m: self._token(m, reverse), text)
+    def spans(self, text, reverse=False):
+        """(start, end, replacement) for every address in `text` that changes,
+        in order and non-overlapping. Callers that hold text split into
+        pieces (document runs) use this to edit across piece boundaries."""
+        found = [(m.start(), m.end(), self._token(m, reverse)) for m in TOKEN_RE.finditer(text)]
         if self._dashed:
-            text = DASHED_RE.sub(
-                lambda m: self.map_ip(m.group("ip").replace("-", "."), reverse).replace(".", "-"),
-                text,
-            )
-        return text
+            found += [
+                (m.start(), m.end(),
+                 self.map_ip(m.group("ip").replace("-", "."), reverse).replace(".", "-"))
+                for m in DASHED_RE.finditer(text)
+            ]
+            found.sort()
+        return [s for s in found if text[s[0]:s[1]] != s[2]]
 
-
-# -- file handling ------------------------------------------------------------
-
-class SkipFile(Exception):
-    pass
-
-
-def current_umask():
-    mask = os.umask(0)
-    os.umask(mask)
-    return mask
-
-
-def write_bytes(path, data, mode=None):
-    """Write atomically: a crash never leaves a half-written file behind."""
-    if path == "-":
-        sys.stdout.buffer.write(data)
-        sys.stdout.flush()
-        return
-    path = os.path.realpath(path)  # replace a symlink's target, not the link
-    if mode is None:
-        try:
-            mode = os.stat(path).st_mode & 0o7777
-        except FileNotFoundError:
-            mode = 0o666 & ~current_umask()
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".ipredact-")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-        os.chmod(tmp, mode)
-        os.replace(tmp, path)
-    except BaseException:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
-
-
-def redact_bytes(redactor, data, reverse):
-    for bom, enc in UTF16_BOMS:
-        if data.startswith(bom):
-            text = data[len(bom):].decode(enc, "surrogatepass")
-            return bom + redactor.redact_text(text, reverse).encode(enc, "surrogatepass")
-    if b"\x00" in data[:8192]:
-        raise SkipFile("looks binary")
-    text = data.decode("utf-8", "surrogateescape")
-    return redactor.redact_text(text, reverse).encode("utf-8", "surrogateescape")
-
-
-def redact_xlsx(redactor, src, reverse):
-    try:
-        import openpyxl
-        from openpyxl.comments import Comment
-    except ImportError:
-        raise SkipFile(".xlsx support needs openpyxl (pip install openpyxl)")
-    wb = openpyxl.load_workbook(src, keep_vba=src.lower().endswith(".xlsm"))
-    for ws in wb.worksheets:
-        title = redactor.redact_text(ws.title, reverse)
-        if title != ws.title:
-            if len(title) <= 31 and title not in wb.sheetnames:
-                ws.title = title
-            else:
-                warn(f"{src}: could not rename sheet {ws.title!r}; its name still contains an address")
-        for row in ws.iter_rows():
-            for cell in row:
-                if isinstance(cell.value, str):
-                    cell.value = redactor.redact_text(cell.value, reverse)
-                if cell.comment is not None:
-                    cell.comment = Comment(redactor.redact_text(cell.comment.text, reverse),
-                                           cell.comment.author)
-                if cell.hyperlink is not None and cell.hyperlink.target:
-                    cell.hyperlink.target = redactor.redact_text(cell.hyperlink.target, reverse)
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
-
-
-def warn(msg):
-    print(f"ipredact: {msg}", file=sys.stderr)
-
-
-def collect_inputs(paths):
-    """Expand directories into (source, path relative to the argument)."""
-    out = []
-    for p in paths:
-        if p == "-":
-            out.append(("-", "-"))
-        elif os.path.isdir(p):
-            for root, dirs, files in os.walk(p):
-                dirs.sort()
-                for name in sorted(files):
-                    full = os.path.join(root, name)
-                    out.append((full, os.path.relpath(full, p)))
-        else:
-            out.append((p, os.path.basename(p)))
-    return out
-
-
-def plan_outputs(inputs, args):
-    plan, seen = [], {}
-    for src, rel in inputs:
-        if args.in_place:
-            dst = src
-        elif args.output:
-            dst = args.output
-        elif args.out_dir:
-            dst = os.path.join(args.out_dir, rel)
-        else:
-            dst = "-"
-        if dst != "-" and not args.in_place:
-            real = os.path.realpath(dst)
-            if src != "-" and os.path.exists(dst) and os.path.samefile(src, dst):
-                sys.exit(f"error: {src} would overwrite itself; use --in-place for that")
-            if real in seen:
-                sys.exit(f"error: {seen[real]} and {src} would both write {dst}")
-            seen[real] = src
-        plan.append((src, dst))
-    return plan
-
-
-def resolve_key(args):
-    if args.key:
-        return args.key, False
-    if args.key_file:
-        with open(args.key_file) as f:
-            key = f.read().strip()
-        if not key:
-            sys.exit(f"error: key file {args.key_file} is empty")
-        return key, False
-    if os.environ.get(KEY_ENV):
-        return os.environ[KEY_ENV], False
-    if args.reverse:
-        sys.exit(f"error: --reverse needs the key used to redact (--key, --key-file or ${KEY_ENV})")
-    return secrets.token_hex(16), True
-
-
-def build_parser():
-    p = argparse.ArgumentParser(
-        description="Redact IPv4 and IPv6 addresses by rewriting their network "
-                    "prefix while keeping subnet structure and host relationships intact.",
-    )
-    p.add_argument("files", nargs="*", default=["-"],
-                   help="text, CSV or .xlsx/.xlsm files, or directories to walk (default: stdin)")
-    out = p.add_mutually_exclusive_group()
-    out.add_argument("-o", "--output", help="output file (single input only)")
-    out.add_argument("-d", "--out-dir", help="write redacted files into this directory, "
-                                             "mirroring the layout of directory inputs")
-    out.add_argument("-i", "--in-place", action="store_true", help="overwrite the input files")
-    p.add_argument("-k", "--key", help="secret key for the mapping; visible in the process "
-                                       f"list, so prefer --key-file or ${KEY_ENV}")
-    p.add_argument("--key-file", help="read the secret key from this file")
-    p.add_argument("--save-key", help="write the key that was used to this file (mode 600)")
-    p.add_argument("-r", "--reverse", action="store_true",
-                   help="restore original addresses (needs the redaction key and the same "
-                        "--v6-bits / exclude settings)")
-    p.add_argument("-x", "--exclude", action="append", default=[], metavar="CIDR",
-                   help="leave addresses in this IPv4 or IPv6 network untouched (repeatable)")
-    p.add_argument("--no-default-excludes", action="store_true",
-                   help="also redact " + ", ".join(DEFAULT_EXCLUDES))
-    p.add_argument("--no-dashed", action="store_true",
-                   help="don't redact dashed hostnames like ip-10-1-2-3")
-    p.add_argument("--v6-bits", type=int, default=48, choices=V6_BITS_CHOICES,
-                   help="how many leading IPv6 bits to rewrite (default 48: the site prefix)")
-    p.add_argument("--map-out", metavar="CSV",
-                   help="write an original,redacted CSV of every address seen "
-                        "(mode 600; sensitive: contains the real addresses)")
-    p.add_argument("-v", "--verbose", action="store_true", help="print a summary to stderr")
-    return p
-
-
-def main(argv=None):
-    args = build_parser().parse_args(argv)
-    inputs = collect_inputs(args.files)
-    if args.output and (len(inputs) != 1 or any(os.path.isdir(f) for f in args.files)):
-        sys.exit("error: --output takes a single input file; use --out-dir for several")
-    if (args.in_place or args.out_dir) and "-" in args.files:
-        sys.exit("error: --in-place/--out-dir need file arguments, not stdin")
-    if not (args.in_place or args.out_dir) and any(os.path.isdir(f) for f in args.files):
-        sys.exit("error: directory inputs need --out-dir or --in-place")
-    for net in args.exclude:
-        try:
-            ipaddress.ip_network(net, strict=False)
-        except ValueError:
-            sys.exit(f"error: bad --exclude network: {net}")
-
-    key, generated = resolve_key(args)
-    if not generated and len(key) < MIN_KEY_LEN:
-        warn(f"warning: key is shorter than {MIN_KEY_LEN} characters; anyone holding one "
-             f"original/redacted pair could brute-force it and undo the redaction")
-    excludes = list(args.exclude)
-    if not args.no_default_excludes:
-        excludes += DEFAULT_EXCLUDES
-    redactor = Redactor(key, excludes, dashed=not args.no_dashed, v6_bits=args.v6_bits)
-
-    failed = done = 0
-    for src, dst in plan_outputs(inputs, args):
-        try:
-            if src.lower().endswith(XLSX_EXTS):
-                if dst == "-":
-                    raise SkipFile("spreadsheet output needs -o, -d or -i")
-                data = redact_xlsx(redactor, src, args.reverse)
-            else:
-                with (sys.stdin.buffer if src == "-" else open(src, "rb")) as f:
-                    raw = f.read()
-                data = redact_bytes(redactor, raw, args.reverse)
-            if dst != "-":
-                os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
-            write_bytes(dst, data)
-            done += 1
-        except (SkipFile, OSError, UnicodeError) as e:
-            failed += 1
-            warn(f"skipped {src}: {e}")
-        except Exception as e:  # e.g. a corrupt workbook; keep going with the rest
-            failed += 1
-            warn(f"skipped {src}: {type(e).__name__}: {e}")
-
-    if args.save_key:
-        write_bytes(args.save_key, (key + "\n").encode(), mode=0o600)
-    if generated and not args.save_key:
-        warn(f"generated key {key} - pass it with --key-file/--key to keep the "
-             f"same mapping across runs or to --reverse")
-    if args.map_out:
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        w.writerow(["original", "redacted"])
-        for orig, red in sorted(redactor.seen.items(), key=lambda kv: (kv[0].version, kv[0])):
-            w.writerow([orig, red])
-        write_bytes(args.map_out, buf.getvalue().encode(), mode=0o600)
-    if redactor.collisions:
-        warn(f"warning: {len(redactor.collisions)} redacted address(es) landed in an "
-             f"excluded range ({', '.join(map(str, sorted(redactor.collisions, key=lambda a: (a.version, a))))}); "
-             f"--reverse will leave those as-is")
-    if args.verbose:
-        action = "restored" if args.reverse else "redacted"
-        warn(f"{action} {redactor.count} address(es) in {done} file(s)"
-             + (f", {len(redactor.seen)} unique" if not args.reverse else "")
-             + (f"; {failed} file(s) skipped" if failed else ""))
-    return 1 if failed else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    def redact_text(self, text, reverse=False):
+        parts, pos = [], 0
+        for start, end, new in self.spans(text, reverse):
+            parts += [text[pos:start], new]
+            pos = end
+        parts.append(text[pos:])
+        return "".join(parts)

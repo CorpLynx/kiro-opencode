@@ -7,10 +7,10 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ipredact import DEFAULT_EXCLUDES, LINK_LOCAL16, Redactor, fmt_v6, mask_len  # noqa: E402
-
-SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ipredact.py")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+from ipredact import DEFAULT_EXCLUDES, Redactor, fmt_v6, mask_len  # noqa: E402
+from ipredact.core import LINK_LOCAL16  # noqa: E402
 KEY = "test-key-0123456789"
 
 
@@ -263,8 +263,8 @@ class TextTest(unittest.TestCase):
 
 class CliTest(unittest.TestCase):
     def run_cli(self, *args, stdin=b"", check=True):
-        return subprocess.run([sys.executable, SCRIPT, *args], input=stdin,
-                              capture_output=True, check=check)
+        return subprocess.run([sys.executable, "-m", "ipredact", *args], input=stdin,
+                              capture_output=True, check=check, cwd=ROOT)
 
     def test_stdin_with_key_is_deterministic_and_reversible(self):
         a = self.run_cli("-k", KEY, stdin=b"10.1.2.3 2001:db8::1\n").stdout
