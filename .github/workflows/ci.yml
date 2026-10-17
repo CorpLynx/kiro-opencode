@@ -31,3 +31,20 @@ jobs:
       - run: npm install -g opencode-ai@1.19.3
       - run: sudo apt-get install -y tmux # for the TUI tracker checks
       - run: OPENCODE_BIN=$(command -v opencode) npm run test:e2e
+
+  ghe-policy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ghe-policy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm install -g opencode-ai@1.19.3
+      - run: OPENCODE_BIN=$(command -v opencode) npm run test:e2e

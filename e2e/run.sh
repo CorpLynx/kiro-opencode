@@ -41,7 +41,7 @@ home() {
 oc() { # home, args...
   local d=$1; shift
   (cd "$WORK/project" && XDG_CONFIG_HOME=$d/config XDG_DATA_HOME=$d/data XDG_CACHE_HOME=$d/cache XDG_STATE_HOME=$d/state \
-    timeout 90 "$OC" "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    timeout 90 "$OC" "$@" </dev/null 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
 }
 expect() { # name, haystack, needle
   if grep -qF -- "$3" <<<"$2"; then pass "$1"; else fail "$1" "    expected to find: $3

@@ -220,6 +220,11 @@ Prior art studied for the design: [`opencode-kiro`](https://github.com/NachoFLiz
 `kiro-cli` over ACP) and `opencode-kiro-auth` (GPL-3.0, direct API). This project is an independent MIT
 implementation and does not copy code from the GPL project.
 
+## Also in this repository
+
+[`ghe-policy/`](ghe-policy/) is a separate plugin, `opencode-ghe-policy`, that makes a GitHub Enterprise
+repository the control plane for opencode: central policy, command guardrails and commit provenance.
+
 ## License
 
 MIT
