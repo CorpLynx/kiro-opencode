@@ -53,6 +53,8 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | organization, org-root, ou, org-policy | `aws:organization:<o-id>`, `aws:org-root:<r-id>`, `aws:ou:<ou-id>`, `aws:org-policy:<p-id>` |
 
 `collect aws` and `collect aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
+
+Both collectors describe themselves in `meta` the same way: `collector`, `collected_at`, and `accounts` (and, for `aws-org`, `ous`) as sorted lists of IDs. `collect aws` also records `regions` and `region_source`.
 | site | `net:site:<lower-case name>` |
 | device | `net:device:<normalize_hostname(name)>`; use `facts.device_id()` |
 | segment | `net:segment:<cidr>` |
@@ -76,11 +78,11 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 | --- | --- |
 | organization | `org_id`, `arn`, `feature_set`, `management_account_id` |
 | org-root | `root_id`, `arn`, `policy_types` (enabled, short names: `scp`, `rcp`, `tag`, `backup`, `ai-opt-out`, `chatbot`, `declarative-ec2`), `policies` |
-| ou | `ou_id`, `arn`, `path` (`Root/Workloads/Prod`), `policies` |
+| ou | `ou_id`, `arn`, `path` (`Root/Workloads/Prod`), `policies`, `empty` (true when it holds no OUs or accounts) |
 | org-policy | `policy_id`, `type` (short name), `aws_managed`, `description` |
-| account | `account_id`, `name`; from `aws-org` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and with `--include` `tags` and `email` |
-| region | `region` |
-| vpc | `vpc_id`, `cidrs` (list), `ipv6_cidrs`, `is_default`, `account_id`, `region`, `tags` (dict) |
+| account | `account_id`, `name`, `collected` (true when `collect aws` reached it; after a merge, false for accounts only the organization listed); from `aws-org` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and with `--include` `tags` and `email` |
+| region | `region`, `empty` (true when nothing was found in it) |
+| vpc | `vpc_id`, `cidrs` (list), `ipv6_cidrs`, `is_default`, `account_id`, `region`, `tags` (dict, only with `--include tags`; this goes for every kind that has `tags`) |
 | subnet | `subnet_id`, `cidr`, `ipv6_cidrs`, `az`, `public` (bool: its route table has a route to an internet gateway), `routes` (list of `{"destination", "target"}`), `tags` |
 | internet-gateway, egress-only-internet-gateway | `gateway_id` |
 | nat-gateway | `nat_gateway_id`, `public_ips`, `private_ips`, `connectivity` (`public`/`private`) |

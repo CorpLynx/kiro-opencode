@@ -18,7 +18,7 @@ import ipaddress
 import sys
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
-from .model import (AWS_CGW, AWS_DX_CONNECTION, LINK_DX_VIF, LINK_STITCH, NET_DEVICE, Link,
+from .model import (AWS_ACCOUNT, AWS_CGW, AWS_DX_CONNECTION, LINK_DX_VIF, LINK_STITCH, NET_DEVICE, Link,
                     Topology, link_id, union)
 
 HELP = "Merge topologies and stitch on-prem devices to their AWS VPN and Direct Connect edges."
@@ -85,10 +85,20 @@ def merge(topologies: Iterable[Topology], stitch: bool = True,
     topologies = list(topologies)
     out = union(topologies)
     _warn_conflicts(topologies, out)
+    _mark_uncollected(out)
     out.meta["stitched"] = add_stitches(out, auto=stitch, manual=manual)
     for problem in out.validate():
         out.warn(f"merged topology: {problem}")
     return out
+
+
+def _mark_uncollected(topo: Topology) -> None:
+    """When some accounts were collected, an account that only the
+    organization listed says so, instead of looking like an empty one."""
+    accounts = topo.by_kind(AWS_ACCOUNT)
+    if any(a.attrs.get("collected") for a in accounts):
+        for account in accounts:
+            account.attrs.setdefault("collected", False)
 
 
 def _warn_conflicts(topologies: List[Topology], merged: Topology) -> None:

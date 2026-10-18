@@ -113,8 +113,17 @@ class OrgTest(unittest.TestCase):
         self.assertIs(topo.nodes[f"aws:account:{management}"].attrs["management"], True)
         self.assertEqual(topo.nodes[f"aws:account:{management}"].parent, root)
         self.assertEqual(topo.meta["collector"], "aws-org")
-        self.assertEqual(topo.meta["ous"], 4)
-        self.assertEqual(topo.meta["accounts"], 4)
+        self.assertEqual(topo.meta["ous"], sorted(
+            ids[k] for k in ("security", "workloads", "prod", "dev")))
+        self.assertEqual(len(topo.meta["accounts"]), 4)
+
+    def test_empty_ous_are_flagged(self):
+        self.client.create_organizational_unit(ParentId=self.ids["root"], Name="Unused")
+        topo = self.collect()
+        for ou in topo.by_kind("ou"):
+            self.assertEqual(bool(ou.attrs.get("empty")), not topo.children(ou.id), ou.label)
+        self.assertTrue(any(ou.attrs.get("empty") and ou.label == "Unused"
+                            for ou in topo.by_kind("ou")))
 
     def test_policies_and_delegated_admins(self):
         topo = self.collect()
@@ -200,7 +209,7 @@ class OrgTest(unittest.TestCase):
                                      "--include", "tags", "-o", out)
             self.assertEqual(status, 0, err)
             topo = Topology.load(out)
-            self.assertEqual(topo.meta["accounts"], 4)
+            self.assertEqual(len(topo.meta["accounts"]), 4)
             err = io.StringIO()
             with redirect_stderr(err), self.assertRaises(SystemExit) as exit_:
                 main(["collect", "aws-org", "--include", "passwords"])

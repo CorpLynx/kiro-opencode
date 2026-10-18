@@ -40,6 +40,26 @@ def device_with(name, ip):
     return t
 
 
+class UncollectedAccountsTest(unittest.TestCase):
+    def accounts(self, *ids):
+        t = Topology()
+        for i in ids:
+            t.add_node(f"aws:account:{i}", "account", i, account_id=i)
+        return t
+
+    def test_org_only_accounts_are_marked_when_others_were_collected(self):
+        org = self.accounts("111111111111", "222222222222")
+        collected = Topology()
+        collected.add_node("aws:account:111111111111", "account", collected=True)
+        m = merge([org, collected])
+        self.assertIs(m.nodes["aws:account:111111111111"].attrs["collected"], True)
+        self.assertIs(m.nodes["aws:account:222222222222"].attrs["collected"], False)
+
+    def test_nothing_is_marked_without_a_collection(self):
+        m = merge([self.accounts("111111111111")])
+        self.assertNotIn("collected", m.nodes["aws:account:111111111111"].attrs)
+
+
 class MergeTest(unittest.TestCase):
     def setUp(self):
         self.aws, self.net = Topology.load(AWS), Topology.load(NETWORK)

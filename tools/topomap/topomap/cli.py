@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 import sys
 from typing import List, Optional
 
 from . import __version__
+from .hygiene import untracked_hint
 from .model import Topology
 
 COLLECTORS = {
@@ -32,6 +34,7 @@ COMMANDS = {
     "diff": "topomap.diff",
     "filter": "topomap.filter",
     "render": "topomap.render",
+    "anonymize": "topomap.anonymize",
 }
 
 
@@ -70,6 +73,7 @@ def write_topology(topo: Topology, path: str) -> None:
     if path == "-":
         sys.stdout.write(text)
     else:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
 
@@ -86,6 +90,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     if isinstance(result, Topology):
         write_topology(result, args.output)
+        if getattr(args._module, "SENSITIVE", True):
+            hint = untracked_hint(args.output)
+            if hint:
+                print(f"topomap: note: {hint}", file=sys.stderr)
         for warning in result.meta.get("warnings", []):
             print(f"topomap: warning: {warning}", file=sys.stderr)
         return 0

@@ -286,12 +286,15 @@ def collect(client: Any, include: List[str] = (), policies: str = "attrs") -> To
     if policies != "none":
         _policies(org, oid, as_nodes=policies == "nodes")
     topo = org.topo
+    for ou in topo.by_kind(AWS_OU):
+        if not topo.children(ou.id):
+            ou.attrs["empty"] = True
     meta: Dict[str, Any] = {
         "collector": "aws-org",
         "organization": topo.nodes[oid].attrs["org_id"],
         "management_account": org.management or None,
-        "accounts": len(topo.by_kind(AWS_ACCOUNT)),
-        "ous": len(topo.by_kind(AWS_OU)),
+        "accounts": sorted(n.attrs["account_id"] for n in topo.by_kind(AWS_ACCOUNT)),
+        "ous": sorted(n.attrs["ou_id"] for n in topo.by_kind(AWS_OU)),
         "collected_at": _now().strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     if topo.meta.get("warnings"):

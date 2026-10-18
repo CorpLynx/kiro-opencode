@@ -70,6 +70,8 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
   - VPN connections, with tunnels;
   - Direct Connect connections, gateways, virtual interfaces and associations.
   - With `--include instances,endpoints`, also EC2 instances and VPC endpoints.
+  - Tags are left out by default, since they are free text (project names, owners). Add `--include tags` to keep them. A resource's Name tag still labels it.
+  - Every region enabled for the account is walked unless you pass `--region`. `meta.region_source` records how the list was chosen: `--region`, `describe-regions`, `fallback` (the region listing was denied, so `us-east-1` only) or `mixed`.
 - **Read-only, enforced in code.** Every boto3 client is wrapped so only `Describe*`/`List*`/`Get*`/`Search*` calls can run. The only exception is STS `AssumeRole`, on the client that fetches credentials for other accounts.
 - **Several accounts:**
   - `--profile` (repeatable) uses your own profiles.
@@ -102,7 +104,7 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
 - **Extras** (`--include`):
   - `tags`: account tags, one API call per account.
   - `emails`: account email addresses. These are personal data, so they're off by default.
-- **Combining with network data:** `collect aws` gives each account the same ID, so `merge org.json aws.json` draws each account inside its OU, with its regions and VPCs inside the account. An account with nothing collected inside it is drawn as an account icon; one holding VPCs is drawn as a container.
+- **Combining with network data:** `collect aws` gives each account the same ID, so `merge org.json aws.json` draws each account inside its OU, with its regions and VPCs inside the account. After a merge, an account that `collect aws` could not reach is labelled "not collected", an empty OU "empty" and a region with nothing in it "no resources", so a bare box is never mistaken for an unscanned one. An account with nothing collected inside it is drawn as an account icon; one holding VPCs is drawn as a container.
 
 ### Saved output and configs (`collect files`)
 
@@ -134,7 +136,7 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
   - an AWS customer gateway whose IP is one of the device's addresses;
   - the Direct Connect connection of a VIF whose customer address is one of the device's addresses;
   - anything you pair by hand with `--stitch device=node`, for gateways behind NAT. Gateways that match nothing are listed in a warning.
-- **`filter`** shrinks big estates down to a readable picture. It takes `--aws-only` / `--network-only`, `--kind`, `--exclude-kind az` (children move up), `--collapse vpc` (subnets fold into their VPC, and links are re-pointed), `--around core1 --depth 2` and `--match REGEX`.
+- **`filter`** shrinks big estates down to a readable picture. It takes `--aws-only` / `--network-only`, `--kind`, `--exclude-kind az` (children move up), `--collapse vpc` (subnets fold into their VPC, and links are re-pointed), `--around core1 --depth 2`, `--match REGEX` and `--hide-empty` (drops regions and OUs in which nothing was found).
 - **`diff`** shows what was added, removed and changed, down to the attribute (`interfaces[Gi1/0/1].addresses: +10.0.0.9/30`). It writes text or JSON, and exits 1 when anything changed, so it can watch for drift in CI.
 
 ## Drawing (`render`)
@@ -150,13 +152,23 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
 - **Output is deterministic:** the same input gives byte-identical output.
 - **Options:** `--direction LR` reads left to right, `--title` adds a title, and `--no-link-labels` drops port and subnet labels.
 
-### Sharing diagrams safely
+### Sharing and committing output safely
 
-Diagrams are full of addresses. The draw.io, SVG, Mermaid and DOT outputs are plain text, and so is the topology JSON. That means [`tools/ip-redactor`](../ip-redactor) can redact them, keeping the structure, before you send them to a vendor:
+Snapshots and diagrams carry account IDs, names, tags and addresses from the real estate. Two things help:
+
+- **Keep real output out of git.** Write it under `topomap-out/`, which the repo ignores (`-o topomap-out/all.json`). If you write real output somewhere inside a git repository that doesn't ignore it, topomap prints a note.
+- **`anonymize` makes a shareable copy.** Render from the anonymized JSON and the diagram is safe too:
 
 ```sh
-ipredact network.drawio -o network.redacted.drawio --key-file redact.key
+topomap anonymize topomap-out/all.json -o sample.json
+topomap render sample.json -o sample.svg
 ```
+
+  It replaces account, organization, OU and resource IDs (same prefix and length), names and tag values (`account-1`, `ou-2`), descriptions, serial numbers, source file names, e-mail addresses and MAC addresses. The same real value always gets the same fake, and parent/child structure is kept. Nothing maps back, because no table or key is written. If any original ID is still in the output, there's a warning.
+  - **Addresses:** `--ips ipredact` (the default) runs the addresses through [`tools/ip-redactor`](../ip-redactor), keeping subnets and containment true. Install it first (`pip install ./tools/ip-redactor`); without it, the command stops with that instruction. `--ips public` needs nothing: it moves only public addresses into the documentation ranges and leaves private ones as they are. `--ips keep` leaves all of them. `--ip-key-file` gives the same addresses on every run.
+  - **`--keep-names`** leaves names and tag values alone; IDs and addresses are still replaced.
+
+The text outputs (draw.io, SVG, Mermaid, DOT) can also be run through `ipredact` directly, but that doesn't touch IDs or names.
 
 ## Limits
 

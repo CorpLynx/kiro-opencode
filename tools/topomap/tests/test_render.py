@@ -495,5 +495,20 @@ class RenderTest(unittest.TestCase):
                                                  "TOPOMAP_REGEN_FIXTURES=1")
 
 
+class OrgLabelTest(unittest.TestCase):
+    def lines(self, kind, **attrs):
+        from topomap.model import Node
+        from topomap.render.labels import node_lines
+        return node_lines(Node(id=f"x:{kind}:1", kind=kind, label="Name", attrs=attrs))
+
+    def test_status_lines(self):
+        self.assertIn("not collected", self.lines("account", account_id="111111111111",
+                                                  collected=False))
+        self.assertNotIn("not collected", self.lines("account", account_id="111111111111",
+                                                     collected=True))
+        self.assertIn("no resources", self.lines("region", region="us-east-1", empty=True))
+        self.assertIn("empty", self.lines("ou", ou_id="ou-aaaa-bbbbbbbb", empty=True))
+
+
 if __name__ == "__main__":
     unittest.main()

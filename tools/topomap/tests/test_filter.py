@@ -209,5 +209,27 @@ class FilterCliTest(unittest.TestCase):
             cli.main(["filter", "--aws-only", "--network-only"])
 
 
+class HideEmptyTest(unittest.TestCase):
+    def topo(self):
+        t = Topology()
+        t.add_node("aws:account:111111111111", "account")
+        t.add_node("aws:region:111111111111:us-east-1", "region", parent="aws:account:111111111111")
+        t.add_node("aws:region:111111111111:eu-west-1", "region", parent="aws:account:111111111111",
+                   empty=True)
+        t.add_node("aws:vpc:vpc-00000001", "vpc", parent="aws:region:111111111111:us-east-1")
+        return t
+
+    def test_empty_regions_are_removed(self):
+        out = filter_topology(self.topo(), hide_empty=True)
+        self.assertNotIn("aws:region:111111111111:eu-west-1", out.nodes)
+        self.assertIn("aws:region:111111111111:us-east-1", out.nodes)
+        self.assertEqual(out.validate(), [])
+        self.assertEqual(out.meta["filters"], [{"hide_empty": True}])
+
+    def test_kept_by_default(self):
+        out = filter_topology(self.topo())
+        self.assertIn("aws:region:111111111111:eu-west-1", out.nodes)
+
+
 if __name__ == "__main__":
     unittest.main()

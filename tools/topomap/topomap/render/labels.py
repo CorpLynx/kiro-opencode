@@ -42,16 +42,18 @@ def _details(node: Node) -> List[str]:
         return [_join(a.get("account_id")),
                 "management account" if a.get("management") else "",
                 status.lower() if status and status.upper() != "ACTIVE" else "",
+                "not collected" if a.get("collected") is False else "",
                 _policy_line(a)]
     if k == "organization":
         return [_join(a.get("org_id"))]
     if k in ("org-root", "ou"):
         # Containers show one detail line: the SCPs matter more than the ID.
-        return [_policy_line(a), _join(a.get("ou_id") or a.get("root_id"))]
+        return [_policy_line(a), "empty" if a.get("empty") else "",
+                _join(a.get("ou_id") or a.get("root_id"))]
     if k == "org-policy":
         return [str(a.get("type") or "").upper()]
     if k == "region":
-        return [_join(a.get("region"))]
+        return [_join(a.get("region")), "no resources" if a.get("empty") else ""]
     if k == "vpc":
         return [_join(list(a.get("cidrs") or []) + list(a.get("ipv6_cidrs") or []))]
     if k == "subnet":

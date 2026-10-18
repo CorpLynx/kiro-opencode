@@ -145,7 +145,9 @@ class CoreTest(AwsTestCase):
         self.assertEqual(vpc.label, f"prod ({ids['vpc']})")
         self.assertEqual(vpc.attrs["cidrs"], ["10.0.0.0/16", "10.1.0.0/16"])
         self.assertEqual(vpc.attrs["account_id"], ACCOUNT)
-        self.assertEqual(vpc.attrs["tags"], {"Name": "prod"})
+        self.assertNotIn("tags", vpc.attrs)  # tags are opt-in; the Name tag still labels it
+        tagged = self.collect("--include", "tags")
+        self.assertEqual(tagged.nodes[vpc.id].attrs["tags"], {"Name": "prod"})
         az = f"aws:az:{ids['vpc']}:{REGION}a"
         self.assertEqual(topo.nodes[az].parent, vpc.id)
         web = topo.nodes[f"aws:subnet:{ids['web']}"]
@@ -216,12 +218,33 @@ class CoreTest(AwsTestCase):
         self.assertEqual(topo.meta["regions"], [REGION, "us-west-2"])
         self.assertIn(f"aws:region:{ACCOUNT}:us-west-2", topo.nodes)
 
+    def test_region_source_and_empty_regions(self):
+        topo = self.collect()
+        self.assertEqual(topo.meta["region_source"], "describe-regions")
+        self.assertIs(topo.nodes[f"aws:account:{ACCOUNT}"].attrs["collected"], True)
+        for region in topo.by_kind("region"):
+            self.assertEqual(bool(region.attrs.get("empty")), not topo.children(region.id))
+
+    def test_regions_without_children_are_flagged_empty(self):
+        from topomap.model import Topology
+        topo = Topology()
+        topo.add_node("aws:region:1:a", "region")
+        topo.add_node("aws:region:1:b", "region")
+        topo.add_node("aws:vpc:v", "vpc", parent="aws:region:1:a")
+        aws._mark_empty_regions(topo)
+        self.assertNotIn("empty", topo.nodes["aws:region:1:a"].attrs)
+        self.assertIs(topo.nodes["aws:region:1:b"].attrs["empty"], True)
+
     def test_region_listing_failure_falls_back(self):
         self.overrides[("ec2", None)] = lambda c: Overlay(
             c, describe_regions=denied("DescribeRegions", "UnauthorizedOperation"))
         topo = self.collect()
         self.assertEqual(topo.meta["regions"], [REGION])
         self.assertTrue(any("cannot list enabled regions" in w for w in topo.meta["warnings"]))
+        self.assertEqual(topo.meta["region_source"], "fallback")
+
+    def test_region_source_when_regions_are_given(self):
+        self.assertEqual(self.collect("--region", REGION).meta["region_source"], "--region")
 
 
 class PartialFailureTest(AwsTestCase):
@@ -532,7 +555,7 @@ class DirectConnectTest(AwsTestCase):
                 stubbed.append(self.stub_dx(client))
             return stubbed[0]
         self.overrides[("directconnect", None)] = one_stubbed_client
-        topo = self.collect("--region", REGION)
+        topo = self.collect("--region", REGION, "--include", "tags")
         self.assertEqual(topo.meta.get("warnings"), None)
 
         gateway = topo.nodes[f"aws:dx-gateway:{DXGW}"]

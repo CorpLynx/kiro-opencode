@@ -43,6 +43,10 @@ Each project folder contains:
 
 Projects don't import from each other through relative paths. If a plugin needs a tool, it depends on the tool's installed package or CLI. That way every project can be installed on its own.
 
+## Keeping real data out
+
+Fixtures and samples use made-up values only. `scripts/check_real_data.py` runs in CI and fails when a tracked file holds an AWS account ID or Organizations ID that isn't obviously fake (`python3 scripts/check_real_data.py` runs it locally). To turn a real topomap run into something shareable, use `topomap anonymize`.
+
 ## Adding a project
 
 1. Create `tools/<name>/`, `plugins/<host>-<name>/` or `builds/<name>/` with the files above.

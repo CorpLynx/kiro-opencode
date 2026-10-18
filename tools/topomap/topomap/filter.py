@@ -38,13 +38,15 @@ PORT_ATTRS = ("source_port", "target_port")
 def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Sequence[str] = (),
                     collapse: Sequence[str] = (), around: Optional[str] = None, depth: int = 1,
                     match: Optional[str] = None, aws_only: bool = False,
-                    network_only: bool = False) -> Topology:
+                    network_only: bool = False, hide_empty: bool = False) -> Topology:
     """Return a filtered copy of `topo` (the input is not changed).
 
     `around` is a node ID or exact label; its neighbourhood is everything
     within `depth` link hops of it and, for a container, of its contents.
     `match` is a regular expression searched in each node's label and ID.
-    What was applied is appended to meta["filters"].
+    `hide_empty` drops regions and OUs the collectors flagged `empty`, which
+    is most of a many-region diagram. What was applied is appended to
+    meta["filters"].
     """
     for option, values in (("kind", kinds), ("exclude-kind", exclude_kinds),
                            ("collapse", collapse)):
@@ -73,6 +75,10 @@ def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Se
     if exclude_kinds:
         applied["exclude_kind"] = sorted(set(exclude_kinds))
     excluded = {n.id for n in topo.nodes.values() if n.kind in exclude_kinds}
+    if hide_empty:
+        applied["hide_empty"] = True
+        excluded |= {n.id for n in topo.nodes.values()
+                     if n.attrs.get("empty") is True and not topo.children(n.id)}
     selected = set(topo.nodes) - excluded
     for pick in picks:
         selected &= pick
@@ -265,6 +271,8 @@ def add_arguments(parser) -> None:
                         help="link hops for --around (default: 1)")
     parser.add_argument("--match", metavar="REGEX",
                         help="keep only nodes whose label or ID matches; prefix (?i) to ignore case")
+    parser.add_argument("--hide-empty", action="store_true",
+                        help="remove regions and OUs flagged empty (nothing found in them)")
     only = parser.add_mutually_exclusive_group()
     only.add_argument("--aws-only", action="store_true",
                       help="keep only AWS nodes (IDs under aws:) and external nodes linked to them")
@@ -279,4 +287,4 @@ def run(args) -> Topology:
                            exclude_kinds=args.exclude_kind, collapse=args.collapse,
                            around=args.around, depth=1 if args.depth is None else args.depth,
                            match=args.match, aws_only=args.aws_only,
-                           network_only=args.network_only)
+                           network_only=args.network_only, hide_empty=args.hide_empty)

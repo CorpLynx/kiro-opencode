@@ -15,6 +15,7 @@ import os
 import sys
 from typing import Any, Optional
 
+from ..hygiene import untracked_hint
 from ..model import Topology
 
 HELP = "Draw a topology as draw.io, SVG, Mermaid or Graphviz DOT."
@@ -78,6 +79,10 @@ def run(args) -> int:
     if not args.output or args.output == "-":
         sys.stdout.write(text)
     else:
+        os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(text)
+        hint = None if topo.meta.get("anonymized") else untracked_hint(args.output)
+        if hint:
+            print(f"topomap: note: {hint}", file=sys.stderr)
     return 0

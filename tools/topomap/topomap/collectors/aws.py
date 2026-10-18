@@ -37,7 +37,7 @@ HELP = ("Collect VPCs, subnets, gateways, TGWs, VPNs, peering and Direct Connect
         "(read-only).")
 PRODUCES_TOPOLOGY = True
 
-EXTRAS = ("instances", "endpoints")
+EXTRAS = ("instances", "endpoints", "tags")
 READ_ONLY_PREFIXES = ("describe_", "list_", "get_", "search_")
 FALLBACK_REGION = "us-east-1"
 PUBLIC_SERVICES = node_id("ext", NET_EXTERNAL, "aws-public")
@@ -362,6 +362,7 @@ class _Scope:
     topo: Topology = field(default_factory=Topology)
     hints: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     regions: List[str] = field(default_factory=list)
+    region_source: str = ""
 
     @property
     def key(self) -> Tuple[str, str]:
@@ -921,7 +922,9 @@ def _enabled_regions(scope: _Scope, account: _Account) -> List[str]:
     except _boto_errors() as e:
         scope.warn(f"cannot list enabled regions ({_error_code(e)}); collecting "
                    f"{FALLBACK_REGION} only")
+        scope.region_source = "fallback"
         return [FALLBACK_REGION]
+    scope.region_source = "describe-regions"
     return sorted(r["RegionName"] for r in regions) or [FALLBACK_REGION]
 
 
@@ -931,7 +934,9 @@ def _collect_account(account: _Account, regions: Optional[List[str]]) -> _Scope:
     scope = _Scope(account.account_id)
     name = account.name or _account_name(account)
     scope.topo.add_node(scope.account_node, AWS_ACCOUNT, _label({}, account.account_id, name),
-                        account_id=account.account_id, name=name or None)
+                        account_id=account.account_id, name=name or None, collected=True)
+    if regions:
+        scope.region_source = "--region"
     scope.regions = list(dict.fromkeys(regions)) if regions else _enabled_regions(scope, account)
     _guarded(scope, "directconnect", lambda: _dx_gateways(scope, account.client("directconnect")))
     return scope
@@ -984,6 +989,14 @@ def _reparent_shared(topo: Topology) -> None:
             node.parent = home
 
 
+def _mark_empty_regions(topo: Topology) -> None:
+    """Flag regions that were reached but hold nothing, so a diagram can say
+    "no resources" instead of leaving a bare box that looks unscanned."""
+    for node in topo.by_kind(AWS_REGION):
+        if not topo.children(node.id):
+            node.attrs["empty"] = True
+
+
 def _fill_labels(topo: Topology) -> None:
     """Nodes only ever seen without a label get their resource ID."""
     for node in topo.nodes.values():
@@ -991,8 +1004,24 @@ def _fill_labels(topo: Topology) -> None:
             node.label = node.id.split(":")[-1]
 
 
+def _region_source(scopes: List[_Scope]) -> str:
+    """How the regions were chosen, or "mixed" when accounts differ (one
+    account's region listing may be denied while the others' is not)."""
+    sources = {s.region_source for s in scopes if s.region_source}
+    return sources.pop() if len(sources) == 1 else "mixed" if sources else ""
+
+
+def _drop_tags(topo: Topology) -> None:
+    """Tags are free text people fill in (project names, owners); they are
+    only kept when asked for. The Name tag still labels the node."""
+    for node in topo.nodes.values():
+        node.attrs.pop("tags", None)
+    for link in topo.links.values():
+        link.attrs.pop("tags", None)
+
+
 def _assemble(scopes: List[_Scope], warnings: List[str], accounts: List[str],
-              regions: List[str]) -> Topology:
+              regions: List[str], include: Iterable[str] = ()) -> Topology:
     first = Topology()
     for warning in warnings:
         first.warn(warning)
@@ -1006,11 +1035,15 @@ def _assemble(scopes: List[_Scope], warnings: List[str], accounts: List[str],
                 known.setdefault(key, value)
     _add_placeholders(topo, hints)
     _reparent_shared(topo)
+    _mark_empty_regions(topo)
     _fill_labels(topo)
+    if "tags" not in include:
+        _drop_tags(topo)
     meta: Dict[str, Any] = {
         "collector": "aws",
         "accounts": sorted(accounts),
         "regions": sorted(set(regions)),
+        "region_source": _region_source(scopes),
         "collected_at": _now().strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     if topo.meta.get("warnings"):
@@ -1029,4 +1062,4 @@ def run(args) -> Topology:
         units = [(a, r) for a, s in zip(accounts, account_scopes) for r in s.regions]
         region_scopes = list(pool.map(lambda u: _collect_region(u[0], u[1], include), units))
     return _assemble(account_scopes + region_scopes, warnings,
-                     [a.account_id for a in accounts], [r for _, r in units])
+                     [a.account_id for a in accounts], [r for _, r in units], include)
