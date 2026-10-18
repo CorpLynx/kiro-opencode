@@ -69,7 +69,7 @@ def _ids(topo: Topology) -> Dict[str, str]:
 
 
 def _class_of(vclass: str) -> Optional[str]:
-    if vclass in ("instance", "eks-cluster"):
+    if vclass in ("instance", "eks-cluster", "aws-resource"):
         return "ec2"
     if vclass == "bedrock-model":
         return "ai"

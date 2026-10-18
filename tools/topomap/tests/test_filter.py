@@ -260,3 +260,48 @@ class AiFilterTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MaxPerTypeTest(unittest.TestCase):
+    def inventory(self):
+        t = Topology()
+        t.add_node("aws:account:111122223333", "account", "111122223333")
+        group = "aws:service:111122223333:us-east-1:acm"
+        t.add_node(group, "aws-service", "Certificate Manager", "aws:account:111122223333",
+                   service="acm")
+        for i in range(5):
+            arn = f"arn:aws:acm:us-east-1:111122223333:certificate/c{i}"
+            t.add_node(f"aws:resource:{arn}", "aws-resource", f"c{i}", group, arn=arn,
+                       service="acm", resource_type="AWS::CertificateManager::Certificate")
+        t.add_node("aws:resource:arn:aws:acm-pca:us-east-1:111122223333:certificate-authority/ca",
+                   "aws-resource", "ca", group, service="acm-pca",
+                   resource_type="AWS::ACMPCA::CertificateAuthority")
+        t.add_link("related", "aws:resource:arn:aws:acm:us-east-1:111122223333:certificate/c0",
+                   "aws:resource:arn:aws:acm-pca:us-east-1:111122223333:certificate-authority/ca",
+                   directed=True, relation="Is issued by")
+        t.add_link("related", "aws:resource:arn:aws:acm:us-east-1:111122223333:certificate/c1",
+                   "aws:resource:arn:aws:acm-pca:us-east-1:111122223333:certificate-authority/ca",
+                   directed=True, relation="Is issued by")
+        return t
+
+    def test_types_over_the_limit_fold_into_one_counted_node(self):
+        out = filter_topology(self.inventory(), max_per_type=4)
+        self.assertEqual(out.validate(), [])
+        summary = [n for n in out.by_kind("aws-resource") if n.attrs.get("summarized")]
+        self.assertEqual(len(summary), 1)
+        self.assertEqual(summary[0].label, "5 × certificate")
+        self.assertEqual(summary[0].attrs["summarized"], 5)
+        self.assertEqual(summary[0].parent, "aws:service:111122223333:us-east-1:acm")
+        # The CA is under the limit and stays; the two links merge into one.
+        self.assertEqual(len(out.by_kind("aws-resource")), 2)
+        (link,) = out.links.values()
+        self.assertEqual((link.source, link.attrs["collapsed_links"]), (summary[0].id, 2))
+        self.assertEqual(out.meta["filters"], [{"max_per_type": 4}])
+
+    def test_at_the_limit_nothing_folds(self):
+        out = filter_topology(self.inventory(), max_per_type=5)
+        self.assertEqual(len(out.by_kind("aws-resource")), 6)
+
+    def test_bad_limit(self):
+        with self.assertRaises(ValueError):
+            filter_topology(self.inventory(), max_per_type=0)
