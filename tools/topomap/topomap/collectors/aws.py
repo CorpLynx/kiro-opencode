@@ -35,10 +35,10 @@ from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_CGW, AWS_DX_CONNECTION, AWS_DX_GAT
 
 HELP = ("Collect VPCs, subnets, gateways, TGWs, VPNs, peering and Direct Connect from AWS "
         "(read-only), and with --ai, --iam and --eks Bedrock models, IAM roles and users, and "
-        "EKS clusters.")
+        "EKS clusters; --all-resources adds every resource in the account.")
 PRODUCES_TOPOLOGY = True
 
-EXTRAS = ("instances", "endpoints", "tags")
+EXTRAS = ("instances", "endpoints", "tags", "relationships")
 READ_ONLY_PREFIXES = ("describe_", "list_", "get_", "search_")
 FALLBACK_REGION = "us-east-1"
 
@@ -241,6 +241,12 @@ def add_arguments(parser) -> None:
     parser.add_argument("--eks", action="store_true",
                         help="also collect EKS clusters: version, endpoint access, node groups, "
                              "Fargate profiles and add-ons")
+    parser.add_argument("--all-resources", action="store_true",
+                        help="also collect every resource in the account, from AWS Config and "
+                             "Resource Explorer (or, where neither is on, Cloud Control and the "
+                             "tagging API), each in its VPC or subnet when known and otherwise "
+                             "in a box for its service; --include relationships draws Config's "
+                             "relationships between them")
     parser.add_argument("--skip-network", action="store_true",
                         help="don't collect VPCs, gateways, TGWs, VPNs and Direct Connect; for "
                              "a faster run when you only want --ai, --iam or --eks")
@@ -272,12 +278,15 @@ class _Account:
         self._expires = expires
         self._lock = threading.Lock()
 
-    def client(self, service: str, region: Optional[str] = None) -> ReadOnlyClient:
+    def client(self, service: str, region: Optional[str] = None,
+               also: Iterable[str] = ()) -> ReadOnlyClient:
+        """A read-only client; `also` names read operations outside the
+        Describe/List/Get/Search pattern (Config's SelectResourceConfig)."""
         with self._lock:
             if self._renew and self._expires and _now() > self._expires - timedelta(minutes=5):
                 self._session, self._expires = self._renew()
             session = self._session
-        return ReadOnlyClient(_new_client(session, service, region or self.home_region))
+        return ReadOnlyClient(_new_client(session, service, region or self.home_region), also)
 
 
 @dataclass
@@ -1000,13 +1009,13 @@ def _enabled_regions(scope: _Scope, account: _Account) -> List[str]:
 def _wanted(args: Any) -> frozenset:
     """The optional collections asked for, as the names `include` carries."""
     flags = {"ai": "ai", "iam": "iam", "iam_all": "iam-all", "eks": "eks",
-             "skip_network": "skip-network"}
+             "all_resources": "all-resources", "skip_network": "skip-network"}
     return frozenset(name for attr, name in flags.items() if getattr(args, attr, False))
 
 
 def _needs_regions(include: Iterable[str]) -> bool:
     include = set(include)
-    return "skip-network" not in include or bool(include & {"ai", "eks"})
+    return "skip-network" not in include or bool(include & {"ai", "eks", "all-resources"})
 
 
 def _collect_account(account: _Account, regions: Optional[List[str]],
@@ -1054,6 +1063,9 @@ def _collect_region(account: _Account, region: str, include: Iterable[str],
     if "ai" in include:
         from . import aws_ai
         _guarded(scope, "bedrock", lambda: aws_ai.collect(scope, account, region, grants))
+    if "all-resources" in include:
+        from . import aws_inventory
+        _guarded(scope, "inventory", lambda: aws_inventory.collect(scope, account, region))
     if scope.scp_denied:
         scope.topo.add_node(scope.region_node, AWS_REGION, region, scope.account_node,
                             scp_denied=sorted(scope.scp_denied))
@@ -1158,8 +1170,11 @@ def _assemble(scopes: List[_Scope], warnings: List[str], accounts: List[str],
                 known.setdefault(key, value)
     _add_placeholders(topo, hints)
     _reparent_shared(topo)
+    if "all-resources" in include:
+        from . import aws_inventory
+        aws_inventory.finish(topo, links="relationships" in include)
     _mark_empty_regions(topo)
-    if "skip-network" in include:
+    if "skip-network" in include and "all-resources" not in include:
         _drop_empty_regions(topo)
     _add_trust_links(topo)
     _fill_labels(topo)

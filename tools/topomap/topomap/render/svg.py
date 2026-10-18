@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Tuple
 
+from ..aws_services import service_info
 from ..model import Topology
 from . import labels, styles
 from .layout import EDGE_LINE_H, LINE_H, Box, Layout, Route, edge_text_width
@@ -115,8 +116,16 @@ BOXED = {"segment": ("#DAE8FC", "#6C8EBF"), "device": ("#F5F5F5", "#666666"),
          "generic": ("#F5F5F5", "#666666")}
 
 
-def _glyph(box: Box) -> str:
+def _service_tile(topo: Topology, nid: str) -> Tuple[int, int, str]:
+    _, _, color, short = service_info(str(topo.nodes[nid].attrs.get("service") or ""))
+    return _aws_tile(short, color)
+
+
+def _glyph(box: Box, topo: Topology) -> str:
     x, y, w, h = box.icon
+    if box.vclass == "aws-resource":
+        vw, vh, body = _service_tile(topo, box.id)
+        return f'<g transform="translate({x} {y}) scale({w / vw:.4g} {h / vh:.4g})">{body}</g>'
     if box.vclass in BOXED or box.vclass not in GLYPHS:
         fill, stroke = BOXED.get(box.vclass, BOXED["generic"])
         rx = 16 if box.vclass == "segment" else 6
@@ -149,8 +158,9 @@ def _container(box: Box, topo: Topology) -> str:
     tip = esc(labels.tooltip(topo.nodes[box.id]))
     tab = f'<rect x="{box.x}" y="{box.y}" width="8" height="8" fill="{stroke}"/>'
     logo, text_x = "", box.x + 14
-    if box.vclass in CORNER_TILES:
-        vw, vh, body = _aws_tile(*CORNER_TILES[box.vclass])
+    if box.vclass in CORNER_TILES or box.vclass == "aws-service":
+        vw, vh, body = (_service_tile(topo, box.id) if box.vclass == "aws-service"
+                        else _aws_tile(*CORNER_TILES[box.vclass]))
         logo = (f'<g transform="translate({box.x + 8} {box.y + 6}) scale({30 / vw:.4g} {30 / vh:.4g})">'
                 f'{body}</g>')
         text_x = box.x + 46
@@ -165,13 +175,13 @@ def _leaf(box: Box, topo: Topology) -> str:
     tip = esc(labels.tooltip(topo.nodes[box.id]))
     x, y, w, h = box.icon
     opacity = ' opacity="0.7"' if topo.nodes[box.id].attrs.get("external") else ""
-    if box.vclass in BOXED or box.vclass not in GLYPHS:
+    if box.vclass != "aws-resource" and (box.vclass in BOXED or box.vclass not in GLYPHS):
         n = len(box.lines)
         text = _text_lines(box.lines, x + w / 2, y + h / 2 - (n - 1) * LINE_H / 2 + 4, True)
     else:
         text = _text_lines(box.lines, x + w / 2, y + h + 15, True, halo=True)
     return (f'<g class="node {esc(box.vclass)}" data-id="{esc(box.id)}"{opacity}>'
-            f'<title>{tip}</title>{_glyph(box)}{text}</g>')
+            f'<title>{tip}</title>{_glyph(box, topo)}{text}</g>')
 
 
 def _edge(route: Route) -> str:

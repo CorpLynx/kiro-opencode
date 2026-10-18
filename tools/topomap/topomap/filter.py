@@ -12,7 +12,9 @@ three parts, applied in this order:
    children of a removed container move up to the nearest kept ancestor,
    which is how `--exclude-kind az` gives a flatter VPC.
 3. **Collapse.** `--collapse vpc` folds everything inside each VPC into it,
-   re-pointing links that ended inside at the VPC.
+   re-pointing links that ended inside at the VPC. `--max-per-type N` folds
+   the resources `collect aws --all-resources` found, where one box holds
+   more than N of a type, into one "286 × certificate" node.
 
 Links survive only if both ends do, so the result always passes
 `Topology.validate()`.
@@ -25,7 +27,7 @@ import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from .merge import find_node, read_topology
-from .model import NODE_KINDS, Link, Node, Topology, link_id
+from .model import AWS_RESOURCE, NODE_KINDS, Link, Node, Topology, link_id
 
 HELP = "Cut a topology down to the parts you want to draw."
 PRODUCES_TOPOLOGY = True
@@ -38,7 +40,8 @@ PORT_ATTRS = ("source_port", "target_port")
 def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Sequence[str] = (),
                     collapse: Sequence[str] = (), around: Optional[str] = None, depth: int = 1,
                     match: Optional[str] = None, aws_only: bool = False,
-                    network_only: bool = False, hide_empty: bool = False) -> Topology:
+                    network_only: bool = False, hide_empty: bool = False,
+                    max_per_type: Optional[int] = None) -> Topology:
     """Return a filtered copy of `topo` (the input is not changed).
 
     `around` is a node ID or exact label; its neighbourhood is everything
@@ -55,6 +58,8 @@ def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Se
         raise ValueError("--aws-only and --network-only exclude each other")
     if depth < 0:
         raise ValueError(f"--depth must be 0 or more, not {depth}")
+    if max_per_type is not None and max_per_type < 1:
+        raise ValueError(f"--max-per-type must be 1 or more, not {max_per_type}")
 
     applied: Dict[str, Any] = {}
     picks: List[Set[str]] = []
@@ -88,6 +93,9 @@ def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Se
     if collapse:
         applied["collapse"] = sorted(set(collapse))
         _collapse(out, collapse)
+    if max_per_type is not None:
+        applied["max_per_type"] = max_per_type
+        _summarize(out, max_per_type)
     if applied:
         out.meta["filters"] = list(out.meta.get("filters") or []) + [applied]
     if topo.nodes and not out.nodes:
@@ -202,6 +210,31 @@ def _collapse(topo: Topology, kinds: Sequence[str]) -> None:
     _repoint_links(topo, folded)
 
 
+def _summarize(topo: Topology, limit: int) -> None:
+    """Where one box holds more than `limit` resources of one type, draw
+    them as a single node that counts them, in place. Only leaves fold: a
+    resource holding others is a container and stays."""
+    from .render.labels import short_type
+    groups: Dict[Tuple[str, str], List[Node]] = {}
+    for node in topo.by_kind(AWS_RESOURCE):
+        if node.parent and not topo.children(node.id):
+            key = (node.parent, str(node.attrs.get("resource_type") or node.attrs.get("service")))
+            groups.setdefault(key, []).append(node)
+    folded: Dict[str, str] = {}
+    for (parent, rtype), members in sorted(groups.items()):
+        if len(members) <= limit:
+            continue
+        first = members[0].attrs
+        sid = f"aws:resource:{parent}/{rtype}"
+        for member in members:
+            folded[member.id] = sid
+            del topo.nodes[member.id]
+        topo.add_node(sid, AWS_RESOURCE, f"{len(members)} × {short_type(rtype) or rtype}", parent,
+                      service=first.get("service"), resource_type=rtype, region=first.get("region"),
+                      summarized=len(members))
+    _repoint_links(topo, folded)
+
+
 def _repoint_links(topo: Topology, folded: Dict[str, str]) -> None:
     """Move link ends that pointed inside a collapsed node onto it.
 
@@ -264,6 +297,9 @@ def add_arguments(parser) -> None:
     parser.add_argument("--collapse", action="append", default=[], metavar="KIND",
                         help="fold everything inside each node of this kind into it, re-pointing"
                              " links (e.g. --collapse vpc); repeatable")
+    parser.add_argument("--max-per-type", type=int, metavar="N",
+                        help="where a box holds more than N resources of one type (from collect "
+                             "aws --all-resources), draw them as one node that counts them")
     parser.add_argument("--around", metavar="NODE",
                         help="keep only what is within --depth link hops of this node (ID or"
                              " exact label) or of its contents")
@@ -287,4 +323,5 @@ def run(args) -> Topology:
                            exclude_kinds=args.exclude_kind, collapse=args.collapse,
                            around=args.around, depth=1 if args.depth is None else args.depth,
                            match=args.match, aws_only=args.aws_only,
-                           network_only=args.network_only, hide_empty=args.hide_empty)
+                           network_only=args.network_only, hide_empty=args.hide_empty,
+                           max_per_type=args.max_per_type)

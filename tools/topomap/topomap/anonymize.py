@@ -53,6 +53,11 @@ _SHORT = {  # Organizations IDs: root, organization, policy
 }
 _RESOURCE = re.compile(r"(?<![\w-])((?:[a-z]+-)*[a-z]+)-([0-9a-f]{17}|[0-9a-f]{8})(?![\w-])")
 _ACCOUNT = re.compile(r"(?<!\d)\d{12}(?!\d)")
+# IAM unique IDs (AROA... for a role, AIDA... for a user), which AWS Config
+# uses as their resource IDs, and UUIDs (KMS keys, stacks, ...).
+_UNIQUE = re.compile(r"(?<![A-Z0-9])(A(?:RO|ID|GP|NP|NV|KI|SI|PK|IP|NA)A)([A-Z0-9]{12,28})(?![A-Za-z0-9])")
+_UUID = re.compile(r"(?<![0-9A-Za-z])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                   r"[0-9a-fA-F]{12}(?![0-9A-Za-z])")
 _OIDC = re.compile(r"(?<=/id/)[0-9A-Fa-f]{32}(?![0-9A-Za-z])")  # an EKS cluster's OIDC issuer ID
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 _MAC = re.compile(r"(?<![0-9A-Fa-f:.-])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f:.-])"
@@ -63,7 +68,8 @@ _LABEL = re.compile(r"^(.*\S) \(([^()]+)\)$")
 
 # Kinds whose label is the name a person gave the thing.
 _NAMED_KINDS = {"account": "account", "ou": "ou", "org-policy": "policy", "device": "device",
-                "site": "site", "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster"}
+                "site": "site", "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster",
+                "aws-resource": "resource"}
 _GENERIC = {"root", "main", "default", "internet"}
 _FREE_TEXT = {"description": "description", "comment": "comment", "serial": "serial",
               "sources": "source"}
@@ -90,6 +96,7 @@ _SAFE_KEYS = frozenset("""
     base_model version platform_version endpoint_public_access endpoint_private_access created
     summary aws_owned admin_access trusts_everyone trusts_own_account mfa_enabled active_access_keys nodegroups
     instance_types capacity_type ami_type desired min max
+    resource_id found_by relationships relation inventory_sources resources summarized subnet_ids
 """.split())
 _DOC_NETS = (ipaddress.ip_network("192.0.2.0/24"), ipaddress.ip_network("198.51.100.0/24"),
              ipaddress.ip_network("203.0.113.0/24"))
@@ -144,7 +151,8 @@ class _Mapper:
         return self.names.get(name.strip().lower())
 
     def _is_id(self, text: str) -> bool:
-        return any(rx.fullmatch(text) for rx in (_OU, _RESOURCE, _ACCOUNT, *_SHORT.values()))
+        return any(rx.fullmatch(text) for rx in (_OU, _RESOURCE, _ACCOUNT, _UNIQUE, _UUID,
+                                                 *_SHORT.values()))
 
     def _name_rx(self) -> Optional["re.Pattern[str]"]:
         if self._rx is None:
@@ -170,7 +178,7 @@ class _Mapper:
     def scan(self, text: str) -> None:
         """Note every identifier already in the input, so a fake never
         lands on a real one."""
-        for rx in (_OU, _RESOURCE, _OIDC, _ACCOUNT, _EMAIL, *_SHORT.values()):
+        for rx in (_OU, _RESOURCE, _OIDC, _ACCOUNT, _EMAIL, _UNIQUE, _UUID, *_SHORT.values()):
             self.taken.update(m.group(0) for m in rx.finditer(text))
 
     def identifiers(self, text: str) -> str:
@@ -178,6 +186,10 @@ class _Mapper:
             a, b = m.group(1), m.group(2)
             return self._fake_id("ou", m.group(0), lambda n: f"ou-{n:0{len(a)}x}-{n:0{len(b)}x}")
 
+        text = _UUID.sub(lambda m: self._fake_id(
+            "uuid", m.group(0), lambda n: f"00000000-0000-4000-8000-fa4e{n:08x}"), text)
+        text = _UNIQUE.sub(lambda m: self._fake_id(
+            "unique", m.group(0), lambda n: f"{m.group(1)}{n:0{len(m.group(2))}d}"), text)
         text = _OU.sub(ou, text)
         for letter, rx in _SHORT.items():
             text = rx.sub(lambda m, letter=letter: self._fake_id(

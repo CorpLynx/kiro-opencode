@@ -422,3 +422,44 @@ class HygieneTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InventoryTest(unittest.TestCase):
+    """What `collect aws --all-resources` adds: ARNs in IDs, IAM unique IDs
+    and UUIDs as resource IDs."""
+
+    def test_arns_unique_ids_and_uuids_are_replaced(self):
+        t = Topology({"collector": "aws"})
+        t.add_node(f"aws:account:{ACCOUNT}", "account", ACCOUNT, account_id=ACCOUNT)
+        group = f"aws:service:{ACCOUNT}:global:iam"
+        t.add_node(group, "aws-service", "IAM", f"aws:account:{ACCOUNT}", service="iam")
+        role = f"arn:aws:iam::{ACCOUNT}:role/acme-payments-runtime"
+        t.add_node(f"aws:resource:{role}", "aws-resource", "acme-payments-runtime", group, arn=role,
+                   resource_id="AROAEXAMPLE1234567890", service="iam",
+                   resource_type="AWS::IAM::Role", found_by=["config"])
+        key_id = "1f0e2d3c-4b5a-6978-8091-a2b3c4d5e6f7"
+        key = f"arn:aws:kms:us-east-1:{ACCOUNT}:key/{key_id}"
+        t.add_node(f"aws:resource:{key}", "aws-resource", key_id, group, arn=key,
+                   resource_id=key_id, service="kms", resource_type="AWS::KMS::Key",
+                   found_by=["config"], relationships=[
+                       {"relation": "Is used by", "type": "AWS::IAM::Role",
+                        "id": "AROAEXAMPLE1234567890"}])
+        out = anon.anonymize(t, ips="public")
+        text = dumped(out)
+        for original in (ACCOUNT, "acme", "AROAEXAMPLE1234567890", key_id):
+            self.assertNotIn(original, text)
+        self.assertEqual(out.validate(), [])
+        self.assertFalse([w for w in out.meta.get("warnings", []) if "anonymize" in w])
+        node = next(n for n in out.by_kind("aws-resource") if n.attrs["service"] == "kms")
+        # The same fake everywhere: in the ID, the ARN, the label and the relationship.
+        fake_uuid = node.attrs["resource_id"]
+        self.assertRegex(fake_uuid, r"^00000000-0000-4000-8000-fa4e[0-9a-f]{8}$")
+        self.assertIn(fake_uuid, node.id)
+        self.assertEqual(node.label, fake_uuid)
+        role_node = next(n for n in out.by_kind("aws-resource") if n.attrs["service"] == "iam")
+        self.assertEqual(node.attrs["relationships"][0]["id"], role_node.attrs["resource_id"])
+        self.assertTrue(role_node.attrs["resource_id"].startswith("AROA"))
+        strict = anon.anonymize(t, ips="public", strict=True)
+        kept = next(n for n in strict.by_kind("aws-resource") if n.attrs["service"] == "kms").attrs
+        self.assertEqual(sorted(kept), ["arn", "found_by", "relationships", "resource_id",
+                                        "resource_type", "service"])

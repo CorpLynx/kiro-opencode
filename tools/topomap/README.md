@@ -2,7 +2,7 @@
 
 `topomap` builds topology diagrams from the network itself instead of from someone's memory. It collects from three kinds of source:
 
-- **AWS:** read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account, and with flags the Bedrock models each account can use, its custom IAM roles and users, and EKS clusters.
+- **AWS:** read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account, and with flags the Bedrock models each account can use, its custom IAM roles and users, EKS clusters, or every resource in the account.
 - **Network devices:** an SSH crawl that follows CDP/LLDP neighbours.
 - **Files you already have:** saved `show` output and config backups, from RANCID, Oxidized or a folder of captures.
 
@@ -129,6 +129,30 @@ topomap render topomap-out/models.json -o topomap-out/models.svg
 
 `filter --kind bedrock-model` keeps the models and everything above them (region, account, OU, organization). The same works for `--kind iam-role --kind iam-user` (an IAM view with trust links) and `--kind eks-cluster`. Roles, users and cluster names identify an estate, so `topomap anonymize` replaces them (and `--strict` drops everything else but a short list of facts).
 
+### Every resource in an account (`--all-resources`)
+
+`collect aws --all-resources` draws everything in the account, not only the network: every Lambda function, bucket, queue, table, key, role, log group and the rest, each with its service's AWS icon.
+
+```sh
+topomap collect aws --profile prod --all-resources -o topomap-out/everything.json
+topomap filter topomap-out/everything.json --max-per-type 10 | topomap render - -o topomap-out/everything.drawio
+```
+
+- **Where the list comes from.** AWS has no single "list everything" call, so each region is asked through whichever inventory service the account has turned on, and the answers are combined by ARN:
+  - **AWS Config**, if a recorder is recording (Control Tower turns it on in governed regions). Config also gives each resource's relationships, which is what puts a resource in its VPC or subnet.
+  - **Resource Explorer**, if the region has an index and a default view. It lists untagged resources too.
+  - If neither is on in a region, a **fallback** lists about fifty common resource types with Cloud Control, plus anything tagged, through the tagging API. That can miss types, so there's one warning per account naming the regions. Turning on Resource Explorer (one click, all regions, no charge) gives the complete list.
+  - Each region records what it used in `inventory_sources`.
+- **Where each resource is drawn:**
+  - A resource the network collection already draws (VPC, subnet, instance, gateway) keeps its node, and IAM roles and EKS clusters from `--iam` and `--eks` keep theirs.
+  - When Config says a resource is in one subnet, it's drawn in that subnet. When it spans several subnets (a Lambda function, a load balancer) or names only a VPC (a security group), it's drawn in the VPC.
+  - Everything else goes in a box for its service in its region ("Lambda · 12 resources"), or in the account for global services such as IAM, CloudFront and Route 53.
+- **Relationships:** `--include relationships` also draws Config's relationships between resources ("Is associated with Role") as thin dashed arrows. Relationships that placed a resource aren't drawn twice.
+- **Big accounts:** the JSON keeps every resource. `filter --max-per-type N` draws a box's resources of one type as one node (`286 × certificate`) wherever there are more than N, which keeps a few thousand resources readable.
+- **Permissions:** the AWS-managed `ReadOnlyAccess` policy covers all of it: `config:DescribeConfigurationRecorderStatus` and `config:SelectResourceConfig`, `resource-explorer-2:GetIndex`, `GetDefaultView` and `ListResources`, and for the fallback `cloudformation:ListResources` (with the services' own list permissions) and `tag:GetResources`. `SelectResourceConfig` is read-only but isn't named `Describe`/`List`/`Get`/`Search`, so it's allowed by name on the Config client only.
+- **Without `--skip-network`** you get the full VPC picture with resources placed in it. With `--skip-network`, VPCs and subnets come from the inventory itself and are still drawn as VPCs and subnets.
+- **Not collected:** resource configurations (only identity, type, tags and relationships), and resources Config and Resource Explorer don't record or index. Config's compliance and inventory reports aren't resources and are left out.
+
 ### AWS Organizations (`collect aws-org`)
 
 ![An organization chart: the root with its SCP, the management account, and Infrastructure, Sandbox, Security and Workloads OUs (Workloads holding Prod and NonProd), each OU listing its SCPs and accounts](docs/organization.png)
@@ -183,7 +207,7 @@ topomap render topomap-out/models.json -o topomap-out/models.svg
   - an AWS customer gateway whose IP is one of the device's addresses;
   - the Direct Connect connection of a VIF whose customer address is one of the device's addresses;
   - anything you pair by hand with `--stitch device=node`, for gateways behind NAT. Gateways that match nothing are listed in a warning.
-- **`filter`** shrinks big estates down to a readable picture. It takes `--aws-only` / `--network-only`, `--kind`, `--exclude-kind az` (children move up), `--collapse vpc` (subnets fold into their VPC, and links are re-pointed), `--around core1 --depth 2`, `--match REGEX` and `--hide-empty` (drops regions and OUs in which nothing was found).
+- **`filter`** shrinks big estates down to a readable picture. It takes `--aws-only` / `--network-only`, `--kind`, `--exclude-kind az` (children move up), `--collapse vpc` (subnets fold into their VPC, and links are re-pointed), `--max-per-type N` (more than N resources of one type in a box become one counted node), `--around core1 --depth 2`, `--match REGEX` and `--hide-empty` (drops regions and OUs in which nothing was found).
 - **`diff`** shows what was added, removed and changed, down to the attribute (`interfaces[Gi1/0/1].addresses: +10.0.0.9/30`). It writes text or JSON, and exits 1 when anything changed, so it can watch for drift in CI.
 
 ## Drawing (`render`)
@@ -224,10 +248,11 @@ The text outputs (draw.io, SVG, Mermaid, DOT) can also be run through `ipredact`
 - **Lines are straight.** In dense areas they can cross icons and other containers, and port labels can overlap. Tidy up in draw.io if it matters.
 - **Junos crawling:** Junos has no `show lldp neighbors detail` for all interfaces, so the crawler can't follow Junos neighbours by address. They are still drawn.
 - **Not parsed yet:** CDP/LLDP summary tables on Cisco and Arista (only the `detail` forms), Junos `groups`/`apply-groups`, and SNMP.
-- **AWS resources not collected:** DX LAGs, TGW Connect peers, Cloud WAN, load balancers and security groups. From Organizations: policy contents (only names and attachments), and SCP effects on accounts.
+- **AWS resources not collected:** DX LAGs, TGW Connect peers and Cloud WAN; load balancers, security groups and everything else only with `--all-resources`. From Organizations: policy contents (only names and attachments), and SCP effects on accounts.
 - **Bedrock, IAM and EKS tests use emulators and stubs.** moto has no Bedrock API, so `--ai` is tested with stubbed answers; IAM and EKS run against moto. All three have also been run against a real lab organization, but only that one, so please report anything that looks wrong.
 - **Trust links are drawn at collection time,** between accounts collected in the same run. Merging snapshots from separate runs doesn't add links between them. A role that trusts an account outside the run keeps it in `trusted_accounts` but gets no link.
 - **IAM scope:** policy documents, permission analysis and credentials are never read, so "admin" means the AdministratorAccess managed policy is attached, not that the effective permissions were computed.
+- **`--all-resources` is tested with stubbed Config, Resource Explorer and Cloud Control answers** (the emulator has none of them), not yet against a real account. Please report resources that land in the wrong place.
 - **Untested against real equipment:** the device parsers were written from known output formats and tested against made-up captures, not real devices. Please report output that doesn't parse.
 
 ## Development

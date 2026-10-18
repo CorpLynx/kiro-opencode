@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
+from ..aws_services import service_info
 from ..model import Topology
 from . import labels
 from .layout import Box, Layout, Route
@@ -144,6 +145,9 @@ CONTAINER_STYLES: Dict[str, str] = {
                          "verticalAlign=top;align=left;spacingLeft=30;fontColor=#5A6C86;dashed=0;",
     "group": ("fillColor=none;strokeColor=#5A6C86;dashed=1;verticalAlign=top;fontStyle=0;"
               "fontColor=#5A6C86;whiteSpace=wrap;html=1;" + _PLAIN_GROUP_TAIL),
+    "aws-service": ("fillColor=none;strokeColor=#7D8998;dashed=1;verticalAlign=top;fontStyle=1;"
+                    "fontColor=#232F3E;whiteSpace=wrap;html=1;align=left;spacingLeft=46;"
+                    + _PLAIN_GROUP_TAIL),
 }
 
 _EDGE_BASE = "html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;"
@@ -161,6 +165,7 @@ EDGE_STYLES: Dict[str, str] = {
     "stitch": "strokeColor=#E7157B;strokeWidth=2;dashed=1;dashPattern=1 3;",
     "policy-attachment": "strokeColor=#E7157B;strokeWidth=1;dashed=1;dashPattern=4 3;",
     "iam-trust": "strokeColor=#DD344C;strokeWidth=1.5;dashed=1;dashPattern=6 3;",
+    "related": "strokeColor=#879196;strokeWidth=1;dashed=1;dashPattern=3 3;",
 }
 _END_LABEL = "edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;"
 _TITLE = "text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;"
@@ -179,7 +184,24 @@ def html_text(text: str) -> str:
             .replace('"', "&quot;"))
 
 
+def service_icon(service: str) -> str:
+    """draw.io's AWS 2021 icon for a service, in the service's category colour."""
+    _, icon, color, _ = service_info(service)
+    return _AWS_NET_RESOURCE.replace("fillColor=#8C4FFF", f"fillColor={color}") + f"{icon};"
+
+
+def _logo_style(box: Box, topo: Topology) -> str:
+    if box.vclass == "aws-service":
+        return service_icon(str(topo.nodes[box.id].attrs.get("service") or ""))
+    return CORNER_LOGOS.get(box.vclass, "")
+
+
 def vertex_style(box: Box, topo: Topology, parent_class: str = "") -> str:
+    if box.vclass == "aws-resource":
+        style = service_icon(str(topo.nodes[box.id].attrs.get("service") or ""))
+        if not parent_class.startswith("subnet"):
+            style += "labelBackgroundColor=#FFFFFF;"
+        return style
     if box.container:
         style = CONTAINER_STYLES.get(box.vclass, CONTAINER_STYLES["group"])
     else:
@@ -218,12 +240,13 @@ def _vertex(box: Box, parent_box, topo: Topology) -> str:
             f'        </UserObject>')
 
 
-def _logo(box: Box) -> str:
-    """The service icon in the corner of an IAM or Bedrock box. draw.io's group
-    shapes only take a fixed set of corner icons, so the logo is its own cell."""
+def _logo(box: Box, style: str) -> str:
+    """The service icon in the corner of an IAM, Bedrock or service box.
+    draw.io's group shapes only take a fixed set of corner icons, so the
+    logo is its own cell."""
     x, y, w, h = LOGO_BOX
     return (f'        <mxCell id="{xml_attr(box.id)}#logo" value="" '
-            f'style="{xml_attr(CORNER_LOGOS[box.vclass])}" '
+            f'style="{xml_attr(style)}" '
             f'vertex="1" connectable="0" parent="{xml_attr(box.id)}">\n'
             f'          <mxGeometry x="{x}" y="{y}" width="{w}" height="{h}" as="geometry" />\n'
             f'        </mxCell>')
@@ -277,8 +300,9 @@ def render(topo: Topology, lay: Layout, link_labels: bool = True) -> str:
         box = lay.boxes[nid]
         parent_box = lay.boxes.get(box.parent) if box.parent else None
         cells.append(_vertex(box, parent_box, topo))
-        if box.container and box.vclass in CORNER_LOGOS:
-            cells.append(_logo(box))
+        logo = _logo_style(box, topo) if box.container else ""
+        if logo:
+            cells.append(_logo(box, logo))
     return ('<mxfile host="topomap" agent="topomap" compressed="false">\n'
             f'  <diagram id="topomap" name="{xml_attr(name)}">\n'
             f'    <mxGraphModel dx="{lay.width}" dy="{lay.height}" grid="1" gridSize="10" '

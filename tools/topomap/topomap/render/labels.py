@@ -7,6 +7,7 @@ are plain text; each renderer escapes them for its own format.
 from __future__ import annotations
 
 import ipaddress
+import re
 from typing import Any, List, Tuple
 
 from ..model import (LINK_DX_VIF, LINK_DXGW_ASSOCIATION, LINK_L3, LINK_PHYSICAL, LINK_SEGMENT,
@@ -118,7 +119,19 @@ def _details(node: Node) -> List[str]:
         return [_join(a.get("mgmt_ip")), _join(a.get("model") or a.get("platform"))]
     if k == "segment":
         return [_join(a.get("subnet"))]
+    if k == "aws-resource":
+        return [short_type(a.get("resource_type"))]
+    if k == "aws-service":
+        count = a.get("resources")
+        return [f"{count} resource{'s' if count != 1 else ''}" if count else ""]
     return []
+
+
+def short_type(resource_type: Any) -> str:
+    """"AWS::EC2::NetworkInterface" or "ec2:network-interface" -> "network interface"."""
+    last = str(resource_type or "").replace("::", ":").split(":")[-1]
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", last)
+    return words.replace("-", " ").replace("_", " ").lower()
 
 
 def _policy_line(attrs: Any) -> str:

@@ -51,6 +51,8 @@ AWS_IAM = "iam"                        # an account's IAM roles and users, drawn
 AWS_IAM_ROLE = "iam-role"
 AWS_IAM_USER = "iam-user"
 AWS_EKS = "eks-cluster"
+AWS_SERVICE = "aws-service"           # one service's resources in a region (or account-wide)
+AWS_RESOURCE = "aws-resource"         # any resource --all-resources found, by ARN
 
 NET_SITE = "site"
 NET_DEVICE = "device"
@@ -62,6 +64,7 @@ NODE_KINDS = frozenset({
     AWS_ENDPOINT, AWS_TGW, AWS_VGW, AWS_CGW, AWS_DX_CONNECTION, AWS_DX_GATEWAY, AWS_INSTANCE,
     AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ORG_POLICY,
     AWS_BEDROCK, AWS_BEDROCK_MODEL, AWS_IAM, AWS_IAM_ROLE, AWS_IAM_USER, AWS_EKS,
+    AWS_SERVICE, AWS_RESOURCE,
     NET_SITE, NET_DEVICE, NET_SEGMENT, NET_EXTERNAL,
 })
 
@@ -80,11 +83,12 @@ LINK_DXGW_ASSOCIATION = "dxgw-association"
 LINK_STITCH = "stitch"                # on-prem device <-> AWS edge, found by merge
 LINK_POLICY = "policy-attachment"     # organization policy -> root / OU / account
 LINK_TRUST = "iam-trust"              # account or principal -> the role it may assume
+LINK_RELATED = "related"              # an AWS Config relationship between two resources
 
 LINK_KINDS = frozenset({
     LINK_PHYSICAL, LINK_L3, LINK_SEGMENT, LINK_TGW_ATTACHMENT, LINK_TGW_PEERING,
     LINK_VPC_PEERING, LINK_VPN, LINK_VGW_ATTACHMENT, LINK_DX_VIF, LINK_DXGW_ASSOCIATION,
-    LINK_STITCH, LINK_POLICY, LINK_TRUST,
+    LINK_STITCH, LINK_POLICY, LINK_TRUST, LINK_RELATED,
 })
 
 
