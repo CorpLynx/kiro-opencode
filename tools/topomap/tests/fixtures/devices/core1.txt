@@ -1,0 +1,239 @@
+core1# terminal length 0
+core1# show version
+Cisco Nexus Operating System (NX-OS) Software
+TAC support: http://www.cisco.com/tac
+Documents: http://www.cisco.com/en/US/products/ps9372/tsd_products_support_series_home.html
+Copyright (c) 2002-2022, Cisco Systems, Inc. All rights reserved.
+The copyrights to certain works contained in this software are
+owned by other third parties and used and distributed under their own
+licenses, such as open source.  This software is provided "as is," and unless
+otherwise stated, there is no warranty, express or implied, including but not
+limited to warranties of merchantability and fitness for a particular purpose.
+
+Software
+  BIOS: version 05.45
+ NXOS: version 9.3(10)
+  BIOS compile time:  07/05/2021
+  NXOS image file is: bootflash:///nxos.9.3.10.bin
+  NXOS compile time:  5/9/2022 9:00:00 [05/09/2022 18:57:47]
+
+
+Hardware
+  cisco Nexus9000 C93180YC-FX Chassis
+  Intel(R) Xeon(R) CPU  D-1528 @ 1.90GHz with 24569416 kB of memory.
+  Processor Board ID FDO23456789
+
+  Device name: core1
+  bootflash:   53298520 kB
+Kernel uptime is 120 day(s), 3 hour(s), 4 minute(s), 5 second(s)
+
+Last reset at 211425 usecs after Sun Jun 21 08:01:12 2026
+  Reason: Reset Requested by CLI command reload
+  System version: 9.3(10)
+  Service:
+
+plugin
+  Core Plugin, Ethernet Plugin
+
+Active Package(s):
+
+core1# show cdp neighbors detail
+----------------------------------------
+Device ID:dist1.example.net
+System Name: dist1
+
+Interface address(es):
+    IPv4 Address: 10.20.100.4
+Platform: cisco C9300-48P, Capabilities: Router Switch IGMP Filtering
+Interface: Ethernet1/1, Port ID (outgoing port): TenGigabitEthernet1/1/1
+Holdtime: 152 sec
+
+Version:
+Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.9.4a, RELEASE SOFTWARE (fc3)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2023 by Cisco Systems, Inc.
+Compiled Fri 20-Oct-23 10:44 by mcpre
+
+Advertisement Version: 2
+
+Native VLAN: 1
+Duplex: full
+
+Mgmt address(es):
+    IPv4 Address: 192.168.0.13
+
+----------------------------------------
+Device ID:core2.example.net(FDO23456790)
+System Name: core2
+
+Interface address(es):
+    IPv4 Address: 10.0.0.5
+Platform: N9K-C93180YC-FX, Capabilities: Router Switch IGMP Filtering Supports-STP-Dispute
+Interface: Ethernet1/53, Port ID (outgoing port): Ethernet1/53
+Holdtime: 171 sec
+
+Version:
+Cisco Nexus Operating System (NX-OS) Software, Version 9.3(10)
+
+Advertisement Version: 2
+
+Duplex: full
+
+MTU: 9216
+Physical Location: dc1 row A rack 4
+Mgmt address(es):
+    IPv4 Address: 192.168.0.12
+
+core1# show lldp neighbors detail
+Capability codes:
+  (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+  (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+Device ID            Local Intf      Hold-time  Capability  Port ID
+
+Chassis id: 0000.5e00.5321
+Port id: Te1/1/1
+Local Port id: Eth1/1
+Port Description: TenGigabitEthernet1/1/1
+System Name: dist1.example.net
+System Description: Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.9.4a, RELEASE SOFTWARE (fc3) Technical Support: http://www.cisco.com/techsupport Copyright (c) 1986-2023 by Cisco Systems, Inc. Compiled Fri 20-Oct-23 10:44 by mcpre
+Time remaining: 101 seconds
+System Capabilities: B, R
+Enabled Capabilities: B, R
+Management Address: 192.168.0.13
+Management Address IPV6: not advertised
+Vlan ID: 1
+
+
+Chassis id: 0000.5e00.5341
+Port id: Ethernet49/1
+Local Port id: Eth1/2
+Port Description: to core1 Eth1/2
+System Name: leaf1.example.net
+System Description: Arista Networks EOS version 4.28.3M running on an Arista Networks DCS-7050SX3-48YC8
+Time remaining: 97 seconds
+System Capabilities: B, R
+Enabled Capabilities: B, R
+Management Address: 192.168.0.21
+Management Address IPV6: not advertised
+Vlan ID: not advertised
+
+
+Chassis id: 0000.5e00.5301
+Port id: xe-0/1/0
+Local Port id: Eth1/49
+Port Description: to core1 Eth1/49
+System Name: edge1.example.net
+System Description: Juniper Networks, Inc. mx204 internet router, kernel JUNOS 21.4R3-S5.4, Build date: 2023-06-01 09:15:12 UTC Copyright (c) 1996-2023 Juniper Networks, Inc.
+Time remaining: 109 seconds
+System Capabilities: B, R
+Enabled Capabilities: B, R
+Management Address: 192.168.0.1
+Management Address IPV6: not advertised
+Vlan ID: not advertised
+
+
+Chassis id: 0000.5e00.5312
+Port id: Ethernet1/53
+Local Port id: Eth1/53
+Port Description: to core1 Eth1/53
+System Name: core2.example.net
+System Description: Cisco Nexus Operating System (NX-OS) Software 9.3(10) TAC support: http://www.cisco.com/tac Copyright (c) 2002-2022, Cisco Systems, Inc. All rights reserved.
+Time remaining: 113 seconds
+System Capabilities: B, R
+Enabled Capabilities: B, R
+Management Address: 192.168.0.12
+Management Address IPV6: not advertised
+Vlan ID: not advertised
+
+Total entries displayed: 4
+core1# show ip interface vrf all
+IP Interface Status for VRF "default"(1)
+loopback0, Interface status: protocol-up/link-up/admin-up, iod: 4,
+  IP address: 10.255.255.11, IP subnet: 10.255.255.11/32 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+  IP multicast groups locally joined: none
+  IP MTU: 1500 bytes (using link MTU)
+  IP primary address route-preference: 0, tag: 0
+Vlan100, Interface status: protocol-up/link-up/admin-up, iod: 6,
+  IP address: 10.20.100.2, IP subnet: 10.20.100.0/24 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+  IP multicast groups locally joined:
+      224.0.0.2  224.0.0.102
+  IP MTU: 1500 bytes (using link MTU)
+  IP primary address route-preference: 0, tag: 0
+Vlan999, Interface status: protocol-up/link-up/admin-up, iod: 7,
+  IP address: 10.0.0.21, IP subnet: 10.0.0.20/30 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+  IP multicast groups locally joined:
+      224.0.0.5  224.0.0.6
+  IP MTU: 9000 bytes
+Ethernet1/2, Interface status: protocol-up/link-up/admin-up, iod: 9,
+  IP address: 10.0.0.8, IP subnet: 10.0.0.8/31 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+  IP MTU: 9216 bytes (using link MTU)
+Ethernet1/49, Interface status: protocol-up/link-up/admin-up, iod: 56,
+  IP address: 10.0.0.1, IP subnet: 10.0.0.0/31 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+  IP MTU: 9216 bytes (using link MTU)
+Ethernet1/53, Interface status: protocol-up/link-up/admin-up, iod: 60,
+  IP address: 10.0.0.4, IP subnet: 10.0.0.4/31 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+  IP MTU: 9216 bytes (using link MTU)
+Ethernet1/54, Interface status: protocol-down/link-down/admin-down, iod: 61,
+  IP address: 10.0.0.30, IP subnet: 10.0.0.30/31 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+
+IP Interface Status for VRF "management"(2)
+mgmt0, Interface status: protocol-up/link-up/admin-up, iod: 2,
+  IP address: 192.168.0.11, IP subnet: 192.168.0.0/24 route-preference: 0, tag: 0
+  IP broadcast address: 255.255.255.255
+  IP multicast groups locally joined: none
+  IP MTU: 1500 bytes (using link MTU)
+
+core1# show ipv6 interface vrf all
+IPv6 Interface Status for VRF "default"(1)
+Vlan100, Interface status: protocol-up/link-up/admin-up, iod: 6
+  IPv6 address:
+    2001:db8:20:100::2/64 [VALID]
+  IPv6 subnet:  2001:db8:20:100::/64
+  IPv6 link-local address: fe80::200:5eff:fe00:5311 (default) [VALID]
+  IPv6 virtual addresses configured: none
+  IPv6 multicast routing: disabled
+  IPv6 report link local: disabled
+  IPv6 Forwarding feature: disabled
+Ethernet1/2, Interface status: protocol-up/link-up/admin-up, iod: 9
+  IPv6 address:
+    2001:db8:0:3::1/64 [VALID]
+  IPv6 subnet:  2001:db8:0:3::/64
+  IPv6 link-local address: fe80::200:5eff:fe00:5311 (default) [VALID]
+  IPv6 virtual addresses configured: none
+Ethernet1/49, Interface status: protocol-up/link-up/admin-up, iod: 56
+  IPv6 address:
+    2001:db8:0:1::2/64 [VALID]
+  IPv6 subnet:  2001:db8:0:1::/64
+  IPv6 link-local address: fe80::200:5eff:fe00:5311 (default) [VALID]
+  IPv6 virtual addresses configured: none
+
+IPv6 Interface Status for VRF "management"(2)
+
+core1# show interface description
+
+-------------------------------------------------------------------------------
+Port          Type   Speed   Description
+-------------------------------------------------------------------------------
+mgmt0         --     --      oob-mgmt
+Eth1/1        eth    10G     to dist1 Te1/1/1
+Eth1/2        eth    100G    to leaf1 Et49/1
+Eth1/3        eth    10G     --
+Eth1/49       eth    10G     to edge1 xe-0/1/0
+Eth1/53       eth    100G    to core2 Eth1/53
+Eth1/54       eth    100G    spare
+
+-------------------------------------------------------------------------------
+Interface                Description
+-------------------------------------------------------------------------------
+Vlan100                  users
+Vlan999                  ospf transit to core2
+loopback0                router-id
+
+core1# exit

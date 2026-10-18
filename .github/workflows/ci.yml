@@ -17,11 +17,14 @@ jobs:
         # One entry per Python project. "test" installs every optional extra;
         # "core" installs none, proving the stdlib-only core still works and
         # that extra-dependent tests skip cleanly.
-        project: [tools/ip-redactor]
+        project: [tools/ip-redactor, tools/topomap]
         python: ["3.9", "3.13"]
         install: [test]
         include:
           - project: tools/ip-redactor
+            python: "3.13"
+            install: core
+          - project: tools/topomap
             python: "3.13"
             install: core
     defaults:
