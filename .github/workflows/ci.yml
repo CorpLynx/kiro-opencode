@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: ${{ matrix.project }} (py${{ matrix.python }}, ${{ matrix.install }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # One entry per Python project. "test" installs every optional extra;
+        # "core" installs none, proving the stdlib-only core still works and
+        # that extra-dependent tests skip cleanly.
+        project: [tools/ip-redactor]
+        python: ["3.9", "3.13"]
+        install: [test]
+        include:
+          - project: tools/ip-redactor
+            python: "3.13"
+            install: core
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          if [ "${{ matrix.install }}" = core ]; then
+            python -m pip install .
+          else
+            python -m pip install ".[${{ matrix.install }}]"
+          fi
+      - name: Test
+        run: python -m unittest discover -s tests -v
