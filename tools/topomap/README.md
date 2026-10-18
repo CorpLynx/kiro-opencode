@@ -2,7 +2,7 @@
 
 `topomap` builds topology diagrams from the network itself instead of from someone's memory. It collects from three kinds of source:
 
-- **AWS:** read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account.
+- **AWS:** read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account, and with flags the Bedrock models each account can use, its custom IAM roles and users, and EKS clusters.
 - **Network devices:** an SSH crawl that follows CDP/LLDP neighbours.
 - **Files you already have:** saved `show` output and config backups, from RANCID, Oxidized or a folder of captures.
 
@@ -79,8 +79,55 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
   - `--org-role-name NAME` assumes `role/NAME` in every active account of your AWS Organization.
 - **Speed:** regions and accounts are collected in parallel (`--workers`).
 - **Failures:** a denied region or service becomes one warning and the rest is still collected.
+- **Regions blocked by an SCP:** when a service control policy explicitly denies EC2, EKS, Bedrock or Direct Connect in a region, that is recognised by the error text, reported once per service and region, and recorded on the region as `scp_denied`. The diagram labels it `SCP blocks EC2, EKS`, and `filter --hide-empty` drops it.
 - **Peers outside the collected estate** (a VPC in another account, a TGW peer) get a dashed placeholder.
 - VPN pre-shared keys and customer gateway configurations are never read.
+
+### GovCloud and other partitions
+
+topomap works in the AWS GovCloud (US) partition. Credentials only work in their own partition, so a GovCloud profile is separate from a commercial one.
+
+```sh
+topomap collect aws-org --profile gov-management -o topomap-out/gov-org.json
+topomap collect aws --profile gov-management --region us-gov-west-1 --region us-gov-east-1 \
+    --iam -o topomap-out/gov.json
+```
+
+- **Home region:** with no `--region` and no region in the profile, topomap tries the commercial, GovCloud and China starting regions in turn, so the partition is found from the credentials. Give `--region us-gov-west-1` to skip the probing.
+- **Regions:** `describe-regions` lists `us-gov-east-1` and `us-gov-west-1`. If that listing is denied, the fallback is `us-gov-west-1`.
+- **Service lookups:** whether Bedrock or EKS exists in a region is checked in that region's own partition. GovCloud has both in `us-gov-west-1` and `us-gov-east-1`.
+- **ARNs:** `--role-arn` and `--org-role-name` use the partition the credentials belong to (`arn:aws-us-gov:...`).
+- **Merging:** account IDs in GovCloud and commercial are different accounts, so merging both into one diagram is safe. Nothing links the two partitions.
+- **Tested with an emulator only.** The GovCloud code paths are exercised against moto in `us-gov-west-1` and with stubbed partition lookups, never against a real GovCloud account. Please report anything that behaves differently there. Bedrock availability in GovCloud follows the same API but I haven't seen real GovCloud answers.
+
+### Bedrock, IAM and EKS (`--ai`, `--iam`, `--eks`)
+
+Three flags on `collect aws` add what the network collection doesn't cover. Each is off by default, read-only, and works across every account `collect aws` reaches (`--org-role-name` for the whole organization).
+
+| Flag | Adds | Needs (read-only) |
+| --- | --- | --- |
+| `--ai` | A **Bedrock** group in each account and region where Bedrock exists. It holds a node for each foundation model that is **in use** (CloudWatch has Bedrock metrics for it in the last 14 days) or **granted** (an IAM policy in that account allows invoking it by name or pattern), plus the account's custom and imported models. A model nobody can call, because its agreement isn't in place, is marked `not invocable`. A policy granting every model is recorded on the box (`granted_all_to`), not drawn as hundreds of nodes. The list of models Bedrock offers in the region is only a count. Regions without Bedrock aren't asked. | `bedrock:ListFoundationModels`, `GetFoundationModelAvailability`, `ListCustomModels`, `ListImportedModels`, `ListProvisionedModelThroughputs`, `cloudwatch:ListMetrics`, `iam:GetAccountAuthorizationDetails` |
+| `--iam` | One node per **custom IAM role** and **user**, in an **IAM box** that is always drawn in the account's top-right corner. For a role: who may assume it (accounts, services, federated providers, or anyone), policy names, permissions boundary, last use. For a user: groups, policy names, whether MFA is on, and the status and age of access keys. Roles that trust a principal in another collected account get a drawn **trust link**. Service-linked roles and Identity Center roles are left out unless you add `--iam-all`. No policy documents, key IDs or credentials are read. | `iam:GetAccountAuthorizationDetails` (falls back to `ListRoles` and `ListUsers`), `ListMFADevices`, `ListAccessKeys` |
+| `--eks` | An **EKS cluster** node in its VPC: version, status, whether the API endpoint is public or private, logging, IAM role, OIDC issuer, node groups, Fargate profiles and add-ons. Pods and namespaces need the Kubernetes API and aren't collected. | `eks:ListClusters`, `DescribeCluster`, `ListNodegroups`, `DescribeNodegroup`, `ListFargateProfiles`, `DescribeFargateProfile`, `ListAddons` |
+
+Add `--skip-network` to leave out the VPC, gateway, TGW, VPN and Direct Connect collection, for a faster run when you only want these. Regions with nothing to show are then dropped from the output.
+
+**Why "in use or granted" and not "enabled":** Bedrock now switches most models on for every account, and its availability API says the same about all of them (an Anthropic model additionally needs a use-case form and, for some providers, an agreement). So availability can't tell one account from another. Usage and IAM grants can. Grants mean "an Allow statement exists": deny statements and permission boundaries aren't evaluated, so a grant doesn't prove a call would succeed. Usage only reaches back as far as CloudWatch keeps it (about two weeks).
+
+Bedrock access was written against the API's documentation, checked once against a real account, and tested with stubbed answers, because the test AWS emulator has no Bedrock. Please report anything that doesn't match what the console shows.
+
+An organization-wide picture of which accounts can use which models:
+
+```sh
+topomap collect aws-org --profile management -o topomap-out/org.json
+topomap collect aws --profile management --org-role-name OrganizationAccountAccessRole \
+    --ai --skip-network -o topomap-out/ai.json
+topomap merge topomap-out/org.json topomap-out/ai.json -o topomap-out/org-ai.json
+topomap filter topomap-out/org-ai.json --kind bedrock-model --hide-empty -o topomap-out/models.json
+topomap render topomap-out/models.json -o topomap-out/models.svg
+```
+
+`filter --kind bedrock-model` keeps the models and everything above them (region, account, OU, organization). The same works for `--kind iam-role --kind iam-user` (an IAM view with trust links) and `--kind eks-cluster`. Roles, users and cluster names identify an estate, so `topomap anonymize` replaces them (and `--strict` drops everything else but a short list of facts).
 
 ### AWS Organizations (`collect aws-org`)
 
@@ -156,7 +203,7 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
 
 Snapshots and diagrams carry account IDs, names, tags and addresses from the real estate. Two things help:
 
-- **Keep real output out of git.** Write it under `topomap-out/`, which the repo ignores (`-o topomap-out/all.json`). If you write real output somewhere inside a git repository that doesn't ignore it, topomap prints a note.
+- **Keep real output out of git.** Write it under `topomap-out/`, which the repo ignores (`-o topomap-out/all.json`; the folder is created for you). Real output is written readable by you only (mode 0600). If it lands inside a git repository that doesn't ignore it, topomap prints a note. That covers `-o`, a redirected stdout (`> out.json`) and a `--save-raw` folder.
 - **`anonymize` makes a shareable copy.** Render from the anonymized JSON and the diagram is safe too:
 
 ```sh
@@ -167,6 +214,8 @@ topomap render sample.json -o sample.svg
   It replaces account, organization, OU and resource IDs (same prefix and length), names and tag values (`account-1`, `ou-2`), descriptions, serial numbers, source file names, e-mail addresses and MAC addresses. The same real value always gets the same fake, and parent/child structure is kept. Nothing maps back, because no table or key is written. If any original ID is still in the output, there's a warning.
   - **Addresses:** `--ips ipredact` (the default) runs the addresses through [`tools/ip-redactor`](../ip-redactor), keeping subnets and containment true. Install it first (`pip install ./tools/ip-redactor`); without it, the command stops with that instruction. `--ips public` needs nothing: it moves only public addresses into the documentation ranges and leaves private ones as they are. `--ips keep` leaves all of them. `--ip-key-file` gives the same addresses on every run.
   - **`--keep-names`** leaves names and tag values alone; IDs and addresses are still replaced.
+  - **`--strict`** also drops every attribute that isn't on the list of known, non-free-text ones (tags, descriptions, serials, anything unfamiliar). Use it when you don't know what a field might contain.
+  - **Checks:** the output is searched for the original IDs, names and public addresses, and anything that survived is a warning. Fakes never equal a real value, and link order stays canonical, so `diff` and `merge` work on anonymized snapshots.
 
 The text outputs (draw.io, SVG, Mermaid, DOT) can also be run through `ipredact` directly, but that doesn't touch IDs or names.
 
@@ -176,6 +225,9 @@ The text outputs (draw.io, SVG, Mermaid, DOT) can also be run through `ipredact`
 - **Junos crawling:** Junos has no `show lldp neighbors detail` for all interfaces, so the crawler can't follow Junos neighbours by address. They are still drawn.
 - **Not parsed yet:** CDP/LLDP summary tables on Cisco and Arista (only the `detail` forms), Junos `groups`/`apply-groups`, and SNMP.
 - **AWS resources not collected:** DX LAGs, TGW Connect peers, Cloud WAN, load balancers and security groups. From Organizations: policy contents (only names and attachments), and SCP effects on accounts.
+- **Bedrock, IAM and EKS tests use emulators and stubs.** moto has no Bedrock API, so `--ai` is tested with stubbed answers; IAM and EKS run against moto. All three have also been run against a real lab organization, but only that one, so please report anything that looks wrong.
+- **Trust links are drawn at collection time,** between accounts collected in the same run. Merging snapshots from separate runs doesn't add links between them. A role that trusts an account outside the run keeps it in `trusted_accounts` but gets no link.
+- **IAM scope:** policy documents, permission analysis and credentials are never read, so "admin" means the AdministratorAccess managed policy is attached, not that the effective permissions were computed.
 - **Untested against real equipment:** the device parsers were written from known output formats and tested against made-up captures, not real devices. Please report output that doesn't parse.
 
 ## Development

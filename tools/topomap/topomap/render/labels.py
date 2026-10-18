@@ -52,8 +52,45 @@ def _details(node: Node) -> List[str]:
                 _join(a.get("ou_id") or a.get("root_id"))]
     if k == "org-policy":
         return [str(a.get("type") or "").upper()]
+    if k == "iam":
+        return [str(a["summary"]) if a.get("summary") else ""]
+    if k == "bedrock":
+        shown = a.get("models_shown")
+        return [f"{shown} in use or granted" if shown is not None else "",
+                "all models granted" if a.get("granted_all_to") else ""]
+    if k == "bedrock-model":
+        return [_join(a.get("provider")),
+                {"custom": "custom model", "imported": "imported model"}.get(
+                    str(a.get("source")), _join(a.get("evidence"))),
+                "not invocable" if a.get("invocable") is False else ""]
+    if k == "iam-role":
+        trusts = []
+        if a.get("trusts_everyone"):
+            trusts.append("trusts anyone")
+        if a.get("trusted_accounts"):
+            trusts.append(f"{len(a['trusted_accounts'])} account(s)")
+        if a.get("trusts_own_account"):
+            trusts.append("own account")
+        if a.get("trusted_services"):
+            trusts.append(_join([str(s).split(".")[0] for s in a["trusted_services"]][:2]))
+        if a.get("trusted_federated"):
+            trusts.append("federated")
+        return [("trusts " + ", ".join(trusts)) if trusts else "",
+                "admin access" if a.get("admin_access") else ""]
+    if k == "iam-user":
+        mfa = a.get("mfa_enabled")
+        keys = a.get("active_access_keys")
+        return [{True: "MFA", False: "no MFA"}.get(mfa, ""),
+                f"{keys} access key(s)" if keys else ""]
+    if k == "eks-cluster":
+        public = a.get("endpoint_public_access")
+        return [f"Kubernetes {a['version']}" if a.get("version") else "",
+                "public endpoint" if public else ("private endpoint" if public is False else "")]
     if k == "region":
-        return [_join(a.get("region")), "no resources" if a.get("empty") else ""]
+        denied = a.get("scp_denied")
+        return [_join(a.get("region")),
+                f"SCP blocks {_join(denied)}" if denied else
+                "no resources" if a.get("empty") else ""]
     if k == "vpc":
         return [_join(list(a.get("cidrs") or []) + list(a.get("ipv6_cidrs") or []))]
     if k == "subnet":

@@ -42,6 +42,10 @@ jobs:
           else
             python -m pip install ".[${{ matrix.install }}]"
           fi
+      - name: Install ip-redactor (topomap's anonymize calls its CLI)
+        if: matrix.project == 'tools/topomap' && matrix.install == 'test'
+        working-directory: tools/ip-redactor
+        run: python -m pip install .
       - name: Test
         run: python -m unittest discover -s tests -v
 
@@ -50,6 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -57,3 +63,5 @@ jobs:
         run: python3 -m unittest discover -s scripts -v
       - name: Check tracked files
         run: python3 scripts/check_real_data.py
+      - name: Check history
+        run: python3 scripts/check_real_data.py --history

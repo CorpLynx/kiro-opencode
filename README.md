@@ -8,6 +8,7 @@ A collection of standalone tools and editor/agent plugins. Each project lives in
 | --- | --- | --- |
 | [`tools/ip-redactor`](tools/ip-redactor) | CLI (Python) | Structure-preserving IPv4/IPv6 redaction for configs, logs, Office/Visio files and packet captures. It is keyed and reversible, and subnets stay together. |
 | [`tools/topomap`](tools/topomap) | CLI (Python) | Gathers network and AWS topology automatically (AWS APIs, AWS Organizations OUs and accounts, SSH crawl over CDP/LLDP, or saved command output and config backups), stitches on-prem to AWS, and draws it as draw.io, SVG, Mermaid or DOT. |
+| [`infra/`](infra/) | Terraform | Cheap AWS estate (VPC, subnets, internet gateway, EC2, S3 VPC endpoint) that `topomap collect aws` gathers. Reviewed by hand, not in CI: it creates real billable resources and needs AWS credentials. |
 
 ### In review ([PR #1](https://github.com/CorpLynx/kiro-opencode/pull/1))
 
@@ -45,7 +46,16 @@ Projects don't import from each other through relative paths. If a plugin needs 
 
 ## Keeping real data out
 
-Fixtures and samples use made-up values only. `scripts/check_real_data.py` runs in CI and fails when a tracked file holds an AWS account ID or Organizations ID that isn't obviously fake (`python3 scripts/check_real_data.py` runs it locally). To turn a real topomap run into something shareable, use `topomap anonymize`.
+Fixtures and samples use made-up values only. `scripts/check_real_data.py` runs in CI and fails when a file holds an AWS account ID or Organizations ID that isn't obviously fake, an AWS access key or secret key, a private key block, or a GitHub or Slack token.
+
+```sh
+python3 scripts/check_real_data.py             # tracked files and new, unignored ones
+python3 scripts/check_real_data.py --staged    # only what you are about to commit
+python3 scripts/check_real_data.py --history   # every line ever added, on every ref
+git config core.hooksPath scripts/hooks        # run --staged before every commit
+```
+
+Files that aren't UTF-8 text are listed rather than skipped silently. A legitimate token goes in `scripts/real-data-allowlist.txt`. To turn a real topomap run into something shareable, use `topomap anonymize`.
 
 ## Adding a project
 

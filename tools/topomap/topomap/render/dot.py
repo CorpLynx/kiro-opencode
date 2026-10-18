@@ -26,6 +26,10 @@ NODE_ATTRS = {
     "segment": 'shape=parallelogram, style=filled, fillcolor="#DAE8FC", color="#6C8EBF"',
     "external": 'shape=ellipse, style="filled,dashed", fillcolor="#EEEEEE", color="#8A929C"',
     "instance": 'shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"',
+    "eks-cluster": 'shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"',
+    "bedrock-model": 'shape=box, style="filled,rounded", fillcolor="#E6F6F3", color="#01A88D"',
+    "iam-role": 'shape=box, style="filled,rounded", fillcolor="#FCE9EC", color="#DD344C"',
+    "iam-user": 'shape=box, style="filled,rounded", fillcolor="#F2F3F3", color="#232F3D"',
 }
 AWS_GATEWAY_ATTRS = 'shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"'
 DEFAULT_ATTRS = 'shape=box, style="filled,rounded", fillcolor="#F5F5F5", color="#666666"'

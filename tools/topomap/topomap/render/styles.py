@@ -13,18 +13,19 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_ORG, AWS_ORG_POLICY, AWS_ORG_ROOT, AWS_OU, AWS_REGION,
-                     AWS_SUBNET, AWS_VPC, LINK_DX_VIF, LINK_POLICY,
+from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_BEDROCK, AWS_IAM, AWS_ORG, AWS_ORG_POLICY, AWS_ORG_ROOT, AWS_OU,
+                     AWS_REGION, AWS_SUBNET, AWS_VPC, LINK_DX_VIF, LINK_POLICY, LINK_TRUST,
                      LINK_DXGW_ASSOCIATION, LINK_L3, LINK_PHYSICAL, LINK_SEGMENT, LINK_STITCH,
                      LINK_TGW_ATTACHMENT, LINK_TGW_PEERING, LINK_VGW_ATTACHMENT, LINK_VPC_PEERING,
                      LINK_VPN, NET_DEVICE, NET_EXTERNAL, NET_SEGMENT, NET_SITE, Link, Topology)
 
 CONTAINER_KINDS = frozenset({AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ACCOUNT, AWS_REGION, AWS_VPC,
-                             AWS_AZ, AWS_SUBNET, NET_SITE})
+                             AWS_AZ, AWS_SUBNET, AWS_BEDROCK, AWS_IAM, NET_SITE})
 
 AWS_LEAF_KINDS = frozenset({
     "internet-gateway", "egress-only-internet-gateway", "nat-gateway", "vpc-endpoint",
     "transit-gateway", "vpn-gateway", "customer-gateway", "dx-connection", "dx-gateway", "instance",
+    "eks-cluster", "bedrock-model", "iam-role", "iam-user",
 })
 
 
@@ -64,13 +65,17 @@ SHAPES: Dict[str, Shape] = {
     "nat-gateway": Shape(48, 48, 4),
     "vpc-endpoint": Shape(48, 48, 4),
     "instance": Shape(48, 48, 5),
+    "eks-cluster": Shape(48, 48, 5),
+    "bedrock-model": Shape(130, 36, 4, boxed=True),
+    "iam-role": Shape(48, 48, 4),
+    "iam-user": Shape(40, 40, 4),
     "server": Shape(28, 50, 5),
     "phone": Shape(58, 50, 5),
     "wireless-ap": Shape(50, 50, 5),
 }
 CONTAINER_TIER = 3
 
-CONTAINER_CLASSES = ("organization", "org-root", "ou", "account", "region", "vpc", "az",
+CONTAINER_CLASSES = ("organization", "org-root", "ou", "account", "region", "vpc", "az", "bedrock", "iam",
                      "subnet-public", "subnet-private", "site", "group")
 
 # Colours shared by the SVG renderer (draw.io uses its own built-in styles).
@@ -83,6 +88,8 @@ CONTAINER_COLORS: Dict[str, tuple] = {
     "region": ("#00A4A6", "none", True, "#147EBA"),
     "vpc": ("#8C4FFF", "none", False, "#6B3FD4"),
     "az": ("#147EBA", "none", True, "#147EBA"),
+    "bedrock": ("#01A88D", "#F0FAF8", False, "#017A66"),
+    "iam": ("#DD344C", "#FEF5F6", False, "#B02A3D"),
     "subnet-public": ("#7AA116", "#F2F6E8", False, "#248814"),
     "subnet-private": ("#00A4A6", "#E6F6F7", False, "#147EBA"),
     "site": ("#7D8998", "none", False, "#5A6C86"),
@@ -110,6 +117,7 @@ LINK_LOOKS: Dict[str, LinkLook] = {
     LINK_DXGW_ASSOCIATION: LinkLook("#1A73E8", 2),
     LINK_STITCH: LinkLook("#E7157B", 2, "2 4"),
     LINK_POLICY: LinkLook("#E7157B", 1, "4 3"),
+    LINK_TRUST: LinkLook("#DD344C", 1.5, "6 3"),
 }
 DEFAULT_LINK_LOOK = LinkLook("#666666", 1.5)
 

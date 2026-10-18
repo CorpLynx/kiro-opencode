@@ -495,6 +495,167 @@ class RenderTest(unittest.TestCase):
                                                  "TOPOMAP_REGEN_FIXTURES=1")
 
 
+def ai_topology() -> Topology:
+    """An organization with Bedrock, IAM and EKS in two accounts."""
+    t = Topology({"collector": "test"})
+    org = t.add_node("aws:organization:o-example0001", "organization", "Organization").id
+    ids = {"111122223333": "prod", "444455556666": "dev"}
+    for account, name in ids.items():
+        acct = t.add_node(f"aws:account:{account}", "account", f"{name} ({account})", org,
+                          account_id=account).id
+        region = t.add_node(f"aws:region:{account}:us-east-1", "region", "us-east-1", acct).id
+        group = t.add_node(f"aws:bedrock:{account}:us-east-1", "bedrock", "Amazon Bedrock",
+                           region, models_shown=2).id
+        for model, provider in (("Claude A", "Anthropic"), ("Titan B", "Amazon")):
+            t.add_node(f"aws:bedrock-model:{account}:us-east-1:{model}", "bedrock-model", model,
+                       group, provider=provider, source="foundation")
+        vpc = t.add_node(f"aws:vpc:vpc-{name}", "vpc", f"{name}-vpc", region, cidrs=["10.0.0.0/16"]).id
+        t.add_node(f"aws:eks-cluster:{account}:us-east-1:platform", "eks-cluster", "platform", vpc,
+                   version="1.30", endpoint_public_access=True)
+        box = t.add_node(f"aws:iam:{account}", "iam", "IAM", acct, summary="1 role, 1 user").id
+        t.add_node(f"aws:iam-role:{account}:deploy", "iam-role", "deploy", box,
+                   trusted_accounts=["444455556666"], admin_access=True)
+        t.add_node(f"aws:iam-user:{account}:alice", "iam-user", "alice", box, mfa_enabled=False,
+                   active_access_keys=1)
+    t.add_link("iam-trust", "aws:account:444455556666", "aws:iam-role:111122223333:deploy",
+               directed=True, principal="root")
+    return t
+
+
+class AiRenderTest(unittest.TestCase):
+    def test_every_format_renders_the_new_kinds(self):
+        t = ai_topology()
+        self.assertEqual(t.validate(), [])
+        for fmt in FORMATS:
+            with self.subTest(fmt=fmt):
+                text = render(t, fmt)
+                for word in ("Amazon Bedrock", "Claude A", "deploy", "alice", "platform"):
+                    self.assertIn(word, text)
+        self.assertIn("trusts 1 account(s)", render(t, "svg"))
+        self.assertIn("admin access", render(t, "svg"))
+        self.assertIn("no MFA", render(t, "svg"))
+        self.assertIn("Kubernetes 1.30", render(t, "svg"))
+        self.assertIn("2 in use or granted", render(t, "svg"))
+
+    def test_drawio_uses_the_aws_icons_and_valid_xml(self):
+        text = render(ai_topology(), "drawio")
+        ET.fromstring(text)
+        self.assertIn("resIcon=mxgraph.aws4.eks", text)
+        self.assertIn("strokeColor=#01A88D", text)       # Bedrock group and models
+        self.assertIn("strokeColor=#DD344C", text)       # IAM role and the trust link
+
+    def test_drawio_iam_box_and_eks_use_awss_own_icons(self):
+        text = render(ai_topology(), "drawio")
+        root = ET.fromstring(text)
+        cells = {c.get("id"): c for c in root.iter("mxCell")}
+        for u in root.iter("UserObject"):
+            cells[u.get("id")] = u.find("mxCell")
+        logo = cells["aws:iam:111122223333#logo"]
+        self.assertIn("shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4."
+                      "identity_and_access_management;", logo.get("style"))
+        self.assertIn("fillColor=#DD344C", logo.get("style"))
+        self.assertEqual(logo.get("parent"), "aws:iam:111122223333")
+        geometry = logo.find("mxGeometry")
+        self.assertEqual([int(geometry.get(k)) for k in ("x", "y", "width", "height")], [8, 6, 30, 30])
+        self.assertIn("spacingLeft=46", cells["aws:iam:111122223333"].get("style"))
+        eks = cells["aws:eks-cluster:111122223333:us-east-1:platform"].get("style")
+        self.assertIn("shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eks;", eks)
+        self.assertIn("fillColor=#ED7100", eks)
+        ids = [e.get("id") for e in root.iter() if e.tag in ("mxCell", "UserObject") and e.get("id")]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_drawio_roles_users_and_bedrock_use_awss_own_shapes(self):
+        root = ET.fromstring(render(ai_topology(), "drawio"))
+        styles = {}
+        for u in root.iter("UserObject"):
+            styles[u.get("id")] = u.find("mxCell").get("style")
+        for c in root.iter("mxCell"):
+            if c.get("id"):
+                styles[c.get("id")] = c.get("style")
+        role = styles["aws:iam-role:111122223333:deploy"]
+        user = styles["aws:iam-user:111122223333:alice"]
+        logo = styles["aws:iam:111122223333#logo"]
+        # A role wears the IAM box's own icon; it only adds the white label background
+        # that every icon with its name underneath gets.
+        self.assertEqual(role.replace("labelBackgroundColor=#FFFFFF;", ""), logo)
+        self.assertIn("resIcon=mxgraph.aws4.identity_and_access_management;", role)
+        self.assertNotIn("mxgraph.aws4.role", role)
+        self.assertIn("fillColor=#DD344C", role)
+        self.assertIn("shape=mxgraph.aws4.user;", user)
+        self.assertIn("fillColor=#232F3D", user)
+        for node in ("aws:iam-role:111122223333:deploy", "aws:iam-user:111122223333:alice"):
+            self.assertIn("verticalLabelPosition=bottom", styles[node])   # name under the icon
+        self.assertIn("resIcon=mxgraph.aws4.bedrock;", styles["aws:bedrock:111122223333:us-east-1#logo"])
+        self.assertIn("fillColor=#01A88D", styles["aws:bedrock:111122223333:us-east-1#logo"])
+        self.assertIn("spacingLeft=46", styles["aws:bedrock:111122223333:us-east-1"])
+
+    def test_svg_has_matching_tiles(self):
+        svg = render(ai_topology(), "svg")
+        for word in (">USER</text>", ">AI</text>", ">IAM</text>"):
+            self.assertIn(word, svg)
+        lay = layout(ai_topology())
+        for box in lay.boxes.values():
+            if box.vclass in ("iam-role", "iam-user"):
+                self.assertFalse(box.container)
+                self.assertGreaterEqual(box.h, box.icon[3] + 15)       # label sits below the icon
+
+    def test_the_logo_fits_in_the_title_bar_without_covering_the_title(self):
+        lay = layout(ai_topology())
+        for nid, box in lay.boxes.items():
+            if box.vclass in ("iam", "bedrock"):
+                self.assertGreaterEqual(box.header, 36)
+                self.assertGreaterEqual(box.w, 36 + 8 + 30)
+
+    def test_svg_iam_box_has_a_logo(self):
+        svg = render(ai_topology(), "svg")
+        self.assertIn(">IAM</text>", svg)
+        ET.fromstring(svg)
+
+    def test_geometry_holds_with_the_new_kinds(self):
+        t = ai_topology()
+        for direction in ("TB", "LR"):
+            lay = layout(t, direction=direction)
+            for box in lay.boxes.values():
+                parent = lay.boxes.get(box.parent) if box.parent else None
+                if parent is not None:
+                    self.assertGreaterEqual(box.x, parent.x)
+                    self.assertGreaterEqual(box.y, parent.y)
+                    self.assertLessEqual(box.x + box.w, parent.x + parent.w)
+                    self.assertLessEqual(box.y + box.h, parent.y + parent.h)
+        self.assertEqual(render(t, "svg"), render(ai_topology(), "svg"))
+        ET.fromstring(render(t, "svg"))
+
+    def test_iam_box_is_pinned_to_the_accounts_top_right_corner(self):
+        t = ai_topology()
+        # An account whose other contents are tall and wide, and one with only IAM.
+        for i in range(6):
+            t.add_node(f"aws:vpc:vpc-extra{i}", "vpc", f"extra{i}",
+                       "aws:region:111122223333:us-east-1", cidrs=["10.1.0.0/16"])
+        t.add_node("aws:account:777788889999", "account", "iam-only", "aws:organization:o-example0001")
+        t.add_node("aws:iam:777788889999", "iam", "IAM", "aws:account:777788889999")
+        t.add_node("aws:iam-role:777788889999:r", "iam-role", "r", "aws:iam:777788889999")
+        for direction in ("TB", "LR"):
+            boxes = layout(t, direction=direction).boxes
+            for account in ("111122223333", "444455556666", "777788889999"):
+                acct, iam = boxes[f"aws:account:{account}"], boxes[f"aws:iam:{account}"]
+                self.assertEqual(iam.parent, acct.id)
+                self.assertEqual(iam.y, min(b.y for b in boxes.values() if b.parent == acct.id))
+                self.assertEqual(iam.x, max(b.x for b in boxes.values() if b.parent == acct.id))
+                others = [b for b in boxes.values() if b.parent == acct.id and b.id != iam.id]
+                for b in others:
+                    self.assertLessEqual(b.x + b.w, iam.x)
+
+    def test_iam_box_text_and_roles_inside(self):
+        svg = render(ai_topology(), "svg")
+        self.assertIn("1 role, 1 user", svg)
+        self.assertIn('class="container iam"', svg)
+
+    def test_mermaid_and_dot_nest_bedrock_in_the_region(self):
+        self.assertRegex(render(ai_topology(), "mermaid"),
+                         r"subgraph n_aws_bedrock_111122223333_us_east_1\[")
+        self.assertIn("cluster_aws:bedrock:111122223333:us-east-1", render(ai_topology(), "dot"))
+
+
 class OrgLabelTest(unittest.TestCase):
     def lines(self, kind, **attrs):
         from topomap.model import Node

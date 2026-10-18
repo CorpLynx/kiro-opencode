@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refuse a commit that adds real-looking account IDs or secrets.
+# Enable with:  git config core.hooksPath scripts/hooks
+exec python3 "$(git rev-parse --show-toplevel)/scripts/check_real_data.py" --staged

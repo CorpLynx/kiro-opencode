@@ -34,12 +34,50 @@ from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_CGW, AWS_DX_CONNECTION, AWS_DX_GAT
                      NET_EXTERNAL, Topology, node_id, union)
 
 HELP = ("Collect VPCs, subnets, gateways, TGWs, VPNs, peering and Direct Connect from AWS "
-        "(read-only).")
+        "(read-only), and with --ai, --iam and --eks Bedrock models, IAM roles and users, and "
+        "EKS clusters.")
 PRODUCES_TOPOLOGY = True
 
 EXTRAS = ("instances", "endpoints", "tags")
 READ_ONLY_PREFIXES = ("describe_", "list_", "get_", "search_")
 FALLBACK_REGION = "us-east-1"
+
+# The region to start from when nothing says which, per partition. GovCloud and
+# China have their own endpoints and credentials, so the commercial default
+# only works for commercial accounts.
+PARTITION_HOMES = {"aws": "us-east-1", "aws-us-gov": "us-gov-west-1", "aws-cn": "cn-north-1"}
+
+
+def partition_of_region(region: str) -> str:
+    """The AWS partition a region name belongs to."""
+    if region.startswith("us-gov-"):
+        return "aws-us-gov"
+    if region.startswith("cn-"):
+        return "aws-cn"
+    return "aws"
+
+
+def fallback_region(region: str = "") -> str:
+    """A region in the same partition as `region` (commercial if unknown)."""
+    return PARTITION_HOMES[partition_of_region(region)] if region else FALLBACK_REGION
+
+
+def probe_home(session: Any, preferred: Optional[str] = None) -> Tuple[str, Any]:
+    """(home region, caller identity) for `session`.
+
+    A region from --region or the profile is used as given. Without one the
+    commercial, GovCloud and China starting points are tried in turn, since
+    credentials only work in their own partition.
+    """
+    candidates = [preferred] if preferred else list(PARTITION_HOMES.values())
+    error: Optional[Exception] = None
+    for region in candidates:
+        try:
+            identity = ReadOnlyClient(_new_client(session, "sts", region)).get_caller_identity()
+            return region, identity
+        except _boto_errors() as e:
+            error = e
+    raise error  # type: ignore[misc]
 PUBLIC_SERVICES = node_id("ext", NET_EXTERNAL, "aws-public")
 
 # States meaning "this no longer exists, or never will": not drawn.
@@ -190,6 +228,22 @@ def add_arguments(parser) -> None:
     parser.add_argument("--include", action="extend", type=_include_list, default=[],
                         metavar="LIST",
                         help=f"comma-separated extras beyond the core: {', '.join(EXTRAS)}")
+    parser.add_argument("--ai", action="store_true",
+                        help="also collect the Bedrock models each account can use, per region "
+                             "(foundation models it is authorized for, plus custom and imported "
+                             "ones)")
+    parser.add_argument("--iam", action="store_true",
+                        help="also collect each account's custom IAM roles and users: trust, "
+                             "policy names, MFA and access-key age (no credentials or policy "
+                             "documents)")
+    parser.add_argument("--iam-all", action="store_true",
+                        help="with --iam, include service-linked and IAM Identity Center roles too")
+    parser.add_argument("--eks", action="store_true",
+                        help="also collect EKS clusters: version, endpoint access, node groups, "
+                             "Fargate profiles and add-ons")
+    parser.add_argument("--skip-network", action="store_true",
+                        help="don't collect VPCs, gateways, TGWs, VPNs and Direct Connect; for "
+                             "a faster run when you only want --ai, --iam or --eks")
     parser.add_argument("--workers", type=_positive_int, default=8, metavar="N",
                         help="(account, region) pairs collected in parallel (default: 8)")
 
@@ -252,9 +306,8 @@ def _base_sessions(boto3: Any, args: Any, warnings: List[str]) -> List[_Base]:
         if credentials is None:
             raise RuntimeError(f"no AWS credentials found in {where}; run 'aws configure' or "
                                "'aws sso login', set AWS_PROFILE, or pass --profile")
-        home = (args.region or [None])[0] or session.region_name or FALLBACK_REGION
         try:
-            identity = ReadOnlyClient(_new_client(session, "sts", home)).get_caller_identity()
+            home, identity = probe_home(session, (args.region or [None])[0] or session.region_name)
         except _boto_errors() as e:
             warnings.append(f"aws: cannot use credentials from {where} ({_error_code(e)})")
             continue
@@ -363,6 +416,8 @@ class _Scope:
     hints: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     regions: List[str] = field(default_factory=list)
     region_source: str = ""
+    scp_denied: List[str] = field(default_factory=list)
+    grants: Any = None       # Bedrock grants from IAM, set on the account-wide unit
 
     @property
     def key(self) -> Tuple[str, str]:
@@ -399,11 +454,25 @@ class _Scope:
             return fn(*args, **kwargs)
         except _boto_errors() as e:
             code = _error_code(e)
+            if skip and _denied_by_scp(e):
+                service = skip.split(" in ")[0]
+                if service not in self.scp_denied:
+                    self.scp_denied.append(service)
+                    self.warn(f"{service} is blocked here by a service control policy")
+                raise _Unavailable() from e
             if skip or code in _UNAVAILABLE:
                 self.warn(f"cannot {what} ({code}); skipped {skip or 'the rest of it'}")
                 raise _Unavailable() from e
             self.warn(f"cannot {what} ({code})")
         return None
+
+
+def _denied_by_scp(error: Exception) -> bool:
+    """An explicit deny from a service control policy: the account can't use
+    the service here at all, whatever its IAM policies say."""
+    response = getattr(error, "response", None) or {}
+    message = str(response.get("Error", {}).get("Message") or error)
+    return "service control policy" in message.lower()
 
 
 def _aws(kind: str, resource_id: str) -> str:
@@ -920,34 +989,74 @@ def _enabled_regions(scope: _Scope, account: _Account) -> List[str]:
     try:
         regions = account.client("ec2").describe_regions().get("Regions", [])
     except _boto_errors() as e:
-        scope.warn(f"cannot list enabled regions ({_error_code(e)}); collecting "
-                   f"{FALLBACK_REGION} only")
+        home = fallback_region(account.home_region)
+        scope.warn(f"cannot list enabled regions ({_error_code(e)}); collecting {home} only")
         scope.region_source = "fallback"
-        return [FALLBACK_REGION]
+        return [home]
     scope.region_source = "describe-regions"
-    return sorted(r["RegionName"] for r in regions) or [FALLBACK_REGION]
+    return sorted(r["RegionName"] for r in regions) or [fallback_region(account.home_region)]
 
 
-def _collect_account(account: _Account, regions: Optional[List[str]]) -> _Scope:
+def _wanted(args: Any) -> frozenset:
+    """The optional collections asked for, as the names `include` carries."""
+    flags = {"ai": "ai", "iam": "iam", "iam_all": "iam-all", "eks": "eks",
+             "skip_network": "skip-network"}
+    return frozenset(name for attr, name in flags.items() if getattr(args, attr, False))
+
+
+def _needs_regions(include: Iterable[str]) -> bool:
+    include = set(include)
+    return "skip-network" not in include or bool(include & {"ai", "eks"})
+
+
+def _collect_account(account: _Account, regions: Optional[List[str]],
+                     include: Iterable[str] = ()) -> _Scope:
     """The account-wide unit: the account node, its regions to walk, and
     Direct Connect gateways, which are global and so listed once."""
     scope = _Scope(account.account_id)
     name = account.name or _account_name(account)
     scope.topo.add_node(scope.account_node, AWS_ACCOUNT, _label({}, account.account_id, name),
                         account_id=account.account_id, name=name or None, collected=True)
-    if regions:
+    include = set(include)
+    if not _needs_regions(include):
+        scope.regions = []
+    elif regions:
         scope.region_source = "--region"
-    scope.regions = list(dict.fromkeys(regions)) if regions else _enabled_regions(scope, account)
-    _guarded(scope, "directconnect", lambda: _dx_gateways(scope, account.client("directconnect")))
+        scope.regions = list(dict.fromkeys(regions))
+    else:
+        scope.regions = _enabled_regions(scope, account)
+    if "skip-network" not in include:
+        _guarded(scope, "directconnect",
+                 lambda: _dx_gateways(scope, account.client("directconnect")))
+    if "iam" in include:
+        from . import aws_iam
+        _guarded(scope, "iam", lambda: aws_iam.collect(scope, account.client("iam"),
+                                                       "iam-all" in include))
+    if "ai" in include:
+        from . import aws_ai
+        _guarded(scope, "bedrock-grants", lambda: setattr(
+            scope, "grants", aws_ai.collect_grants(scope, account.client("iam"))))
     return scope
 
 
-def _collect_region(account: _Account, region: str, include: Iterable[str]) -> _Scope:
+def _collect_region(account: _Account, region: str, include: Iterable[str],
+                    grants: Any = None) -> _Scope:
     scope = _Scope(account.account_id, region)
     scope.topo.add_node(scope.account_node, AWS_ACCOUNT, account_id=account.account_id)
     scope.topo.add_node(scope.region_node, AWS_REGION, region, scope.account_node, region=region)
-    _guarded(scope, "ec2", lambda: _collect_ec2(scope, account.client("ec2", region), include))
-    _guarded(scope, "directconnect", lambda: _collect_dx(scope, account.client("directconnect", region)))
+    if "skip-network" not in include:
+        _guarded(scope, "ec2", lambda: _collect_ec2(scope, account.client("ec2", region), include))
+        _guarded(scope, "directconnect",
+                 lambda: _collect_dx(scope, account.client("directconnect", region)))
+    if "eks" in include:
+        from . import aws_eks
+        _guarded(scope, "eks", lambda: aws_eks.collect(scope, account.client("eks", region)))
+    if "ai" in include:
+        from . import aws_ai
+        _guarded(scope, "bedrock", lambda: aws_ai.collect(scope, account, region, grants))
+    if scope.scp_denied:
+        scope.topo.add_node(scope.region_node, AWS_REGION, region, scope.account_node,
+                            scp_denied=sorted(scope.scp_denied))
     return scope
 
 
@@ -997,6 +1106,20 @@ def _mark_empty_regions(topo: Topology) -> None:
             node.attrs["empty"] = True
 
 
+def _drop_empty_regions(topo: Topology) -> None:
+    """Without the network collection an empty region only means "nothing
+    of what was asked for", which every region without Bedrock or EKS would
+    say; leave them off rather than draw dozens of empty boxes."""
+    for node in topo.by_kind(AWS_REGION):
+        if node.attrs.get("empty") is True:
+            del topo.nodes[node.id]
+
+
+def _add_trust_links(topo: Topology) -> None:
+    from . import aws_iam
+    aws_iam.add_trust_links(topo)
+
+
 def _fill_labels(topo: Topology) -> None:
     """Nodes only ever seen without a label get their resource ID."""
     for node in topo.nodes.values():
@@ -1036,6 +1159,9 @@ def _assemble(scopes: List[_Scope], warnings: List[str], accounts: List[str],
     _add_placeholders(topo, hints)
     _reparent_shared(topo)
     _mark_empty_regions(topo)
+    if "skip-network" in include:
+        _drop_empty_regions(topo)
+    _add_trust_links(topo)
     _fill_labels(topo)
     if "tags" not in include:
         _drop_tags(topo)
@@ -1054,12 +1180,14 @@ def _assemble(scopes: List[_Scope], warnings: List[str], accounts: List[str],
 
 def run(args) -> Topology:
     boto3 = _require_boto3()
-    include = sorted(set(args.include or []))
+    include = sorted(set(args.include or []) | _wanted(args))
     warnings: List[str] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         accounts = _accounts(boto3, args, pool, warnings)
-        account_scopes = list(pool.map(lambda a: _collect_account(a, args.region), accounts))
+        account_scopes = list(pool.map(lambda a: _collect_account(a, args.region, include), accounts))
         units = [(a, r) for a, s in zip(accounts, account_scopes) for r in s.regions]
-        region_scopes = list(pool.map(lambda u: _collect_region(u[0], u[1], include), units))
+        grants = {a.account_id: s.grants for a, s in zip(accounts, account_scopes)}
+        region_scopes = list(pool.map(
+            lambda u: _collect_region(u[0], u[1], include, grants.get(u[0].account_id)), units))
     return _assemble(account_scopes + region_scopes, warnings,
                      [a.account_id for a in accounts], [r for _, r in units], include)

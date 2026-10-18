@@ -50,6 +50,11 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | az | `aws:az:<vpc-id>:<az-name>` (an AZ is drawn *inside* a VPC) |
 | dx-connection, dx-gateway | `aws:dx-connection:<dxcon-id>`, `aws:dx-gateway:<dxgw-id>` |
 | AWS public services (end of a public VIF) | `ext:external:aws-public` |
+| bedrock | `aws:bedrock:<account-id>:<region>` (the account's Bedrock models in that region, drawn as a group in the region) |
+| bedrock-model | `aws:bedrock-model:<account-id>:<region>:<model-id>`; custom and imported models use `custom/<name>` and `imported/<name>` as the model ID |
+| iam | `aws:iam:<account-id>` (the box holding an account's roles and users) |
+| iam-role, iam-user | `aws:iam-role:<account-id>:<name>`, `aws:iam-user:<account-id>:<name>` |
+| eks-cluster | `aws:eks-cluster:<account-id>:<region>:<name>` |
 | organization, org-root, ou, org-policy | `aws:organization:<o-id>`, `aws:org-root:<r-id>`, `aws:ou:<ou-id>`, `aws:org-policy:<p-id>` |
 
 `collect aws` and `collect aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
@@ -68,6 +73,7 @@ Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you.
   - An internet gateway, egress-only gateway, VPC endpoint or VPN gateway attached to a VPC has that VPC as its parent.
   - Transit gateways, customer gateways, DX gateways and DX connections sit in their region.
   - A DX gateway is global, so it sits in its account.
+  - IAM roles and users are global, so they sit in one `iam` box per account, which the renderers draw in the account's top-right corner. A Bedrock group sits in its region, with its models inside it. An EKS cluster sits in its VPC, or in the region when that VPC wasn't collected.
 - **Network:** `site > device` when the site is known. Otherwise devices sit at the top level. Segments sit at the top level.
 
 ## Node attributes (by kind)
@@ -81,7 +87,7 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 | ou | `ou_id`, `arn`, `path` (`Root/Workloads/Prod`), `policies`, `empty` (true when it holds no OUs or accounts) |
 | org-policy | `policy_id`, `type` (short name), `aws_managed`, `description` |
 | account | `account_id`, `name`, `collected` (true when `collect aws` reached it; after a merge, false for accounts only the organization listed); from `aws-org` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and with `--include` `tags` and `email` |
-| region | `region`, `empty` (true when nothing was found in it) |
+| region | `region`, `empty` (true when nothing was found in it), `bedrock_models_shown`, `bedrock_models_offered`, `scp_denied` (services a service control policy blocks there, such as `["EC2"]`) |
 | vpc | `vpc_id`, `cidrs` (list), `ipv6_cidrs`, `is_default`, `account_id`, `region`, `tags` (dict, only with `--include tags`; this goes for every kind that has `tags`) |
 | subnet | `subnet_id`, `cidr`, `ipv6_cidrs`, `az`, `public` (bool: its route table has a route to an internet gateway), `routes` (list of `{"destination", "target"}`), `tags` |
 | internet-gateway, egress-only-internet-gateway | `gateway_id` |
@@ -96,6 +102,12 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 | site | `name` |
 | device | `vendor`, `platform`, `model`, `os_version`, `serial`, `mgmt_ip`, `role` (see `facts.ROLES`), `interfaces` (list of `{"name", "addresses": ["10.0.0.1/30"], "description", "status", "vrf"}`), `discovered` (`"neighbor"` if only seen as someone's CDP/LLDP neighbour), `sources` |
 | segment | `subnet` |
+| bedrock | `region`, `models_shown` (models drawn), `models_offered` (what Bedrock lists in the region), `models_in_use`, `granted_all_to` (principals with an Allow on every model), `provisioned_throughput` (list of `{"name", "model_units", "status"}`) |
+| bedrock-model | `model_id`, `model_name`, `provider`, `input_modalities`, `output_modalities`, `inference_types` (`ON_DEMAND`, `PROVISIONED`, `INFERENCE_PROFILE`), `streaming`, `lifecycle`, `source` (`foundation`, `custom`, `imported`), `evidence` (`in use`, `granted`), `granted_to` (role, user or group names), `invocable` (false when the account isn't authorized, entitled or under an agreement), `base_model`, `arn` (custom and imported) |
+| iam | `account_id`, `summary` ("12 roles, 3 users") |
+| iam-role | `role_name`, `path`, `arn`, `account_id`, `created`, `last_used`, `aws_owned`, `trusted_accounts` (other accounts only), `trusts_own_account`, `trusted_principals` (list of `{"account", "type": root/role/user, "name"}`; named roles and users in the role's own account are kept, its own root is not), `trusted_services`, `trusted_federated`, `trusts_everyone`, `attached_policies`, `inline_policies`, `permissions_boundary`, `admin_access` (AdministratorAccess attached), `tags` |
+| iam-user | `user_name`, `path`, `arn`, `account_id`, `created`, `password_last_used`, `groups`, `attached_policies`, `inline_policies`, `permissions_boundary`, `mfa_enabled`, `access_keys` (list of `{"status", "created"}`), `active_access_keys`, `tags` |
+| eks-cluster | `cluster_name`, `arn`, `version`, `status`, `platform_version`, `created`, `role_arn`, `endpoint_public_access`, `endpoint_private_access`, `public_access_cidrs`, `subnet_ids`, `security_group_ids`, `oidc_issuer`, `logging_enabled`, `secrets_encrypted`, `vpc_id`, `account_id`, `region`, `nodegroups` (list of `{"name", "status", "instance_types", "capacity_type", "ami_type", "version", "desired", "min", "max"}`), `fargate_profiles`, `addons`, `tags` |
 
 Labels should be what a person calls the thing: the Name tag if present (`prod-vpc (vpc-0abc)`), otherwise the ID or hostname.
 
@@ -114,6 +126,7 @@ Labels should be what a person calls the thing: the Name tag if present (`prod-v
 | `dx-vif` | dx-connection → dx-gateway / vpn-gateway / `ext:external:aws-public` (directed) | `vif_id`, `vif_type` (`private`/`transit`/`public`), `vlan`, `customer_address`, `amazon_address`, `asn`, `amazon_asn`, `state` |
 | `dxgw-association` | dx-gateway ↔ transit-gateway / vpn-gateway | `association_id`, `state`, `allowed_prefixes` |
 | `policy-attachment` | org-policy → org-root / ou / account (directed) | `type` |
+| `iam-trust` | account / iam-role / iam-user → iam-role (directed) | `principal` (`root`, `role`, `user`): the role's trust policy lets that principal assume it. Only drawn when the trusted account was collected too. |
 | `stitch` | device ↔ customer-gateway / dx-connection | `rule` (`cgw-ip`, `dx-vif`, `manual`), `address`, the device-side port |
 
 A DX gateway attached to a transit gateway appears twice: as a `tgw-attachment` (from the TGW's side) and a `dxgw-association` (from the DX side). Both are kept, because each carries its own state.

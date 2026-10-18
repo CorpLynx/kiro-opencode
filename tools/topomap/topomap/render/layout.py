@@ -16,6 +16,9 @@ How a container arranges its children:
   routers, then core switches, access switches, endpoints), with a few
   barycenter sweeps to reduce crossings and an isotonic-regression pass to
   centre blocks over their neighbours. Unlinked children go in a grid.
+* **Account:** the `iam` box (roles and users) is pinned to the top-right
+  corner, with everything else arranged to its left, so IAM is always in
+  the same place whatever else the account holds.
 * **VPC:** gateways and endpoints in a row along the top, then the AZs as
   side-by-side columns. Subnets are stacked in their AZ, public above
   private, and aligned into rows across AZs so the VPC reads as a table.
@@ -33,7 +36,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-from ..model import AWS_AZ, AWS_SUBNET, AWS_VPC, Link, Topology
+from ..model import AWS_ACCOUNT, AWS_AZ, AWS_IAM, AWS_SUBNET, AWS_VPC, Link, Topology
 from . import labels, styles
 
 # Node labels are 12px Helvetica; widths are estimated generously so text
@@ -222,7 +225,11 @@ class _Engine:
         else:
             for k in kids:
                 self.measure(k)
-            pos, w, h = self._arrange_generic(nid, kids)
+            if self.kind(nid) == AWS_ACCOUNT and any(
+                    self.kind(k) == AWS_IAM and self.is_container(k) for k in kids):
+                pos, w, h = self._arrange_account(nid, kids)
+            else:
+                pos, w, h = self._arrange_generic(nid, kids)
         self._wrap(nid, pos, w, h)
 
     def _measure_leaf(self, nid: str) -> None:
@@ -246,6 +253,8 @@ class _Engine:
         lines = self.title_lines(nid)
         header = max(32, 12 + LINE_H * len(lines))
         min_w = 30 + max(text_width(l) for l in lines) + PAD
+        if self.vclass[nid] in ("iam", "bedrock"):
+            min_w += 36                      # room for the logo beside the title
         return header, max(MIN_CONTAINER_W, min_w)
 
     def _wrap(self, nid: str, pos: Dict[str, Point], w: int, h: int) -> None:
@@ -458,6 +467,20 @@ class _Engine:
         return pos, col_x[-1] + col_w[-1], row_y[-1] + row_h[-1]
 
     # -- AWS conventions -------------------------------------------------------
+
+    def _arrange_account(self, account: str, kids: Sequence[str]
+                         ) -> Tuple[Dict[str, Point], int, int]:
+        """Regions and the rest to the left, the IAM box in the top-right corner."""
+        boxes = [k for k in kids if self.kind(k) == AWS_IAM and self.is_container(k)]
+        rest = [k for k in kids if k not in boxes]
+        iam = boxes[0]
+        iam_w, iam_h = self.size[iam]
+        if not rest:
+            return {iam: (0, 0)}, iam_w, iam_h
+        pos, w, h = self._arrange_generic(account, rest)
+        pos = dict(pos)
+        pos[iam] = (w + GAP, 0)
+        return pos, w + GAP + iam_w, max(h, iam_h)
 
     def _arrange_vpc(self, vpc: str, kids: Sequence[str]) -> Tuple[Dict[str, Point], int, int]:
         edge = [k for k in kids if not self.is_container(k) and self.kind(k) in EDGE_ROW_KINDS]

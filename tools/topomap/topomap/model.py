@@ -45,6 +45,12 @@ AWS_ORG = "organization"
 AWS_ORG_ROOT = "org-root"
 AWS_OU = "ou"
 AWS_ORG_POLICY = "org-policy"
+AWS_BEDROCK = "bedrock"                # the Bedrock models one account has in one region
+AWS_BEDROCK_MODEL = "bedrock-model"
+AWS_IAM = "iam"                        # an account's IAM roles and users, drawn as one box
+AWS_IAM_ROLE = "iam-role"
+AWS_IAM_USER = "iam-user"
+AWS_EKS = "eks-cluster"
 
 NET_SITE = "site"
 NET_DEVICE = "device"
@@ -55,6 +61,7 @@ NODE_KINDS = frozenset({
     AWS_ACCOUNT, AWS_REGION, AWS_VPC, AWS_AZ, AWS_SUBNET, AWS_IGW, AWS_EIGW, AWS_NAT,
     AWS_ENDPOINT, AWS_TGW, AWS_VGW, AWS_CGW, AWS_DX_CONNECTION, AWS_DX_GATEWAY, AWS_INSTANCE,
     AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ORG_POLICY,
+    AWS_BEDROCK, AWS_BEDROCK_MODEL, AWS_IAM, AWS_IAM_ROLE, AWS_IAM_USER, AWS_EKS,
     NET_SITE, NET_DEVICE, NET_SEGMENT, NET_EXTERNAL,
 })
 
@@ -72,11 +79,12 @@ LINK_DX_VIF = "dx-vif"                # DX connection -> DX gateway / VGW
 LINK_DXGW_ASSOCIATION = "dxgw-association"
 LINK_STITCH = "stitch"                # on-prem device <-> AWS edge, found by merge
 LINK_POLICY = "policy-attachment"     # organization policy -> root / OU / account
+LINK_TRUST = "iam-trust"              # account or principal -> the role it may assume
 
 LINK_KINDS = frozenset({
     LINK_PHYSICAL, LINK_L3, LINK_SEGMENT, LINK_TGW_ATTACHMENT, LINK_TGW_PEERING,
     LINK_VPC_PEERING, LINK_VPN, LINK_VGW_ATTACHMENT, LINK_DX_VIF, LINK_DXGW_ASSOCIATION,
-    LINK_STITCH, LINK_POLICY,
+    LINK_STITCH, LINK_POLICY, LINK_TRUST,
 })
 
 

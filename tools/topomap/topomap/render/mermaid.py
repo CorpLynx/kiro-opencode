@@ -30,7 +30,7 @@ GATEWAYS = {"internet-gateway", "egress-only-internet-gateway", "nat-gateway", "
             "customer-gateway", "transit-gateway", "dx-connection", "dx-gateway"}
 ARROWS = {  # (undirected, directed)
     "l3": ("-.-", "-.->"), "vpn": ("-.-", "-.->"), "stitch": ("-.-", "-.->"),
-    "vpc-peering": ("-.-", "-.->"), "tgw-peering": ("-.-", "-.->"),
+    "vpc-peering": ("-.-", "-.->"), "tgw-peering": ("-.-", "-.->"), "iam-trust": ("-.-", "-.->"),
     "dx-vif": ("===", "==>"), "dxgw-association": ("===", "==>"),
 }
 CLASSES = {
@@ -40,6 +40,8 @@ CLASSES = {
     "net": "fill:#EAF2F7,stroke:#005073,color:#232F3E",
     "fw": "fill:#F6DEDA,stroke:#B03A2E,color:#232F3E",
     "ext": "fill:#EEEEEE,stroke:#8A929C,color:#232F3E,stroke-dasharray:4 3",
+    "ai": "fill:#E6F6F3,stroke:#01A88D,color:#232F3E",
+    "iam": "fill:#FCE9EC,stroke:#DD344C,color:#232F3E",
 }
 
 
@@ -67,8 +69,12 @@ def _ids(topo: Topology) -> Dict[str, str]:
 
 
 def _class_of(vclass: str) -> Optional[str]:
-    if vclass == "instance":
+    if vclass in ("instance", "eks-cluster"):
         return "ec2"
+    if vclass == "bedrock-model":
+        return "ai"
+    if vclass in ("iam-role", "iam-user"):
+        return "iam"
     if vclass in ("account-leaf", "account-management", "org-policy"):
         return "org"
     if vclass in GATEWAYS or vclass == "vpc-endpoint":

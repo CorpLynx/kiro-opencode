@@ -32,6 +32,12 @@ _AWS_NET_RESOURCE = (
     "[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;"
     "dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;"
     "fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.")
+# The service icons draw.io's own AWS 2021 sidebar uses for IAM and EKS.
+IAM_LOGO = (_AWS_NET_RESOURCE.replace("fillColor=#8C4FFF", "fillColor=#DD344C")
+            + "identity_and_access_management;")
+BEDROCK_LOGO = _AWS_NET_RESOURCE.replace("fillColor=#8C4FFF", "fillColor=#01A88D") + "bedrock;"
+CORNER_LOGOS = {"iam": IAM_LOGO, "bedrock": BEDROCK_LOGO}   # container class -> its icon
+LOGO_BOX = (8, 6, 30, 30)          # x, y, width, height inside the container's title bar
 _AWS_MGMT = ("sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E7157B;"
              "strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;"
              "html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.")
@@ -71,6 +77,11 @@ VERTEX_STYLES: Dict[str, str] = {
     "transit-gateway": _AWS_NET_RESOURCE + "transit_gateway;",
     "dx-connection": _AWS_NET_RESOURCE + "direct_connect;",
     "instance": _AWS_COMPUTE + "instance2;",
+    "eks-cluster": _AWS_NET_RESOURCE.replace("fillColor=#8C4FFF", "fillColor=#ED7100") + "eks;",
+    # AWS / Machine Learning, Security
+    "bedrock-model": "rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F6F3;strokeColor=#01A88D;fontColor=#232F3E;",
+    "iam-role": IAM_LOGO,   # the same IAM icon as the corner of the IAM box
+    "iam-user": _AWS_NET.replace("fillColor=#8C4FFF", "fillColor=#232F3D") + "user;",
     # AWS / Management & Governance
     "account-leaf": _AWS_MGMT + "organizations_account;",
     "account-management": _AWS_MGMT + "organizations_management_account;",
@@ -115,6 +126,12 @@ CONTAINER_STYLES: Dict[str, str] = {
                            "align=left;spacingLeft=30;fontColor=#147EBA;dashed=1;",
     "vpc": _AWS_GROUP + "group_vpc2;strokeColor=#8C4FFF;fillColor=none;verticalAlign=top;"
                         "align=left;spacingLeft=30;fontColor=#AAB7B8;dashed=0;",
+    "iam": ("fillColor=#FEF5F6;strokeColor=#DD344C;dashed=0;verticalAlign=top;fontStyle=1;"
+            "fontColor=#B02A3D;whiteSpace=wrap;html=1;align=left;spacingLeft=46;"
+            + _PLAIN_GROUP_TAIL),
+    "bedrock": ("fillColor=#F0FAF8;strokeColor=#01A88D;dashed=0;verticalAlign=top;fontStyle=1;"
+                "fontColor=#017A66;whiteSpace=wrap;html=1;align=left;spacingLeft=46;"
+                + _PLAIN_GROUP_TAIL),
     "az": ("fillColor=none;strokeColor=#147EBA;dashed=1;verticalAlign=top;fontStyle=0;"
            "fontColor=#147EBA;whiteSpace=wrap;html=1;" + _PLAIN_GROUP_TAIL),
     "subnet-public": _AWS_GROUP + "group_security_group;grStroke=0;strokeColor=#7AA116;"
@@ -143,6 +160,7 @@ EDGE_STYLES: Dict[str, str] = {
     "dxgw-association": "strokeColor=#1A73E8;strokeWidth=2;",
     "stitch": "strokeColor=#E7157B;strokeWidth=2;dashed=1;dashPattern=1 3;",
     "policy-attachment": "strokeColor=#E7157B;strokeWidth=1;dashed=1;dashPattern=4 3;",
+    "iam-trust": "strokeColor=#DD344C;strokeWidth=1.5;dashed=1;dashPattern=6 3;",
 }
 _END_LABEL = "edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;"
 _TITLE = "text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;"
@@ -200,6 +218,17 @@ def _vertex(box: Box, parent_box, topo: Topology) -> str:
             f'        </UserObject>')
 
 
+def _logo(box: Box) -> str:
+    """The service icon in the corner of an IAM or Bedrock box. draw.io's group
+    shapes only take a fixed set of corner icons, so the logo is its own cell."""
+    x, y, w, h = LOGO_BOX
+    return (f'        <mxCell id="{xml_attr(box.id)}#logo" value="" '
+            f'style="{xml_attr(CORNER_LOGOS[box.vclass])}" '
+            f'vertex="1" connectable="0" parent="{xml_attr(box.id)}">\n'
+            f'          <mxGeometry x="{x}" y="{y}" width="{w}" height="{h}" as="geometry" />\n'
+            f'        </mxCell>')
+
+
 def _edge(route: Route, link_labels: bool) -> List[str]:
     link = route.link
     style = _EDGE_BASE + EDGE_STYLES.get(link.kind, "strokeColor=#666666;")
@@ -248,6 +277,8 @@ def render(topo: Topology, lay: Layout, link_labels: bool = True) -> str:
         box = lay.boxes[nid]
         parent_box = lay.boxes.get(box.parent) if box.parent else None
         cells.append(_vertex(box, parent_box, topo))
+        if box.container and box.vclass in CORNER_LOGOS:
+            cells.append(_logo(box))
     return ('<mxfile host="topomap" agent="topomap" compressed="false">\n'
             f'  <diagram id="topomap" name="{xml_attr(name)}">\n'
             f'    <mxGraphModel dx="{lay.width}" dy="{lay.height}" grid="1" gridSize="10" '

@@ -48,6 +48,9 @@ GLYPHS: Dict[str, Callable[[], Tuple[int, int, str]]] = {
     "dx-connection": lambda: _aws_tile("DX", "#8C4FFF"),
     "dx-gateway": lambda: _aws_tile("DXGW", "#8C4FFF"),
     "instance": lambda: _aws_tile("EC2", "#ED7100"),
+    "eks-cluster": lambda: _aws_tile("EKS", "#ED7100"),
+    "iam-role": lambda: _aws_tile("IAM", "#DD344C"),   # matches the IAM box's corner tile
+    "iam-user": lambda: _aws_tile("USER", "#232F3D"),
     "account-leaf": lambda: _aws_tile("ACCT", "#E7157B"),
     "account-management": lambda: _aws_tile("MGMT", "#E7157B"),
     "router": lambda: (50, 50,
@@ -105,8 +108,10 @@ GLYPHS: Dict[str, Callable[[], Tuple[int, int, str]]] = {
         '<path d="M14 34 a10 10 0 0 1 -1 -20 a13 13 0 0 1 24 -6 a10 10 0 0 1 15 6 '
         'a10 10 0 0 1 -2 20z" fill="#C9CED6" stroke="#8A929C" stroke-width="1.5"/>'),
 }
+CORNER_TILES = {"iam": ("IAM", "#DD344C"), "bedrock": ("AI", "#01A88D")}
 BOXED = {"segment": ("#DAE8FC", "#6C8EBF"), "device": ("#F5F5F5", "#666666"),
          "org-policy": ("#FDF0F6", "#E7157B"),
+         "bedrock-model": ("#E6F6F3", "#01A88D"),
          "generic": ("#F5F5F5", "#666666")}
 
 
@@ -143,10 +148,16 @@ def _container(box: Box, topo: Topology) -> str:
     dash = ' stroke-dasharray="6 4"' if dashed else ""
     tip = esc(labels.tooltip(topo.nodes[box.id]))
     tab = f'<rect x="{box.x}" y="{box.y}" width="8" height="8" fill="{stroke}"/>'
+    logo, text_x = "", box.x + 14
+    if box.vclass in CORNER_TILES:
+        vw, vh, body = _aws_tile(*CORNER_TILES[box.vclass])
+        logo = (f'<g transform="translate({box.x + 8} {box.y + 6}) scale({30 / vw:.4g} {30 / vh:.4g})">'
+                f'{body}</g>')
+        text_x = box.x + 46
     return (f'<g class="container {esc(box.vclass)}" data-id="{esc(box.id)}"><title>{tip}</title>'
             f'<rect x="{box.x}" y="{box.y}" width="{box.w}" height="{box.h}" fill="{fill}" '
-            f'stroke="{stroke}" stroke-width="1.5"{dash}/>{tab}'
-            + _text_lines(box.lines[:2], box.x + 14, box.y + 19, True, 12, title, "start")
+            f'stroke="{stroke}" stroke-width="1.5"{dash}/>{tab}{logo}'
+            + _text_lines(box.lines[:2], text_x, box.y + 19, True, 12, title, "start")
             + '</g>')
 
 

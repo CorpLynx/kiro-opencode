@@ -20,7 +20,7 @@ import sys
 from typing import List, Optional
 
 from . import __version__
-from .hygiene import untracked_hint
+from .hygiene import stdout_file, untracked_hint, write_private
 from .model import Topology
 
 COLLECTORS = {
@@ -68,14 +68,29 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def write_topology(topo: Topology, path: str) -> None:
+def write_topology(topo: Topology, path: str, private: bool = True) -> None:
     text = topo.dumps()
     if path == "-":
         sys.stdout.write(text)
+    elif private:
+        write_private(path, text)
     else:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
+
+
+def _note_untracked(args: argparse.Namespace) -> None:
+    """Say so when real data was written where git would pick it up: the
+    output file, a redirected stdout, or a `--save-raw` folder."""
+    places = [args.output if args.output != "-" else stdout_file()]
+    raw = getattr(args, "save_raw", None)
+    if raw:
+        places.append(os.path.join(raw, "device.txt"))
+    for path in places:
+        hint = untracked_hint(path) if path else None
+        if hint:
+            print(f"topomap: note: {hint}", file=sys.stderr)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -89,11 +104,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"topomap: error: {e}", file=sys.stderr)
         return 2
     if isinstance(result, Topology):
-        write_topology(result, args.output)
-        if getattr(args._module, "SENSITIVE", True):
-            hint = untracked_hint(args.output)
-            if hint:
-                print(f"topomap: note: {hint}", file=sys.stderr)
+        sensitive = getattr(args._module, "SENSITIVE", True)
+        write_topology(result, args.output, private=sensitive)
+        if sensitive:
+            _note_untracked(args)
         for warning in result.meta.get("warnings", []):
             print(f"topomap: warning: {warning}", file=sys.stderr)
         return 0

@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from topomap import cli  # noqa: E402
 from topomap.filter import filter_topology  # noqa: E402
 from topomap.merge import merge  # noqa: E402
@@ -229,6 +230,32 @@ class HideEmptyTest(unittest.TestCase):
     def test_kept_by_default(self):
         out = filter_topology(self.topo())
         self.assertIn("aws:region:111111111111:eu-west-1", out.nodes)
+
+
+class AiFilterTest(unittest.TestCase):
+    def topo(self):
+        from test_render import ai_topology
+        return ai_topology()
+
+    def test_models_view_keeps_the_org_chart_above_them(self):
+        out = filter_topology(self.topo(), kinds=["bedrock-model"])
+        kinds = {n.kind for n in out.nodes.values()}
+        self.assertEqual(kinds, {"organization", "account", "region", "bedrock", "bedrock-model"})
+        self.assertEqual(out.validate(), [])
+
+    def test_iam_view_keeps_roles_users_and_trust_links(self):
+        out = filter_topology(self.topo(), kinds=["iam-role", "iam-user"])
+        self.assertEqual({n.kind for n in out.nodes.values()},
+                         {"organization", "account", "iam", "iam-role", "iam-user"})
+        self.assertEqual([l.kind for l in out.links.values()], ["iam-trust"])
+
+    def test_hide_empty_keeps_regions_that_have_models(self):
+        t = self.topo()
+        t.add_node("aws:region:111122223333:eu-west-1", "region", "eu-west-1",
+                   "aws:account:111122223333", empty=True)
+        out = filter_topology(t, hide_empty=True)
+        self.assertNotIn("aws:region:111122223333:eu-west-1", out.nodes)
+        self.assertIn("aws:bedrock:111122223333:us-east-1", out.nodes)
 
 
 if __name__ == "__main__":

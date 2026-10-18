@@ -9,6 +9,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from topomap.collectors import aws  # noqa: E402
+from topomap.model import Topology  # noqa: E402
 
 try:
     import boto3
@@ -226,7 +227,6 @@ class CoreTest(AwsTestCase):
             self.assertEqual(bool(region.attrs.get("empty")), not topo.children(region.id))
 
     def test_regions_without_children_are_flagged_empty(self):
-        from topomap.model import Topology
         topo = Topology()
         topo.add_node("aws:region:1:a", "region")
         topo.add_node("aws:region:1:b", "region")
@@ -658,6 +658,35 @@ class AccountsTest(AwsTestCase):
                                     "RoleSessionName": "topomap", "ExternalId": "ext-1"}])
         self.assertEqual(topo.nodes[f"aws:account:{ACCOUNT}"].label, f"management ({ACCOUNT})")
         self.assertIn(f"aws:vpc:{vpc}", topo.nodes)
+
+    def test_org_member_that_denies_the_role_is_warned_about_and_not_collected(self):
+        from topomap.merge import merge
+        accounts = {"Accounts": [
+            {"Id": ACCOUNT, "Name": "management", "Status": "ACTIVE"},
+            {"Id": OTHER, "Name": "network", "Status": "ACTIVE"}]}
+        self.overrides[("organizations", None)] = lambda c: Overlay(c, list_accounts=accounts)
+        self.overrides[("sts", None)] = lambda c: Overlay(c, assume_role=denied("AssumeRole"))
+        topo = self.collect("--region", REGION, "--org-role-name", "OrgRead")
+        self.assertEqual(topo.meta["accounts"], [ACCOUNT])
+        self.assertNotIn(f"aws:account:{OTHER}", topo.nodes)
+        self.assertIn(f"aws: cannot assume arn:aws:iam::{OTHER}:role/OrgRead (AccessDenied)",
+                      topo.meta["warnings"])
+
+        listed = Topology()
+        for account_id in (ACCOUNT, OTHER):
+            listed.add_node(f"aws:account:{account_id}", "account", account_id=account_id)
+        merged = merge([listed, topo])
+        self.assertIs(merged.nodes[f"aws:account:{ACCOUNT}"].attrs["collected"], True)
+        self.assertIs(merged.nodes[f"aws:account:{OTHER}"].attrs["collected"], False)
+
+    def test_region_source_is_mixed_when_accounts_differ(self):
+        def scope(source):
+            s = aws._Scope(ACCOUNT)
+            s.region_source = source
+            return s
+        self.assertEqual(aws._region_source([scope("fallback"), scope("fallback")]), "fallback")
+        self.assertEqual(aws._region_source([scope("fallback"), scope("describe-regions")]), "mixed")
+        self.assertEqual(aws._region_source([aws._Scope(ACCOUNT, REGION)]), "")
 
     def test_nothing_reachable_is_an_error(self):
         self.overrides[("sts", None)] = lambda c: Overlay(c, assume_role=denied("AssumeRole"))

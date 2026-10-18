@@ -19,8 +19,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..model import (AWS_ACCOUNT, AWS_ORG, AWS_ORG_POLICY, AWS_ORG_ROOT, AWS_OU, LINK_POLICY,
                      Topology, node_id)
-from .aws import (FALLBACK_REGION, ReadOnlyClient, _boto_errors, _error_code, _label,
-                  _new_client, _now, _paginate, _require_boto3, _role_arn)
+from .aws import (ReadOnlyClient, _boto_errors, _error_code, _label,
+                  _new_client, _now, _paginate, _require_boto3, _role_arn, probe_home)
 
 HELP = ("Collect an AWS Organization: OUs, accounts, policies (SCPs, RCPs, tag, backup, ...) and "
         "delegated administrators. Run against the management account (read-only).")
@@ -84,7 +84,10 @@ def _organizations_client(boto3: Any, args: Any) -> ReadOnlyClient:
     if session.get_credentials() is None:
         raise RuntimeError(f"no AWS credentials found in {where}; run 'aws configure' or "
                            "'aws sso login', set AWS_PROFILE, or pass --profile")
-    region = session.region_name or FALLBACK_REGION
+    try:
+        region, _ = probe_home(session, session.region_name)
+    except _boto_errors() as e:
+        raise RuntimeError(f"cannot use the credentials from {where} ({_error_code(e)})") from None
     if args.role_arn:
         sts = ReadOnlyClient(_new_client(session, "sts", region), also=("assume_role",))
         kwargs = {"RoleArn": args.role_arn, "RoleSessionName": args.role_session_name}
