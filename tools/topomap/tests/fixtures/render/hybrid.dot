@@ -1,0 +1,145 @@
+graph topomap {
+  compound=true;
+  rankdir=TB;
+  fontname="Helvetica"; fontsize=12; newrank=true;
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9];
+  label="HQ and AWS (example)"; labelloc=t; fontsize=16;
+  subgraph "cluster_aws:account:123456789012" {
+    label="example-prod\n123456789012"; labeljust=l;
+    style="rounded"; color="#CD2264"; fontcolor="#CD2264";
+    "aws:dx-gateway:dxgw-01" [label="dxgw-01\nASN 64600", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+    subgraph "cluster_aws:region:123456789012:us-east-1" {
+      label="us-east-1"; labeljust=l;
+      style="rounded,dashed"; color="#00A4A6"; fontcolor="#147EBA";
+      "aws:customer-gateway:cgw-01" [label="hq-cgw (cgw-01)\n203.0.113.10\nASN 65010", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+      "aws:dx-connection:dxcon-01" [label="dxcon-01\nEqDC2\n1Gbps", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+      "aws:transit-gateway:tgw-01" [label="core-tgw (tgw-01)\nASN 64512", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+      subgraph "cluster_aws:vpc:vpc-00" {
+        label="prod (vpc-00)\n10.0.0.0/16"; labeljust=l;
+        style="rounded"; color="#8C4FFF"; fontcolor="#6B3FD4";
+        "anchor:aws:vpc:vpc-00" [shape=point, style=invis, width=0.01, label=""];
+        subgraph "cluster_aws:az:vpc-00:us-east-1a" {
+          label="us-east-1a"; labeljust=l;
+          style="rounded,dashed"; color="#147EBA"; fontcolor="#147EBA";
+          subgraph "cluster_aws:subnet:subnet-000" {
+            label="prod-public-a (subnet-000)\n10.0.0.0/24"; labeljust=l;
+            style="rounded,filled"; color="#7AA116"; fontcolor="#248814"; fillcolor="#F2F6E8";
+            "aws:nat-gateway:nat-00" [label="nat-00\n203.0.113.20", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+          }
+          subgraph "cluster_aws:subnet:subnet-001" {
+            label="prod-private-a (subnet-001)\n10.0.1.0/24"; labeljust=l;
+            style="rounded,filled"; color="#00A4A6"; fontcolor="#147EBA"; fillcolor="#E6F6F7";
+            "aws:instance:i-0000" [label="app-000 (i-0000)\n10.0.1.10\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+            "aws:instance:i-0001" [label="app-001 (i-0001)\n10.0.1.11\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+          }
+        }
+        subgraph "cluster_aws:az:vpc-00:us-east-1b" {
+          label="us-east-1b"; labeljust=l;
+          style="rounded,dashed"; color="#147EBA"; fontcolor="#147EBA";
+          subgraph "cluster_aws:subnet:subnet-010" {
+            label="prod-public-b (subnet-010)\n10.0.2.0/24"; labeljust=l;
+            style="rounded,filled"; color="#7AA116"; fontcolor="#248814"; fillcolor="#F2F6E8";
+            "anchor:aws:subnet:subnet-010" [shape=point, style=invis, width=0.01, label=""];
+          }
+          subgraph "cluster_aws:subnet:subnet-011" {
+            label="prod-private-b (subnet-011)\n10.0.3.0/24"; labeljust=l;
+            style="rounded,filled"; color="#00A4A6"; fontcolor="#147EBA"; fillcolor="#E6F6F7";
+            "aws:instance:i-0010" [label="app-010 (i-0010)\n10.0.3.10\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+            "aws:instance:i-0011" [label="app-011 (i-0011)\n10.0.3.11\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+          }
+        }
+        "aws:internet-gateway:igw-00" [label="igw-00", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+      }
+      subgraph "cluster_aws:vpc:vpc-01" {
+        label="shared (vpc-01)\n10.1.0.0/16"; labeljust=l;
+        style="rounded"; color="#8C4FFF"; fontcolor="#6B3FD4";
+        "anchor:aws:vpc:vpc-01" [shape=point, style=invis, width=0.01, label=""];
+        subgraph "cluster_aws:az:vpc-01:us-east-1a" {
+          label="us-east-1a"; labeljust=l;
+          style="rounded,dashed"; color="#147EBA"; fontcolor="#147EBA";
+          subgraph "cluster_aws:subnet:subnet-100" {
+            label="shared-public-a (subnet-100)\n10.1.0.0/24"; labeljust=l;
+            style="rounded,filled"; color="#7AA116"; fontcolor="#248814"; fillcolor="#F2F6E8";
+            "aws:nat-gateway:nat-01" [label="nat-01\n203.0.113.21", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+          }
+          subgraph "cluster_aws:subnet:subnet-101" {
+            label="shared-private-a (subnet-101)\n10.1.1.0/24"; labeljust=l;
+            style="rounded,filled"; color="#00A4A6"; fontcolor="#147EBA"; fillcolor="#E6F6F7";
+            "aws:instance:i-0100" [label="app-100 (i-0100)\n10.1.1.10\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+            "aws:instance:i-0101" [label="app-101 (i-0101)\n10.1.1.11\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+          }
+        }
+        subgraph "cluster_aws:az:vpc-01:us-east-1b" {
+          label="us-east-1b"; labeljust=l;
+          style="rounded,dashed"; color="#147EBA"; fontcolor="#147EBA";
+          subgraph "cluster_aws:subnet:subnet-110" {
+            label="shared-public-b (subnet-110)\n10.1.2.0/24"; labeljust=l;
+            style="rounded,filled"; color="#7AA116"; fontcolor="#248814"; fillcolor="#F2F6E8";
+            "anchor:aws:subnet:subnet-110" [shape=point, style=invis, width=0.01, label=""];
+          }
+          subgraph "cluster_aws:subnet:subnet-111" {
+            label="shared-private-b (subnet-111)\n10.1.3.0/24"; labeljust=l;
+            style="rounded,filled"; color="#00A4A6"; fontcolor="#147EBA"; fillcolor="#E6F6F7";
+            "aws:instance:i-0110" [label="app-110 (i-0110)\n10.1.3.10\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+            "aws:instance:i-0111" [label="app-111 (i-0111)\n10.1.3.11\nt3.micro", shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"];
+          }
+        }
+        "aws:internet-gateway:igw-01" [label="igw-01", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+        "aws:vpc-endpoint:vpce-01" [label="vpce-01\ncom.amazonaws.us-east-1.s3\nGateway", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+        "aws:vpn-gateway:vgw-01" [label="vgw-01\nASN 64513", shape=component, style=filled, fillcolor="#F4EFFF", color="#8C4FFF"];
+      }
+    }
+  }
+  subgraph "cluster_aws:vpc:vpc-0ext" {
+    label="partner (vpc-0ext)\n172.16.0.0/16"; labeljust=l;
+    style="rounded"; color="#8C4FFF"; fontcolor="#6B3FD4";
+    "anchor:aws:vpc:vpc-0ext" [shape=point, style=invis, width=0.01, label=""];
+  }
+  "ext:external:internet" [label="Internet", shape=ellipse, style="filled,dashed", fillcolor="#EEEEEE", color="#8A929C"];
+  "net:segment:10.10.0.0/24" [label="10.10.0.0/24", shape=parallelogram, style=filled, fillcolor="#DAE8FC", color="#6C8EBF"];
+  subgraph "cluster_net:site:hq" {
+    label="HQ"; labeljust=l;
+    style="rounded"; color="#7D8998"; fontcolor="#5A6C86";
+    "net:device:acc1" [label="acc1\n10.255.0.21\nC9300", shape=box, style=filled, fillcolor="#EAF2F7", color="#005073"];
+    "net:device:acc2" [label="acc2\n10.255.0.22\nC9300", shape=box, style=filled, fillcolor="#EAF2F7", color="#005073"];
+    "net:device:ap1" [label="ap1\n10.255.1.10\nAIR-AP2802I", shape=ellipse, style=filled, fillcolor="#EAF2F7", color="#005073"];
+    "net:device:core1" [label="core1\n10.255.0.11\nC9500", shape=box, style="filled,bold", fillcolor="#EAF2F7", color="#005073"];
+    "net:device:core2" [label="core2\n10.255.0.12\nC9500", shape=box, style="filled,bold", fillcolor="#EAF2F7", color="#005073"];
+    "net:device:fw1" [label="fw1\n10.255.0.1\nASA5516", shape=box3d, style=filled, fillcolor="#F6DEDA", color="#B03A2E"];
+    "net:device:lab1" [label="R&amp;D <lab> \"core\" 'x'\n10.255.0.99", shape=box, style="filled,rounded", fillcolor="#F5F5F5", color="#666666"];
+    "net:device:phone1" [label="phone1\nCP-8845", shape=box, style="filled,rounded", fillcolor="#EAF2F7", color="#005073"];
+    "net:device:rtr1" [label="rtr1\n10.255.0.2\nISR4331", shape=circle, style=filled, fillcolor="#EAF2F7", color="#005073"];
+    "net:device:rtr2" [label="rtr2\n10.255.0.3\nISR4331", shape=circle, style=filled, fillcolor="#EAF2F7", color="#005073"];
+    "net:device:srv1" [label="srv1\n10.20.0.10", shape=box, style="filled,rounded", fillcolor="#EAF2F7", color="#005073"];
+  }
+  "aws:dx-connection:dxcon-01" -- "aws:dx-gateway:dxgw-01" [color="#1A73E8", penwidth=4, style=solid, dir=forward, label="dxvif-01\nVLAN 101 · transit"];
+  "aws:dx-gateway:dxgw-01" -- "aws:transit-gateway:tgw-01" [color="#1A73E8", penwidth=2, style=solid, label="dxgw-assoc-01"];
+  "net:device:rtr1" -- "net:device:rtr2" [color="#3C78D8", penwidth=1.5, style=dashed, label="10.0.255.0/30", taillabel="Tu0 .1", headlabel="Tu0 .2"];
+  "ext:external:internet" -- "net:device:fw1" [color="#333333", penwidth=1.5, style=solid, headlabel="Gi0/0"];
+  "net:device:acc1" -- "net:device:ap1" [color="#333333", penwidth=1.5, style=solid, taillabel="Gi1/0/1", headlabel="Gi0"];
+  "net:device:acc1" -- "net:device:phone1" [color="#333333", penwidth=1.5, style=solid, taillabel="Gi1/0/2", headlabel="Port 1"];
+  "net:device:acc1" -- "net:device:core1" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/1/1", headlabel="Te1/0/21"];
+  "net:device:acc1" -- "net:device:core2" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/1/2", headlabel="Te1/0/21"];
+  "net:device:acc2" -- "net:device:srv1" [color="#333333", penwidth=1.5, style=solid, taillabel="Gi1/0/1", headlabel="eth0"];
+  "net:device:acc2" -- "net:device:lab1" [color="#333333", penwidth=1.5, style=solid, label="R&amp;D <lab> \"core\" 'x'", taillabel="Gi1/0/48", headlabel="eth0"];
+  "net:device:acc2" -- "net:device:core1" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/1/1", headlabel="Te1/0/22"];
+  "net:device:acc2" -- "net:device:core2" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/1/2", headlabel="Te1/0/22"];
+  "net:device:core1" -- "net:device:core2" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/0/10", headlabel="Te1/0/10"];
+  "net:device:core1" -- "net:device:core2" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/0/11", headlabel="Te1/0/11"];
+  "net:device:core1" -- "net:device:rtr1" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/0/1", headlabel="Gi0/0/1"];
+  "net:device:core1" -- "net:device:rtr2" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/0/2", headlabel="Gi0/0/1"];
+  "net:device:core2" -- "net:device:rtr1" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/0/1", headlabel="Gi0/0/2"];
+  "net:device:core2" -- "net:device:rtr2" [color="#333333", penwidth=1.5, style=solid, taillabel="Te1/0/2", headlabel="Gi0/0/2"];
+  "net:device:fw1" -- "net:device:rtr1" [color="#333333", penwidth=1.5, style=solid, taillabel="Gi0/1", headlabel="Gi0/0/0"];
+  "net:device:fw1" -- "net:device:rtr2" [color="#333333", penwidth=1.5, style=solid, taillabel="Gi0/2", headlabel="Gi0/0/0"];
+  "net:device:fw1" -- "net:segment:10.10.0.0/24" [color="#6C8EBF", penwidth=1.5, style=solid, label="10.10.0.1", taillabel="Vlan10"];
+  "net:device:rtr1" -- "net:segment:10.10.0.0/24" [color="#6C8EBF", penwidth=1.5, style=solid, label="10.10.0.2", taillabel="Vlan10"];
+  "net:device:rtr2" -- "net:segment:10.10.0.0/24" [color="#6C8EBF", penwidth=1.5, style=solid, label="10.10.0.3", taillabel="Vlan10"];
+  "aws:customer-gateway:cgw-01" -- "net:device:rtr1" [color="#E7157B", penwidth=2, style=dotted, label="cgw-ip 203.0.113.10"];
+  "aws:transit-gateway:tgw-01" -- "anchor:aws:vpc:vpc-00" [color="#8C4FFF", penwidth=2, style=solid, label="tgw-attach-00", lhead="cluster_aws:vpc:vpc-00"];
+  "aws:transit-gateway:tgw-01" -- "anchor:aws:vpc:vpc-01" [color="#8C4FFF", penwidth=2, style=solid, label="tgw-attach-01", lhead="cluster_aws:vpc:vpc-01"];
+  "anchor:aws:vpc:vpc-00" -- "anchor:aws:vpc:vpc-01" [color="#8C4FFF", penwidth=1.5, style=dashed, label="pcx-01", ltail="cluster_aws:vpc:vpc-00", lhead="cluster_aws:vpc:vpc-01"];
+  "anchor:aws:vpc:vpc-00" -- "anchor:aws:vpc:vpc-0ext" [color="#8C4FFF", penwidth=1.5, style=dashed, label="pcx-02", ltail="cluster_aws:vpc:vpc-00", lhead="cluster_aws:vpc:vpc-0ext"];
+  "aws:customer-gateway:cgw-01" -- "aws:transit-gateway:tgw-01" [color="#C98B00", penwidth=2, style=dashed, label="vpn-01\nBGP · 1/2 tunnels up"];
+}

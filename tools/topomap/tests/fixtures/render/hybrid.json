@@ -1,0 +1,895 @@
+{
+  "links": [
+    {
+      "attrs": {
+        "customer_address": "192.168.100.1/30",
+        "state": "available",
+        "vif_id": "dxvif-01",
+        "vif_type": "transit",
+        "vlan": 101
+      },
+      "directed": true,
+      "id": "dx-vif|aws:dx-connection:dxcon-01|aws:dx-gateway:dxgw-01|dxvif-01",
+      "kind": "dx-vif",
+      "source": "aws:dx-connection:dxcon-01",
+      "target": "aws:dx-gateway:dxgw-01"
+    },
+    {
+      "attrs": {
+        "association_id": "dxgw-assoc-01",
+        "state": "associated"
+      },
+      "id": "dxgw-association|aws:dx-gateway:dxgw-01|aws:transit-gateway:tgw-01",
+      "kind": "dxgw-association",
+      "source": "aws:dx-gateway:dxgw-01",
+      "target": "aws:transit-gateway:tgw-01"
+    },
+    {
+      "attrs": {
+        "addresses": {
+          "net:device:rtr1": "10.0.255.1",
+          "net:device:rtr2": "10.0.255.2"
+        },
+        "source_port": "Tunnel0",
+        "subnet": "10.0.255.0/30",
+        "target_port": "Tunnel0"
+      },
+      "id": "l3|net:device:rtr1[Tunnel0]|net:device:rtr2[Tunnel0]",
+      "kind": "l3",
+      "label": "10.0.255.0/30",
+      "source": "net:device:rtr1",
+      "target": "net:device:rtr2"
+    },
+    {
+      "attrs": {
+        "target_port": "GigabitEthernet0/0"
+      },
+      "id": "physical|ext:external:internet|net:device:fw1[GigabitEthernet0/0]",
+      "kind": "physical",
+      "source": "ext:external:internet",
+      "target": "net:device:fw1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "GigabitEthernet1/0/1",
+        "target_port": "GigabitEthernet0"
+      },
+      "id": "physical|net:device:acc1[GigabitEthernet1/0/1]|net:device:ap1[GigabitEthernet0]",
+      "kind": "physical",
+      "source": "net:device:acc1",
+      "target": "net:device:ap1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "GigabitEthernet1/0/2",
+        "target_port": "Port 1"
+      },
+      "id": "physical|net:device:acc1[GigabitEthernet1/0/2]|net:device:phone1[Port 1]",
+      "kind": "physical",
+      "source": "net:device:acc1",
+      "target": "net:device:phone1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/1/1",
+        "target_port": "TenGigabitEthernet1/0/21"
+      },
+      "id": "physical|net:device:acc1[TenGigabitEthernet1/1/1]|net:device:core1[TenGigabitEthernet1/0/21]",
+      "kind": "physical",
+      "source": "net:device:acc1",
+      "target": "net:device:core1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/1/2",
+        "target_port": "TenGigabitEthernet1/0/21"
+      },
+      "id": "physical|net:device:acc1[TenGigabitEthernet1/1/2]|net:device:core2[TenGigabitEthernet1/0/21]",
+      "kind": "physical",
+      "source": "net:device:acc1",
+      "target": "net:device:core2"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "GigabitEthernet1/0/1",
+        "target_port": "eth0"
+      },
+      "id": "physical|net:device:acc2[GigabitEthernet1/0/1]|net:device:srv1[eth0]",
+      "kind": "physical",
+      "source": "net:device:acc2",
+      "target": "net:device:srv1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "GigabitEthernet1/0/48",
+        "subnets": [
+          "R&D <lab> \"core\" 'x'"
+        ],
+        "target_port": "eth0"
+      },
+      "id": "physical|net:device:acc2[GigabitEthernet1/0/48]|net:device:lab1[eth0]",
+      "kind": "physical",
+      "source": "net:device:acc2",
+      "target": "net:device:lab1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/1/1",
+        "target_port": "TenGigabitEthernet1/0/22"
+      },
+      "id": "physical|net:device:acc2[TenGigabitEthernet1/1/1]|net:device:core1[TenGigabitEthernet1/0/22]",
+      "kind": "physical",
+      "source": "net:device:acc2",
+      "target": "net:device:core1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/1/2",
+        "target_port": "TenGigabitEthernet1/0/22"
+      },
+      "id": "physical|net:device:acc2[TenGigabitEthernet1/1/2]|net:device:core2[TenGigabitEthernet1/0/22]",
+      "kind": "physical",
+      "source": "net:device:acc2",
+      "target": "net:device:core2"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/0/10",
+        "target_port": "TenGigabitEthernet1/0/10"
+      },
+      "id": "physical|net:device:core1[TenGigabitEthernet1/0/10]|net:device:core2[TenGigabitEthernet1/0/10]",
+      "kind": "physical",
+      "source": "net:device:core1",
+      "target": "net:device:core2"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/0/11",
+        "target_port": "TenGigabitEthernet1/0/11"
+      },
+      "id": "physical|net:device:core1[TenGigabitEthernet1/0/11]|net:device:core2[TenGigabitEthernet1/0/11]",
+      "kind": "physical",
+      "source": "net:device:core1",
+      "target": "net:device:core2"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/0/1",
+        "target_port": "GigabitEthernet0/0/1"
+      },
+      "id": "physical|net:device:core1[TenGigabitEthernet1/0/1]|net:device:rtr1[GigabitEthernet0/0/1]",
+      "kind": "physical",
+      "source": "net:device:core1",
+      "target": "net:device:rtr1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/0/2",
+        "target_port": "GigabitEthernet0/0/1"
+      },
+      "id": "physical|net:device:core1[TenGigabitEthernet1/0/2]|net:device:rtr2[GigabitEthernet0/0/1]",
+      "kind": "physical",
+      "source": "net:device:core1",
+      "target": "net:device:rtr2"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/0/1",
+        "target_port": "GigabitEthernet0/0/2"
+      },
+      "id": "physical|net:device:core2[TenGigabitEthernet1/0/1]|net:device:rtr1[GigabitEthernet0/0/2]",
+      "kind": "physical",
+      "source": "net:device:core2",
+      "target": "net:device:rtr1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "TenGigabitEthernet1/0/2",
+        "target_port": "GigabitEthernet0/0/2"
+      },
+      "id": "physical|net:device:core2[TenGigabitEthernet1/0/2]|net:device:rtr2[GigabitEthernet0/0/2]",
+      "kind": "physical",
+      "source": "net:device:core2",
+      "target": "net:device:rtr2"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "GigabitEthernet0/1",
+        "target_port": "GigabitEthernet0/0/0"
+      },
+      "id": "physical|net:device:fw1[GigabitEthernet0/1]|net:device:rtr1[GigabitEthernet0/0/0]",
+      "kind": "physical",
+      "source": "net:device:fw1",
+      "target": "net:device:rtr1"
+    },
+    {
+      "attrs": {
+        "protocols": [
+          "cdp"
+        ],
+        "source_port": "GigabitEthernet0/2",
+        "target_port": "GigabitEthernet0/0/0"
+      },
+      "id": "physical|net:device:fw1[GigabitEthernet0/2]|net:device:rtr2[GigabitEthernet0/0/0]",
+      "kind": "physical",
+      "source": "net:device:fw1",
+      "target": "net:device:rtr2"
+    },
+    {
+      "attrs": {
+        "address": "10.10.0.1",
+        "source_port": "Vlan10"
+      },
+      "id": "segment-member|net:device:fw1[Vlan10]|net:segment:10.10.0.0/24",
+      "kind": "segment-member",
+      "source": "net:device:fw1",
+      "target": "net:segment:10.10.0.0/24"
+    },
+    {
+      "attrs": {
+        "address": "10.10.0.2",
+        "source_port": "Vlan10"
+      },
+      "id": "segment-member|net:device:rtr1[Vlan10]|net:segment:10.10.0.0/24",
+      "kind": "segment-member",
+      "source": "net:device:rtr1",
+      "target": "net:segment:10.10.0.0/24"
+    },
+    {
+      "attrs": {
+        "address": "10.10.0.3",
+        "source_port": "Vlan10"
+      },
+      "id": "segment-member|net:device:rtr2[Vlan10]|net:segment:10.10.0.0/24",
+      "kind": "segment-member",
+      "source": "net:device:rtr2",
+      "target": "net:segment:10.10.0.0/24"
+    },
+    {
+      "attrs": {
+        "address": "203.0.113.10",
+        "rule": "cgw-ip"
+      },
+      "id": "stitch|aws:customer-gateway:cgw-01|net:device:rtr1",
+      "kind": "stitch",
+      "source": "aws:customer-gateway:cgw-01",
+      "target": "net:device:rtr1"
+    },
+    {
+      "attrs": {
+        "attachment_id": "tgw-attach-00",
+        "resource_type": "vpc",
+        "state": "available"
+      },
+      "id": "tgw-attachment|aws:transit-gateway:tgw-01|aws:vpc:vpc-00|tgw-attach-00",
+      "kind": "tgw-attachment",
+      "source": "aws:transit-gateway:tgw-01",
+      "target": "aws:vpc:vpc-00"
+    },
+    {
+      "attrs": {
+        "attachment_id": "tgw-attach-01",
+        "resource_type": "vpc",
+        "state": "available"
+      },
+      "id": "tgw-attachment|aws:transit-gateway:tgw-01|aws:vpc:vpc-01|tgw-attach-01",
+      "kind": "tgw-attachment",
+      "source": "aws:transit-gateway:tgw-01",
+      "target": "aws:vpc:vpc-01"
+    },
+    {
+      "attrs": {
+        "state": "attached"
+      },
+      "id": "vgw-attachment|aws:vpc:vpc-01|aws:vpn-gateway:vgw-01",
+      "kind": "vgw-attachment",
+      "source": "aws:vpc:vpc-01",
+      "target": "aws:vpn-gateway:vgw-01"
+    },
+    {
+      "attrs": {
+        "peering_id": "pcx-01",
+        "state": "active"
+      },
+      "id": "vpc-peering|aws:vpc:vpc-00|aws:vpc:vpc-01|pcx-01",
+      "kind": "vpc-peering",
+      "source": "aws:vpc:vpc-00",
+      "target": "aws:vpc:vpc-01"
+    },
+    {
+      "attrs": {
+        "peering_id": "pcx-02",
+        "state": "pending-acceptance"
+      },
+      "id": "vpc-peering|aws:vpc:vpc-00|aws:vpc:vpc-0ext|pcx-02",
+      "kind": "vpc-peering",
+      "source": "aws:vpc:vpc-00",
+      "target": "aws:vpc:vpc-0ext"
+    },
+    {
+      "attrs": {
+        "routing": "bgp",
+        "state": "available",
+        "tunnels": [
+          {
+            "inside_cidr": "169.254.10.0/30",
+            "outside_ip": "198.51.100.1",
+            "status": "UP"
+          },
+          {
+            "inside_cidr": "169.254.11.0/30",
+            "outside_ip": "198.51.100.2",
+            "status": "DOWN"
+          }
+        ],
+        "vpn_id": "vpn-01"
+      },
+      "id": "vpn|aws:customer-gateway:cgw-01|aws:transit-gateway:tgw-01|vpn-01",
+      "kind": "vpn",
+      "source": "aws:customer-gateway:cgw-01",
+      "target": "aws:transit-gateway:tgw-01"
+    }
+  ],
+  "meta": {
+    "collector": "test"
+  },
+  "nodes": [
+    {
+      "attrs": {
+        "account_id": "123456789012"
+      },
+      "id": "aws:account:123456789012",
+      "kind": "account",
+      "label": "example-prod"
+    },
+    {
+      "id": "aws:az:vpc-00:us-east-1a",
+      "kind": "az",
+      "label": "us-east-1a",
+      "parent": "aws:vpc:vpc-00"
+    },
+    {
+      "id": "aws:az:vpc-00:us-east-1b",
+      "kind": "az",
+      "label": "us-east-1b",
+      "parent": "aws:vpc:vpc-00"
+    },
+    {
+      "id": "aws:az:vpc-01:us-east-1a",
+      "kind": "az",
+      "label": "us-east-1a",
+      "parent": "aws:vpc:vpc-01"
+    },
+    {
+      "id": "aws:az:vpc-01:us-east-1b",
+      "kind": "az",
+      "label": "us-east-1b",
+      "parent": "aws:vpc:vpc-01"
+    },
+    {
+      "attrs": {
+        "asn": 65010,
+        "cgw_id": "cgw-01",
+        "ip": "203.0.113.10"
+      },
+      "id": "aws:customer-gateway:cgw-01",
+      "kind": "customer-gateway",
+      "label": "hq-cgw (cgw-01)",
+      "parent": "aws:region:123456789012:us-east-1"
+    },
+    {
+      "attrs": {
+        "bandwidth": "1Gbps",
+        "connection_id": "dxcon-01",
+        "location": "EqDC2"
+      },
+      "id": "aws:dx-connection:dxcon-01",
+      "kind": "dx-connection",
+      "label": "dxcon-01",
+      "parent": "aws:region:123456789012:us-east-1"
+    },
+    {
+      "attrs": {
+        "asn": 64600,
+        "dxgw_id": "dxgw-01"
+      },
+      "id": "aws:dx-gateway:dxgw-01",
+      "kind": "dx-gateway",
+      "label": "dxgw-01",
+      "parent": "aws:account:123456789012"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0000",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.0.1.10"
+        ]
+      },
+      "id": "aws:instance:i-0000",
+      "kind": "instance",
+      "label": "app-000 (i-0000)",
+      "parent": "aws:subnet:subnet-001"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0001",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.0.1.11"
+        ]
+      },
+      "id": "aws:instance:i-0001",
+      "kind": "instance",
+      "label": "app-001 (i-0001)",
+      "parent": "aws:subnet:subnet-001"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0010",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.0.3.10"
+        ]
+      },
+      "id": "aws:instance:i-0010",
+      "kind": "instance",
+      "label": "app-010 (i-0010)",
+      "parent": "aws:subnet:subnet-011"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0011",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.0.3.11"
+        ]
+      },
+      "id": "aws:instance:i-0011",
+      "kind": "instance",
+      "label": "app-011 (i-0011)",
+      "parent": "aws:subnet:subnet-011"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0100",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.1.1.10"
+        ]
+      },
+      "id": "aws:instance:i-0100",
+      "kind": "instance",
+      "label": "app-100 (i-0100)",
+      "parent": "aws:subnet:subnet-101"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0101",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.1.1.11"
+        ]
+      },
+      "id": "aws:instance:i-0101",
+      "kind": "instance",
+      "label": "app-101 (i-0101)",
+      "parent": "aws:subnet:subnet-101"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0110",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.1.3.10"
+        ]
+      },
+      "id": "aws:instance:i-0110",
+      "kind": "instance",
+      "label": "app-110 (i-0110)",
+      "parent": "aws:subnet:subnet-111"
+    },
+    {
+      "attrs": {
+        "instance_id": "i-0111",
+        "instance_type": "t3.micro",
+        "private_ips": [
+          "10.1.3.11"
+        ]
+      },
+      "id": "aws:instance:i-0111",
+      "kind": "instance",
+      "label": "app-111 (i-0111)",
+      "parent": "aws:subnet:subnet-111"
+    },
+    {
+      "attrs": {
+        "gateway_id": "igw-00"
+      },
+      "id": "aws:internet-gateway:igw-00",
+      "kind": "internet-gateway",
+      "label": "igw-00",
+      "parent": "aws:vpc:vpc-00"
+    },
+    {
+      "attrs": {
+        "gateway_id": "igw-01"
+      },
+      "id": "aws:internet-gateway:igw-01",
+      "kind": "internet-gateway",
+      "label": "igw-01",
+      "parent": "aws:vpc:vpc-01"
+    },
+    {
+      "attrs": {
+        "nat_gateway_id": "nat-00",
+        "public_ips": [
+          "203.0.113.20"
+        ]
+      },
+      "id": "aws:nat-gateway:nat-00",
+      "kind": "nat-gateway",
+      "label": "nat-00",
+      "parent": "aws:subnet:subnet-000"
+    },
+    {
+      "attrs": {
+        "nat_gateway_id": "nat-01",
+        "public_ips": [
+          "203.0.113.21"
+        ]
+      },
+      "id": "aws:nat-gateway:nat-01",
+      "kind": "nat-gateway",
+      "label": "nat-01",
+      "parent": "aws:subnet:subnet-100"
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "id": "aws:region:123456789012:us-east-1",
+      "kind": "region",
+      "label": "us-east-1",
+      "parent": "aws:account:123456789012"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "cidr": "10.0.0.0/24",
+        "public": true
+      },
+      "id": "aws:subnet:subnet-000",
+      "kind": "subnet",
+      "label": "prod-public-a (subnet-000)",
+      "parent": "aws:az:vpc-00:us-east-1a"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "cidr": "10.0.1.0/24",
+        "public": false
+      },
+      "id": "aws:subnet:subnet-001",
+      "kind": "subnet",
+      "label": "prod-private-a (subnet-001)",
+      "parent": "aws:az:vpc-00:us-east-1a"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1b",
+        "cidr": "10.0.2.0/24",
+        "public": true
+      },
+      "id": "aws:subnet:subnet-010",
+      "kind": "subnet",
+      "label": "prod-public-b (subnet-010)",
+      "parent": "aws:az:vpc-00:us-east-1b"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1b",
+        "cidr": "10.0.3.0/24",
+        "public": false
+      },
+      "id": "aws:subnet:subnet-011",
+      "kind": "subnet",
+      "label": "prod-private-b (subnet-011)",
+      "parent": "aws:az:vpc-00:us-east-1b"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "cidr": "10.1.0.0/24",
+        "public": true
+      },
+      "id": "aws:subnet:subnet-100",
+      "kind": "subnet",
+      "label": "shared-public-a (subnet-100)",
+      "parent": "aws:az:vpc-01:us-east-1a"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "cidr": "10.1.1.0/24",
+        "public": false
+      },
+      "id": "aws:subnet:subnet-101",
+      "kind": "subnet",
+      "label": "shared-private-a (subnet-101)",
+      "parent": "aws:az:vpc-01:us-east-1a"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1b",
+        "cidr": "10.1.2.0/24",
+        "public": true
+      },
+      "id": "aws:subnet:subnet-110",
+      "kind": "subnet",
+      "label": "shared-public-b (subnet-110)",
+      "parent": "aws:az:vpc-01:us-east-1b"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1b",
+        "cidr": "10.1.3.0/24",
+        "public": false
+      },
+      "id": "aws:subnet:subnet-111",
+      "kind": "subnet",
+      "label": "shared-private-b (subnet-111)",
+      "parent": "aws:az:vpc-01:us-east-1b"
+    },
+    {
+      "attrs": {
+        "asn": 64512,
+        "tgw_id": "tgw-01"
+      },
+      "id": "aws:transit-gateway:tgw-01",
+      "kind": "transit-gateway",
+      "label": "core-tgw (tgw-01)",
+      "parent": "aws:region:123456789012:us-east-1"
+    },
+    {
+      "attrs": {
+        "endpoint_id": "vpce-01",
+        "endpoint_type": "Gateway",
+        "service": "com.amazonaws.us-east-1.s3"
+      },
+      "id": "aws:vpc-endpoint:vpce-01",
+      "kind": "vpc-endpoint",
+      "label": "vpce-01",
+      "parent": "aws:vpc:vpc-01"
+    },
+    {
+      "attrs": {
+        "cidrs": [
+          "10.0.0.0/16"
+        ]
+      },
+      "id": "aws:vpc:vpc-00",
+      "kind": "vpc",
+      "label": "prod (vpc-00)",
+      "parent": "aws:region:123456789012:us-east-1"
+    },
+    {
+      "attrs": {
+        "cidrs": [
+          "10.1.0.0/16"
+        ]
+      },
+      "id": "aws:vpc:vpc-01",
+      "kind": "vpc",
+      "label": "shared (vpc-01)",
+      "parent": "aws:region:123456789012:us-east-1"
+    },
+    {
+      "attrs": {
+        "account_id": "111122223333",
+        "cidrs": [
+          "172.16.0.0/16"
+        ],
+        "external": true
+      },
+      "id": "aws:vpc:vpc-0ext",
+      "kind": "vpc",
+      "label": "partner (vpc-0ext)"
+    },
+    {
+      "attrs": {
+        "asn": 64513,
+        "vgw_id": "vgw-01"
+      },
+      "id": "aws:vpn-gateway:vgw-01",
+      "kind": "vpn-gateway",
+      "label": "vgw-01",
+      "parent": "aws:vpc:vpc-01"
+    },
+    {
+      "id": "ext:external:internet",
+      "kind": "external",
+      "label": "Internet"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.21",
+        "model": "C9300",
+        "role": "switch"
+      },
+      "id": "net:device:acc1",
+      "kind": "device",
+      "label": "acc1",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.22",
+        "model": "C9300",
+        "role": "switch"
+      },
+      "id": "net:device:acc2",
+      "kind": "device",
+      "label": "acc2",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.1.10",
+        "model": "AIR-AP2802I",
+        "role": "wireless"
+      },
+      "id": "net:device:ap1",
+      "kind": "device",
+      "label": "ap1",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.11",
+        "model": "C9500",
+        "role": "switch"
+      },
+      "id": "net:device:core1",
+      "kind": "device",
+      "label": "core1",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.12",
+        "model": "C9500",
+        "role": "switch"
+      },
+      "id": "net:device:core2",
+      "kind": "device",
+      "label": "core2",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.1",
+        "model": "ASA5516",
+        "role": "firewall"
+      },
+      "id": "net:device:fw1",
+      "kind": "device",
+      "label": "fw1",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.99",
+        "model": "R&D <lab> \"core\" 'x'",
+        "role": "unknown"
+      },
+      "id": "net:device:lab1",
+      "kind": "device",
+      "label": "R&D <lab> \"core\" 'x'",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "",
+        "model": "CP-8845",
+        "role": "phone"
+      },
+      "id": "net:device:phone1",
+      "kind": "device",
+      "label": "phone1",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.2",
+        "model": "ISR4331",
+        "role": "router"
+      },
+      "id": "net:device:rtr1",
+      "kind": "device",
+      "label": "rtr1",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.255.0.3",
+        "model": "ISR4331",
+        "role": "router"
+      },
+      "id": "net:device:rtr2",
+      "kind": "device",
+      "label": "rtr2",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "mgmt_ip": "10.20.0.10",
+        "model": "",
+        "role": "server"
+      },
+      "id": "net:device:srv1",
+      "kind": "device",
+      "label": "srv1",
+      "parent": "net:site:hq"
+    },
+    {
+      "attrs": {
+        "subnet": "10.10.0.0/24"
+      },
+      "id": "net:segment:10.10.0.0/24",
+      "kind": "segment",
+      "label": "10.10.0.0/24"
+    },
+    {
+      "id": "net:site:hq",
+      "kind": "site",
+      "label": "HQ"
+    }
+  ],
+  "schema": "topomap/1"
+}

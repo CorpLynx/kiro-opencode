@@ -1,0 +1,163 @@
+leaf1>enable
+leaf1#terminal length 0
+Pagination disabled.
+leaf1#show version
+Arista DCS-7050SX3-48YC8-F
+Hardware version: 11.02
+Serial number: JPE21345678
+Hardware MAC address: 0000.5e00.5341
+System MAC address: 0000.5e00.5341
+
+Software image version: 4.28.3M
+Architecture: x86_64
+Internal build version: 4.28.3M-28859375.4283M
+Internal build ID: 1f1f4f0e-0000-4000-8000-000000000000
+Image format version: 3.0
+Image optimization: Strata-4GB
+
+Uptime: 17 weeks, 6 days, 2 hours and 8 minutes
+Total memory: 8099732 kB
+Free memory: 6152396 kB
+
+leaf1#show hostname
+Hostname: leaf1
+FQDN:     leaf1.example.net
+leaf1#show lldp neighbors detail
+Interface Ethernet1 detected 1 LLDP neighbors:
+
+  Neighbor 0000.5e00.53c0/"0000.5e00.53c0", age 12 seconds
+  Discovered 3 days, 4:10:02 ago; Last changed 3 days, 4:10:02 ago
+  - Chassis ID type: MAC address (4)
+    Chassis ID     : 0000.5e00.53c0
+  - Port ID type: MAC address (3)
+    Port ID        : 0000.5e00.53c0
+  - Time To Live: 120 seconds
+  - Port Description: "eth0"
+  - System Name: "srv1.example.net"
+  - System Description: "Ubuntu 22.04.4 LTS Linux 5.15.0-105-generic #115-Ubuntu SMP Mon Apr 15 09:52:04 UTC 2024 x86_64"
+  - System Capabilities : Bridge, Router, Station
+    Enabled Capabilities: Station
+  - Management Address Subtype: IPv4 (1)
+    Management Address        : 10.20.200.10
+    Interface Number Subtype  : ifIndex (2)
+    Interface Number          : 2
+    OID String                : 
+  - Maximum Frame Size: 1514 bytes
+
+Interface Ethernet2 detected 0 LLDP neighbors:
+
+Interface Ethernet49/1 detected 1 LLDP neighbors:
+
+  Neighbor 0000.5e00.5311/"Ethernet1/2", age 21 seconds
+  Discovered 17 weeks, 6 days, 1:58:40 ago; Last changed 17 weeks, 6 days, 1:58:40 ago
+  - Chassis ID type: MAC address (4)
+    Chassis ID     : 0000.5e00.5311
+  - Port ID type: Interface name (5)
+    Port ID        : "Ethernet1/2"
+  - Time To Live: 120 seconds
+  - Port Description: "to leaf1 Et49/1"
+  - System Name: "core1.example.net"
+  - System Description: "Cisco Nexus Operating System (NX-OS) Software 9.3(10)
+TAC support: http://www.cisco.com/tac
+Copyright (c) 2002-2022, Cisco Systems, Inc. All rights reserved."
+  - System Capabilities : Bridge, Router
+    Enabled Capabilities: Bridge, Router
+  - Management Address Subtype: IPv4 (1)
+    Management Address        : 192.168.0.11
+    Interface Number Subtype  : ifIndex (2)
+    Interface Number          : 83886080
+    OID String                : 
+  - Link Aggregation           : Capable, Disabled (Port ID: 0)
+  - Maximum Frame Size: 9216 bytes
+
+Interface Ethernet50/1 detected 1 LLDP neighbors:
+
+  Neighbor 0000.5e00.5312/"Ethernet1/2", age 6 seconds
+  Discovered 17 weeks, 6 days, 1:58:31 ago; Last changed 17 weeks, 6 days, 1:58:31 ago
+  - Chassis ID type: MAC address (4)
+    Chassis ID     : 0000.5e00.5312
+  - Port ID type: Interface name (5)
+    Port ID        : "Ethernet1/2"
+  - Time To Live: 120 seconds
+  - Port Description: "to leaf1 Et50/1"
+  - System Name: "core2.example.net"
+  - System Description: "Cisco Nexus Operating System (NX-OS) Software 9.3(10)
+TAC support: http://www.cisco.com/tac
+Copyright (c) 2002-2022, Cisco Systems, Inc. All rights reserved."
+  - System Capabilities : Bridge, Router
+    Enabled Capabilities: Bridge, Router
+  - Management Address Subtype: IPv4 (1)
+    Management Address        : 192.168.0.12
+    Interface Number Subtype  : ifIndex (2)
+    Interface Number          : 83886080
+    OID String                : 
+  - Link Aggregation           : Capable, Disabled (Port ID: 0)
+  - Maximum Frame Size: 9216 bytes
+
+leaf1#show ip interface
+Ethernet49/1 is up, line protocol is up (connected)
+  Description: to core1 Eth1/2
+  Internet address is 10.0.0.9/31
+  Broadcast address is 255.255.255.255
+  IPv6 Interface Forwarding : None
+  Proxy-ARP is disabled
+  Local Proxy-ARP is disabled
+  Gratuitous ARP is ignored
+  IP MTU 9214 bytes
+Ethernet50/1 is up, line protocol is up (connected)
+  Description: to core2 Eth1/2
+  Internet address is 10.0.0.11/31
+  Broadcast address is 255.255.255.255
+  IPv6 Interface Forwarding : None
+  Proxy-ARP is disabled
+  Local Proxy-ARP is disabled
+  Gratuitous ARP is ignored
+  IP MTU 9214 bytes
+Loopback0 is up, line protocol is up (connected)
+  Description: router-id
+  Internet address is 10.255.255.21/32
+  Broadcast address is 255.255.255.255
+  IPv6 Interface Forwarding : None
+  Proxy-ARP is disabled
+  Local Proxy-ARP is disabled
+  Gratuitous ARP is ignored
+  IP MTU 65535 bytes
+Management1 is up, line protocol is up (connected)
+  Description: oob-mgmt
+  Internet address is 192.168.0.21/24
+  Broadcast address is 255.255.255.255
+  IPv6 Interface Forwarding : None
+  Proxy-ARP is disabled
+  Local Proxy-ARP is disabled
+  Gratuitous ARP is ignored
+  IP MTU 1500 bytes
+  VPN Routing/Forwarding "MGMT"
+Vlan200 is up, line protocol is up (connected)
+  Description: servers
+  Internet address is 10.20.200.1/24
+  Broadcast address is 255.255.255.255
+  IPv6 Interface Forwarding : None
+  Proxy-ARP is disabled
+  Local Proxy-ARP is disabled
+  Gratuitous ARP is ignored
+  IP MTU 1500 bytes
+leaf1#show ipv6 interface
+Ethernet49/1 is up, line protocol is up (connected)
+  Description: to core1 Eth1/2
+  IPv6 is enabled, link-local is fe80::200:5eff:fe00:5341/64
+  Global unicast address(es):
+    2001:db8:0:3::2, subnet is 2001:db8:0:3::/64
+  IPv6 MTU 9214 bytes
+  ND DAD is enabled, number of DAD attempts: 1
+  ND reachable time is 30000 milliseconds
+  ND retransmission time is 1000 milliseconds
+leaf1#show interfaces description
+Interface                      Status         Protocol           Description
+Et1                            up             up                 srv1
+Et2                            down           down               
+Et49/1                         up             up                 to core1 Eth1/2
+Et50/1                         up             up                 to core2 Eth1/2
+Lo0                            up             up                 router-id
+Ma1                            up             up                 oob-mgmt
+Vl200                          up             up                 servers
+leaf1#
