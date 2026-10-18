@@ -1,0 +1,86 @@
+From 5713893957efd45c628e25500f688ae6c8fcf931 Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:34:30 +0000
+Subject: [PATCH 3/8] hardened: no update checks or self-upgrade
+
+Installation.latest reports the installed version without any network
+call, upgrade/upgradeMajor and `opencode upgrade` decline, and the TUI's
+update notice never appears.
+---
+ packages/core/src/flag/flag.ts              | 2 +-
+ packages/opencode/src/cli/cmd/upgrade.ts    | 6 ++++++
+ packages/opencode/src/installation/index.ts | 5 +++++
+ 3 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/packages/core/src/flag/flag.ts b/packages/core/src/flag/flag.ts
+index 2175211..7f66a8a 100644
+--- a/packages/core/src/flag/flag.ts
++++ b/packages/core/src/flag/flag.ts
+@@ -21,7 +21,7 @@ export const Flag = {
+   OPENCODE_GIT_BASH_PATH: process.env["OPENCODE_GIT_BASH_PATH"],
+   OPENCODE_CONFIG: process.env["OPENCODE_CONFIG"],
+   OPENCODE_CONFIG_CONTENT: process.env["OPENCODE_CONFIG_CONTENT"],
+-  OPENCODE_DISABLE_AUTOUPDATE: truthy("OPENCODE_DISABLE_AUTOUPDATE"),
++  OPENCODE_DISABLE_AUTOUPDATE: Hardened.enabled || truthy("OPENCODE_DISABLE_AUTOUPDATE"),
+   OPENCODE_ALWAYS_NOTIFY_UPDATE: truthy("OPENCODE_ALWAYS_NOTIFY_UPDATE"),
+   OPENCODE_DISABLE_PRUNE: truthy("OPENCODE_DISABLE_PRUNE"),
+   OPENCODE_DISABLE_TERMINAL_TITLE: truthy("OPENCODE_DISABLE_TERMINAL_TITLE"),
+diff --git a/packages/opencode/src/cli/cmd/upgrade.ts b/packages/opencode/src/cli/cmd/upgrade.ts
+index b329317..c3e062b 100644
+--- a/packages/opencode/src/cli/cmd/upgrade.ts
++++ b/packages/opencode/src/cli/cmd/upgrade.ts
+@@ -1,4 +1,5 @@
+ import type { Argv } from "yargs"
++import { Hardened } from "@opencode-ai/core/hardened"
+ import { UI } from "../ui"
+ import * as prompts from "@clack/prompts"
+ import { Installation } from "../../installation"
+@@ -29,6 +30,11 @@ export const UpgradeCommand = {
+     UI.println(UI.logo("  "))
+     UI.empty()
+     prompts.intro("Upgrade")
++    if (Hardened.enabled) {
++      prompts.log.warn(`Self-upgrade is ${Hardened.notice}. Updates arrive through your organization's software distribution.`)
++      prompts.outro("Done")
++      return
++    }
+     const detectedMethod = await Installation.method()
+     const method = (args.method as Installation.Method) ?? detectedMethod
+     if (method === "unknown") {
+diff --git a/packages/opencode/src/installation/index.ts b/packages/opencode/src/installation/index.ts
+index 439dc84..9b60437 100644
+--- a/packages/opencode/src/installation/index.ts
++++ b/packages/opencode/src/installation/index.ts
+@@ -13,6 +13,7 @@ import { makeRuntime } from "@opencode-ai/core/effect/runtime"
+ import semver from "semver"
+ import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
+ import { NpmConfig } from "@opencode-ai/core/npm-config"
++import { Hardened } from "@opencode-ai/core/hardened"
+ import { InstallationEvent } from "@opencode-ai/schema/installation-event"
+ 
+ export type Method = "curl" | "npm" | "yarn" | "pnpm" | "bun" | "brew" | "scoop" | "choco" | "unknown"
+@@ -310,6 +311,8 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
+       // Reports the installed version when there's no OpenCode 1 update this install method can deliver,
+       // so callers offer OpenCode 2 through the major upgrade instead.
+       latest: Effect.fn("Installation.latest")(function* (installMethod?: Method) {
++        // Hardened builds never look for updates: the organization distributes them.
++        if (Hardened.enabled) return InstallationVersion
+         const method = installMethod || (yield* result.method())
+         // Homebrew Core's opencode formula is OpenCode 2, so `brew upgrade` can't deliver an OpenCode 1 update.
+         if (method === "brew" && !(yield* getBrewFormula()).includes("/")) return InstallationVersion
+@@ -321,6 +324,7 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
+         }).pipe(Effect.timeout("10 seconds"))
+       }, Effect.orDie),
+       upgrade: Effect.fn("Installation.upgrade")(function* (m: Method, target: string) {
++        if (Hardened.enabled) return yield* new UpgradeFailedError({ stderr: `Self-upgrade is ${Hardened.notice}.` })
+         if (semver.valid(target) && semver.major(target) >= 2)
+           return yield* new UpgradeFailedError({
+             stderr: `OpenCode ${target} is OpenCode 2. Upgrade with \`opencode upgrade --major\` or see ${MAJOR_INSTRUCTIONS}`,
+@@ -393,6 +397,7 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
+         yield* text([process.execPath, "--version"])
+       }),
+       upgradeMajor: Effect.fn("Installation.upgradeMajor")(function* (m: Method) {
++        if (Hardened.enabled) return yield* new UpgradeFailedError({ stderr: `Self-upgrade is ${Hardened.notice}.` })
+         const outcome = yield* majorUpgrade(m)
+         if (outcome.code !== 0) return yield* new UpgradeFailedError({ stderr: upgradeFailure(m, outcome) })
+         yield* Effect.logInfo("upgraded major", { method: m, stdout: outcome.stdout, stderr: outcome.stderr })

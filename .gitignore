@@ -1,21 +1,3 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-build/
-dist/
-
-# Node / Bun
-node_modules/
-*.tsbuildinfo
-
-# Editors and OS
-.idea/
-.vscode/
-.DS_Store
-
-# Never commit secrets or real data
-*.key
-.env
+node_modules
+dist
+*.tgz

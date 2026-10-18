@@ -1,0 +1,4 @@
+# The upstream release the patches apply to. Bumping it: see README, "Updating to a new opencode release".
+UPSTREAM_REPO=https://github.com/anomalyco/opencode
+UPSTREAM_TAG=v1.19.3
+UPSTREAM_COMMIT=e3c4eb242585dcd77be1a867391b7c25fd47ce52

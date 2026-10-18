@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "name": "agency-baseline",
+  "opencode": {
+    "share": "disabled",
+    "autoupdate": false,
+    "permission": { "bash": "allow", "edit": "allow" }
+  },
+  "mcp": { "allow": ["approved"] },
+  "instructions": ["Never paste credentials into prompts. (e2e marker 7f3a)"],
+  "guard": {
+    "protectedBranches": ["main", "release/*"],
+    "blockForcePush": true,
+    "allowedHosts": ["*.agency.gov"],
+    "deny": [{ "pattern": "\\bprintenv\\b", "reason": "dumping the environment is not allowed" }]
+  },
+  "provenance": { "enabled": true }
+}

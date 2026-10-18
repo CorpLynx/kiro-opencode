@@ -1,0 +1,94 @@
+From 193639e1daf60bb5496780d9fd34cbec5b432835 Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:39:05 +0000
+Subject: [PATCH 8/8] hardened: no opencode.ai account, GitHub app or Zen
+ services
+
+`opencode console` and `opencode github` are hidden and refuse to run,
+organization config is never pulled from opencode.ai, and the built-in
+"opencode" (Zen) provider is always disabled.
+---
+ packages/opencode/src/config/config.ts |  9 ++++++++-
+ packages/opencode/src/index.ts         | 19 +++++++++++++++++--
+ 2 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/packages/opencode/src/config/config.ts b/packages/opencode/src/config/config.ts
+index 9e10b67..0840cdd 100644
+--- a/packages/opencode/src/config/config.ts
++++ b/packages/opencode/src/config/config.ts
+@@ -36,6 +36,7 @@ import { ConfigVariable } from "./variable"
+ import { ConfigV2Compat } from "./v2-compat"
+ import { Npm } from "@opencode-ai/core/npm"
+ import { withTransientReadRetry } from "@/util/effect-http-client"
++import { Hardened } from "@opencode-ai/core/hardened"
+ 
+ // Custom merge function that concatenates array fields instead of replacing them
+ // Keep remeda's deep conditional merge type out of hot config-loading paths; TS profiling showed it dominates here.
+@@ -492,7 +493,8 @@ const layer = Layer.effect(
+         const activeAccount = Option.getOrUndefined(
+           yield* accountSvc.active().pipe(Effect.catch(() => Effect.succeed(Option.none()))),
+         )
+-        if (activeAccount?.active_org_id) {
++        // Hardened builds never pull configuration from opencode.ai.
++        if (!Hardened.enabled && activeAccount?.active_org_id) {
+           const accountID = activeAccount.id
+           const orgID = activeAccount.active_org_id
+           const url = activeAccount.url
+@@ -586,6 +588,11 @@ const layer = Layer.effect(
+           }
+         }
+ 
++        if (Hardened.enabled) {
++          // opencode.ai's own model service ("Zen") is never available in hardened builds.
++          result.disabled_providers = [...new Set([...(result.disabled_providers ?? []), "opencode"])]
++        }
++
+         if (result.autoshare === true && !result.share) {
+           result.share = "auto"
+         }
+diff --git a/packages/opencode/src/index.ts b/packages/opencode/src/index.ts
+index 13540a7..f49ac65 100644
+--- a/packages/opencode/src/index.ts
++++ b/packages/opencode/src/index.ts
+@@ -28,8 +28,23 @@ import { SessionCommand } from "./cli/cmd/session"
+ import { DbCommand } from "./cli/cmd/db"
+ import { errorMessage } from "./util/error"
+ import { PluginCommand } from "./cli/cmd/plug"
++import { Hardened } from "@opencode-ai/core/hardened"
+ import { Heap } from "./cli/heap"
+ 
++/** Hardened builds: commands that rely on opencode.ai services are hidden and refuse to run. */
++function withoutCloud<T extends { command?: unknown; describe?: unknown }>(command: T): T {
++  if (!Hardened.enabled) return command
++  return {
++    ...command,
++    describe: false,
++    builder: (yargs: any) => yargs.strict(false),
++    handler: () => {
++      process.stderr.write(`This command uses opencode.ai services, which are ${Hardened.notice}.${EOL}`)
++      process.exitCode = 1
++    },
++  }
++}
++
+ const args = hideBin(process.argv)
+ 
+ function show(out: string) {
+@@ -85,7 +100,7 @@ const cli = yargs(args)
+   .command(RunCommand)
+   .command(GenerateCommand)
+   .command(DebugCommand)
+-  .command(ConsoleCommand)
++  .command(withoutCloud(ConsoleCommand))
+   .command(ProvidersCommand)
+   .command(AgentCommand)
+   .command(UpgradeCommand)
+@@ -96,7 +111,7 @@ const cli = yargs(args)
+   .command(StatsCommand)
+   .command(ExportCommand)
+   .command(ImportCommand)
+-  .command(GithubCommand)
++  .command(withoutCloud(GithubCommand))
+   .command(PrCommand)
+   .command(SessionCommand)
+   .command(PluginCommand)

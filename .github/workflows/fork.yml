@@ -1,0 +1,32 @@
+name: Hardened opencode
+on:
+  push:
+    branches: [main]
+    paths: [opencode-fork/**, .github/workflows/fork.yml]
+  pull_request:
+    paths: [opencode-fork/**, .github/workflows/fork.yml]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: opencode-fork
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14 # upstream's packageManager
+      - run: sudo apt-get install -y tmux strace
+      - run: ./build.sh
+      - name: No outbound connections
+        run: test/egress.sh dist/opencode-linux-x64 --expect-none
+      - name: Managed policy holds
+        run: sudo env "PATH=$PATH" test/managed.sh dist/opencode-linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencode-hardened
+          path: opencode-fork/dist/

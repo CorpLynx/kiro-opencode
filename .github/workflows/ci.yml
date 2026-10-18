@@ -1,46 +1,50 @@
 name: CI
-
 on:
   push:
+    branches: [main]
   pull_request:
-
-permissions:
-  contents: read
-
 jobs:
-  python:
-    name: ${{ matrix.project }} (py${{ matrix.python }}, ${{ matrix.install }})
+  test:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
-        # One entry per Python project. "test" installs every optional extra;
-        # "core" installs none, proving the stdlib-only core still works and
-        # that extra-dependent tests skip cleanly.
-        project: [tools/ip-redactor, tools/topomap]
-        python: ["3.9", "3.13"]
-        install: [test]
-        include:
-          - project: tools/ip-redactor
-            python: "3.13"
-            install: core
-          - project: tools/topomap
-            python: "3.13"
-            install: core
-    defaults:
-      run:
-        working-directory: ${{ matrix.project }}
+        node: [22]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: ${{ matrix.python }}
-      - name: Install
-        run: |
-          if [ "${{ matrix.install }}" = core ]; then
-            python -m pip install .
-          else
-            python -m pip install ".[${{ matrix.install }}]"
-          fi
-      - name: Test
-        run: python -m unittest discover -s tests -v
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run pack:check
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm install -g opencode-ai@1.19.3
+      - run: sudo apt-get install -y tmux # for the TUI tracker checks
+      - run: OPENCODE_BIN=$(command -v opencode) npm run test:e2e
+
+  ghe-policy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ghe-policy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm install -g opencode-ai@1.19.3
+      - run: OPENCODE_BIN=$(command -v opencode) npm run test:e2e

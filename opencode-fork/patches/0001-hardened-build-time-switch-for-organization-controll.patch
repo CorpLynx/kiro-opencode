@@ -1,0 +1,64 @@
+From 38690c83df64ec0ad56b32ce9bb753f2bbc91809 Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:34:02 +0000
+Subject: [PATCH 1/8] hardened: build-time switch for organization-controlled
+ builds
+
+Adds packages/core/src/hardened.ts, enabled only when the build defines
+OPENCODE_HARDENED (JSON). Nothing changes for normal builds.
+---
+ packages/core/src/hardened.ts     | 31 +++++++++++++++++++++++++++++++
+ packages/opencode/script/build.ts |  2 ++
+ 2 files changed, 33 insertions(+)
+ create mode 100644 packages/core/src/hardened.ts
+
+diff --git a/packages/core/src/hardened.ts b/packages/core/src/hardened.ts
+new file mode 100644
+index 0000000..d1381c5
+--- /dev/null
++++ b/packages/core/src/hardened.ts
+@@ -0,0 +1,31 @@
++/**
++ * Hardened builds, for organizations that must control everything opencode connects to.
++ *
++ * Switched on at *build* time by defining OPENCODE_HARDENED (a JSON object, see below), never at run
++ * time, so nothing a user sets can switch it off. A hardened build makes no network calls of its own:
++ *
++ *  - no model catalogue fetch from models.opencode.ai: the catalogue embedded at build time is used,
++ *    or `modelsUrl`, an internal mirror chosen at build time;
++ *  - no update checks or self-upgrades (updates come through the organization's software distribution);
++ *  - no LSP server downloads, external skills, Exa/Parallel web search or opencode.ai account services;
++ *  - the server never proxies its web UI from app.opencode.ai;
++ *  - npm installs (plugins, provider SDKs) only from `npmRegistry`, or not at all;
++ *  - managed configuration (/etc/opencode, …) can't be redirected or loosened from the environment,
++ *    and `--pure` can't be used to skip managed plugins.
++ *
++ * Normal builds are unaffected: every hardened behaviour is behind `Hardened.enabled`.
++ */
++declare const OPENCODE_HARDENED: { modelsUrl?: string; npmRegistry?: string } | undefined
++
++const settings = typeof OPENCODE_HARDENED === "undefined" ? undefined : OPENCODE_HARDENED
++const trim = (url?: string) => url?.trim().replace(/\/+$/, "") || undefined
++
++export const Hardened = {
++  enabled: settings !== undefined,
++  /** Internal mirror of the model catalogue (serves `/api.json`); unset means the embedded snapshot only. */
++  modelsUrl: trim(settings?.modelsUrl),
++  /** Internal npm registry for plugin and provider packages; unset means no runtime installs. */
++  npmRegistry: trim(settings?.npmRegistry),
++  /** Shown wherever a hardened build declines to do something. */
++  notice: "disabled in this build by your organization",
++} as const
+diff --git a/packages/opencode/script/build.ts b/packages/opencode/script/build.ts
+index b713911..3994724 100755
+--- a/packages/opencode/script/build.ts
++++ b/packages/opencode/script/build.ts
+@@ -193,6 +193,8 @@ for (const item of targets) {
+       FFF_LIBC: JSON.stringify(item.abi === "musl" ? "musl" : "gnu"),
+       OPENCODE_VERSION: `'${Script.version}'`,
+       OPENCODE_MODELS_DEV: generated.modelsData,
++      // Hardened (organization-controlled) build: OPENCODE_HARDENED='{"npmRegistry":"https://…"}' (or '{}').
++      ...(process.env.OPENCODE_HARDENED ? { OPENCODE_HARDENED: JSON.stringify(JSON.parse(process.env.OPENCODE_HARDENED)) } : {}),
+       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + treeSitterWorkerPath,
+       OPENCODE_WORKER_PATH: workerPath,
+       OPENCODE_CHANNEL: `'${Script.channel}'`,

@@ -1,0 +1,122 @@
+From a2ce2b7efac0c62104d78a034085cbb6c44fecaa Mon Sep 17 00:00:00 2001
+From: kiro-opencode fork <dev@corplynx.invalid>
+Date: Sat, 17 Oct 2026 09:34:59 +0000
+Subject: [PATCH 4/8] hardened: no LSP downloads, external skills, web search
+ services or Claude Code imports
+
+Pins the corresponding runtime flags so the environment can't re-enable
+them: LSP server downloads, external skills, Exa/Parallel web search and
+auto-share are off, and ~/.claude prompts and skills are not read.
+---
+ packages/core/src/tool/websearch.ts           |  8 ++-
+ packages/opencode/src/effect/runtime-flags.ts | 56 ++++++++++++-------
+ 2 files changed, 42 insertions(+), 22 deletions(-)
+
+diff --git a/packages/core/src/tool/websearch.ts b/packages/core/src/tool/websearch.ts
+index 6d62236..38b8f22 100644
+--- a/packages/core/src/tool/websearch.ts
++++ b/packages/core/src/tool/websearch.ts
+@@ -14,6 +14,7 @@ import { Tools } from "./tools"
+ import { collectBoundedResponseBody } from "./http-body"
+ import { checksum } from "../util/encode"
+ import { ToolRegistry } from "./registry"
++import { Hardened } from "../hardened"
+ 
+ export const name = "websearch"
+ export const NO_RESULTS = "No search results found. Please try a different query."
+@@ -76,8 +77,11 @@ export const defaultConfigLayer = Layer.sync(ConfigService, () =>
+       process.env.OPENCODE_WEBSEARCH_PROVIDER === "exa" || process.env.OPENCODE_WEBSEARCH_PROVIDER === "parallel"
+         ? process.env.OPENCODE_WEBSEARCH_PROVIDER
+         : undefined,
+-    enableExa: truthy("OPENCODE_EXPERIMENTAL") || truthy("OPENCODE_ENABLE_EXA") || truthy("OPENCODE_EXPERIMENTAL_EXA"),
+-    enableParallel: truthy("OPENCODE_ENABLE_PARALLEL") || truthy("OPENCODE_EXPERIMENTAL_PARALLEL"),
++    // Hardened builds never send searches to third-party services.
++    enableExa:
++      !Hardened.enabled &&
++      (truthy("OPENCODE_EXPERIMENTAL") || truthy("OPENCODE_ENABLE_EXA") || truthy("OPENCODE_EXPERIMENTAL_EXA")),
++    enableParallel: !Hardened.enabled && (truthy("OPENCODE_ENABLE_PARALLEL") || truthy("OPENCODE_EXPERIMENTAL_PARALLEL")),
+     exaApiKey: process.env.EXA_API_KEY,
+     parallelApiKey: process.env.PARALLEL_API_KEY,
+   }),
+diff --git a/packages/opencode/src/effect/runtime-flags.ts b/packages/opencode/src/effect/runtime-flags.ts
+index 65e02f0..85ba1b6 100644
+--- a/packages/opencode/src/effect/runtime-flags.ts
++++ b/packages/opencode/src/effect/runtime-flags.ts
+@@ -1,5 +1,6 @@
+ import { Config, ConfigProvider, Context, Effect, Layer, Option } from "effect"
+ import { ConfigService } from "@/effect/config-service"
++import { Hardened } from "@opencode-ai/core/hardened"
+ 
+ const bool = (name: string) => Config.boolean(name).pipe(Config.withDefault(false))
+ const positiveInteger = (name: string) =>
+@@ -8,35 +9,50 @@ const positiveInteger = (name: string) =>
+     Config.orElse(() => Config.succeed(undefined)),
+   )
+ const experimental = bool("OPENCODE_EXPERIMENTAL")
++/** In hardened builds, a fixed value the environment can't change. */
++const locked = <A>(config: Config.Config<A>, value: A): Config.Config<A> => (Hardened.enabled ? Config.succeed(value) : config)
+ const enabledByExperimental = (name: string) =>
+   Config.all({ experimental, enabled: Config.boolean(name).pipe(Config.option) }).pipe(
+     Config.map((flags) => Option.getOrElse(flags.enabled, () => flags.experimental)),
+   )
+ 
+ export class Service extends ConfigService.Service<Service>()("@opencode/RuntimeFlags", {
+-  autoShare: bool("OPENCODE_AUTO_SHARE"),
++  autoShare: locked(bool("OPENCODE_AUTO_SHARE"), false),
+   pure: bool("OPENCODE_PURE"),
+   disableDefaultPlugins: bool("OPENCODE_DISABLE_DEFAULT_PLUGINS"),
+   disableEmbeddedWebUi: bool("OPENCODE_DISABLE_EMBEDDED_WEB_UI"),
+-  disableExternalSkills: bool("OPENCODE_DISABLE_EXTERNAL_SKILLS"),
+-  disableLspDownload: bool("OPENCODE_DISABLE_LSP_DOWNLOAD"),
+-  disableClaudeCodePrompt: Config.all({
+-    broad: bool("OPENCODE_DISABLE_CLAUDE_CODE"),
+-    direct: bool("OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"),
+-  }).pipe(Config.map((flags) => flags.broad || flags.direct)),
+-  disableClaudeCodeSkills: Config.all({
+-    broad: bool("OPENCODE_DISABLE_CLAUDE_CODE"),
+-    direct: bool("OPENCODE_DISABLE_CLAUDE_CODE_SKILLS"),
+-  }).pipe(Config.map((flags) => flags.broad || flags.direct)),
+-  enableExa: Config.all({
+-    experimental,
+-    enabled: bool("OPENCODE_ENABLE_EXA"),
+-    legacy: bool("OPENCODE_EXPERIMENTAL_EXA"),
+-  }).pipe(Config.map((flags) => flags.experimental || flags.enabled || flags.legacy)),
+-  enableParallel: Config.all({
+-    enabled: bool("OPENCODE_ENABLE_PARALLEL"),
+-    legacy: bool("OPENCODE_EXPERIMENTAL_PARALLEL"),
+-  }).pipe(Config.map((flags) => flags.enabled || flags.legacy)),
++  disableExternalSkills: locked(bool("OPENCODE_DISABLE_EXTERNAL_SKILLS"), true),
++  disableLspDownload: locked(bool("OPENCODE_DISABLE_LSP_DOWNLOAD"), true),
++  // Hardened builds don't read Claude Code's ~/.claude prompts or skills into sessions.
++  disableClaudeCodePrompt: locked(
++    Config.all({
++      broad: bool("OPENCODE_DISABLE_CLAUDE_CODE"),
++      direct: bool("OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"),
++    }).pipe(Config.map((flags) => flags.broad || flags.direct)),
++    true,
++  ),
++  disableClaudeCodeSkills: locked(
++    Config.all({
++      broad: bool("OPENCODE_DISABLE_CLAUDE_CODE"),
++      direct: bool("OPENCODE_DISABLE_CLAUDE_CODE_SKILLS"),
++    }).pipe(Config.map((flags) => flags.broad || flags.direct)),
++    true,
++  ),
++  enableExa: locked(
++    Config.all({
++      experimental,
++      enabled: bool("OPENCODE_ENABLE_EXA"),
++      legacy: bool("OPENCODE_EXPERIMENTAL_EXA"),
++    }).pipe(Config.map((flags) => flags.experimental || flags.enabled || flags.legacy)),
++    false,
++  ),
++  enableParallel: locked(
++    Config.all({
++      enabled: bool("OPENCODE_ENABLE_PARALLEL"),
++      legacy: bool("OPENCODE_EXPERIMENTAL_PARALLEL"),
++    }).pipe(Config.map((flags) => flags.enabled || flags.legacy)),
++    false,
++  ),
+   enableExperimentalModels: bool("OPENCODE_ENABLE_EXPERIMENTAL_MODELS"),
+   enableQuestionTool: bool("OPENCODE_ENABLE_QUESTION_TOOL"),
+   experimentalReferences: enabledByExperimental("OPENCODE_EXPERIMENTAL_REFERENCES"),
