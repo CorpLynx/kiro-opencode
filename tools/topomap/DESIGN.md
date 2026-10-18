@@ -17,13 +17,14 @@ Every stage reads and writes the same JSON graph (`topomap/model.py`), so stages
   - `boto3` is needed only by `collectors/aws.py`, and `netmiko` only by `collectors/devices.py`.
   - Import them inside functions, never at module top level, and raise a `RuntimeError` naming the extra to install (`pip install 'topomap[aws]'`) if one is missing.
 - **Read-only, always.**
-  - The AWS collector only calls `Describe*`, `List*` and `Get*`.
-  - The crawler only runs commands from `parsers.COMMANDS`, and refuses anything else.
-- **Partial failure is normal.** An unreachable device, an `AccessDenied` region or an unparseable file is recorded with `Topology.warn()`, and collection carries on. Only bad arguments are fatal.
+  - The AWS collector wraps every client so only `Describe*`, `List*`, `Get*` and `Search*` calls can run. The one exception is STS `AssumeRole`, allowed only on the client that fetches credentials for other accounts.
+  - The crawler only runs commands from `parsers.COMMANDS`, and refuses anything else. netmiko's own session setup (`terminal length 0`) and, when autodetecting the platform, its probe commands still reach the device. Give `--platform` to avoid the probes.
+- **Partial failure is normal.** An unreachable device, an `AccessDenied` region or an unparseable file is recorded with `Topology.warn()`, and collection carries on. In the AWS collector each service in each region is guarded, so even an unexpected exception skips only that service. Only bad arguments are fatal.
 - **No real data in the repo,** including in tests and fixtures.
   - Use documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32`) or RFC 1918 space.
   - Hostnames go under `example.net`, AWS account IDs are `123456789012` or `111122223333`, and serial numbers are made up.
 - **Tests** use `unittest`, live in `tests/test_<area>.py`, and keep their fixtures in `tests/fixtures/<area>/`. They must skip, not fail, when an optional dependency is missing.
+- **Exit status:** 0 for success, 1 only from `diff` ("differences found"), 2 for errors (like argparse).
 
 ## Module contract
 
@@ -44,15 +45,16 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | --- | --- |
 | account | `aws:account:<account-id>` |
 | region | `aws:region:<account-id>:<region>` |
-| vpc, subnet, igw, nat, tgw, vgw, cgw, endpoint, instance | `aws:<kind>:<resource-id>` (resource IDs are globally unique) |
+| vpc, subnet, internet-gateway, egress-only-internet-gateway, nat-gateway, transit-gateway, vpn-gateway, customer-gateway, vpc-endpoint, instance | `aws:<prefix>:<resource-id>`, where the prefix follows AWS's own ID prefixes: `vpc`, `subnet`, `igw`, `eigw`, `nat`, `tgw`, `vgw`, `cgw`, `endpoint`, `instance`. Resource IDs are globally unique. |
 | az | `aws:az:<vpc-id>:<az-name>` (an AZ is drawn *inside* a VPC) |
 | dx-connection, dx-gateway | `aws:dx-connection:<dxcon-id>`, `aws:dx-gateway:<dxgw-id>` |
+| AWS public services (end of a public VIF) | `ext:external:aws-public` |
 | site | `net:site:<lower-case name>` |
 | device | `net:device:<normalize_hostname(name)>`; use `facts.device_id()` |
 | segment | `net:segment:<cidr>` |
 | external | `ext:external:<what>`, e.g. `ext:external:internet` |
 
-Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you. Undirected links are stored with `source < target`, and their ports are swapped to match.
+Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you. Undirected links are stored with `source < target`, and their ports are swapped to match. Stitch links leave the device port out of the ID (`stitch|<aws end>|<device>|<address or "manual">`), so renaming an interface doesn't show up as a change in `diff`.
 
 ## Containment (`parent`)
 
@@ -98,10 +100,14 @@ Labels should be what a person calls the thing: the Name tag if present (`prod-v
 | `tgw-peering` | transit-gateway ↔ transit-gateway | `attachment_id`, `state` |
 | `vpc-peering` | vpc ↔ vpc | `peering_id`, `state` |
 | `vgw-attachment` | vpn-gateway ↔ vpc | `state` |
-| `vpn` | customer-gateway ↔ transit-gateway / vpn-gateway | `vpn_id`, `state`, `routing` (`bgp`/`static`), `tunnels` (list of `{"outside_ip", "inside_cidr", "status"}`) |
-| `dx-vif` | dx-connection → dx-gateway / vpn-gateway | `vif_id`, `vif_type` (`private`/`transit`/`public`), `vlan`, `customer_address`, `amazon_address`, `asn`, `amazon_asn`, `state` |
+| `vpn` | customer-gateway ↔ transit-gateway / vpn-gateway | `vpn_id`, `state`, `routing` (`bgp`/`static`), `tunnels` (list of `{"outside_ip", "inside_cidr", "status"}`), `attachment_id` (a TGW's VPN attachment is folded into this link rather than drawn separately) |
+| `dx-vif` | dx-connection → dx-gateway / vpn-gateway / `ext:external:aws-public` (directed) | `vif_id`, `vif_type` (`private`/`transit`/`public`), `vlan`, `customer_address`, `amazon_address`, `asn`, `amazon_asn`, `state` |
 | `dxgw-association` | dx-gateway ↔ transit-gateway / vpn-gateway | `association_id`, `state`, `allowed_prefixes` |
-| `stitch` | device ↔ customer-gateway / dx-connection | `rule` (`cgw-ip`, `dx-vif`, `manual`), `address` |
+| `stitch` | device ↔ customer-gateway / dx-connection | `rule` (`cgw-ip`, `dx-vif`, `manual`), `address`, the device-side port |
+
+A DX gateway attached to a transit gateway appears twice: as a `tgw-attachment` (from the TGW's side) and a `dxgw-association` (from the DX side). Both are kept, because each carries its own state.
+
+`filter --collapse` adds `collapsed: {kind: count}` to a node it folded children into, and `collapsed_links: N` to a link that several links were merged into.
 
 A peer that wasn't collected (a VPC in another account, a TGW peer in another region) still gets a node, with `external: true` in its attributes, so the link has somewhere to go.
 
@@ -120,13 +126,20 @@ A peer that wasn't collected (a VPC in another account, a TGW peer in another re
 - **SVG:** built in, using the same layout engine. It does not need Graphviz.
 - **Mermaid and DOT:** text, with subgraphs or clusters for containers.
 
-## Ownership (initial build)
+## Modules
 
 | Area | Files |
 | --- | --- |
-| Core (model, facts, CLI) | `model.py`, `facts.py`, `cli.py`, `__init__.py`, `tests/test_model.py`, `tests/test_facts.py` |
-| AWS collector | `collectors/aws.py`, `tests/test_aws.py`, `tests/fixtures/aws/` |
-| Parsers and offline collection | `parsers/*`, `collectors/files.py`, `tests/test_parsers.py`, `tests/test_files.py`, `tests/fixtures/devices/` |
-| Live crawler | `collectors/devices.py`, `tests/test_devices.py`, `tests/fixtures/crawl/` |
-| Renderers | `render/*`, `tests/test_render.py`, `tests/fixtures/render/` |
-| Merge, diff, filter | `merge.py`, `diff.py`, `filter.py`, `tests/test_merge.py`, `tests/test_diff.py`, `tests/test_filter.py`, `tests/fixtures/merge/` |
+| Core | `model.py`, `facts.py`, `cli.py` |
+| AWS collector | `collectors/aws.py` |
+| Parsers and offline collection | `parsers/*`, `collectors/files.py` |
+| Live crawler | `collectors/devices.py` |
+| Merge, diff, filter | `merge.py`, `diff.py`, `filter.py` |
+| Layout and renderers | `render/*` |
+
+Each area has its own `tests/test_<area>.py`. `tests/test_e2e.py` chains every stage through the CLI.
+
+### Platform notes
+
+- **Junos:** `show lldp neighbors detail` isn't a valid Junos command (only the per-interface form is), so the crawler runs the `show lldp neighbors` summary. That summary has no management addresses, so the crawler can't follow Junos neighbours by IP; saved per-interface detail output is still parsed.
+- **`show ip interface brief`:** IOS and NX-OS print no masks, so it only contributes interface names and status; addresses come from `show ip interface` or the configuration.

@@ -933,10 +933,7 @@ def _collect_account(account: _Account, regions: Optional[List[str]]) -> _Scope:
     scope.topo.add_node(scope.account_node, AWS_ACCOUNT, _label({}, account.account_id, name),
                         account_id=account.account_id, name=name or None)
     scope.regions = list(dict.fromkeys(regions)) if regions else _enabled_regions(scope, account)
-    try:
-        _dx_gateways(scope, account.client("directconnect"))
-    except _Unavailable:
-        pass
+    _guarded(scope, "directconnect", lambda: _dx_gateways(scope, account.client("directconnect")))
     return scope
 
 
@@ -944,15 +941,23 @@ def _collect_region(account: _Account, region: str, include: Iterable[str]) -> _
     scope = _Scope(account.account_id, region)
     scope.topo.add_node(scope.account_node, AWS_ACCOUNT, account_id=account.account_id)
     scope.topo.add_node(scope.region_node, AWS_REGION, region, scope.account_node, region=region)
-    try:
-        _collect_ec2(scope, account.client("ec2", region), include)
-    except _Unavailable:
-        pass
-    try:
-        _collect_dx(scope, account.client("directconnect", region))
-    except _Unavailable:
-        pass
+    _guarded(scope, "ec2", lambda: _collect_ec2(scope, account.client("ec2", region), include))
+    _guarded(scope, "directconnect", lambda: _collect_dx(scope, account.client("directconnect", region)))
     return scope
+
+
+def _guarded(scope: _Scope, service: str, collect: Callable[[], None]) -> None:
+    """Run one service's collection so that nothing it raises can sink the
+    others: an unexpected response shape or SDK quirk becomes a warning.
+    A read-only refusal is a bug in topomap, so that one still propagates."""
+    try:
+        collect()
+    except _Unavailable:
+        pass
+    except ReadOnlyError:
+        raise
+    except Exception as e:  # noqa: BLE001 - see docstring
+        scope.warn(f"{service}: skipped after unexpected {type(e).__name__}: {e}")
 
 
 # -- assembly --------------------------------------------------------------------

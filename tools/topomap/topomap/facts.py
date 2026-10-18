@@ -78,9 +78,12 @@ _IF_RE = re.compile(r"^([A-Za-z][A-Za-z-]*?)\s*(\d.*)$")
 def normalize_ifname(name: str) -> str:
     """Expand Cisco/Arista-style abbreviations so both ends of a CDP/LLDP
     report agree: "Gi1/0/1" -> "GigabitEthernet1/0/1", "Eth1/1" ->
-    "Ethernet1/1". Junos-style names ("ge-0/0/0", "xe-0/0/1.0", "ae0")
-    are returned unchanged."""
+    "Ethernet1/1". All-lower-case names are Junos or Linux names ("lo0",
+    "eth0", "ge-0/0/0", "ae0"), never Cisco/Arista abbreviations, and are
+    returned unchanged."""
     name = name.strip()
+    if name.islower():
+        return name
     m = _IF_RE.match(name)
     if not m:
         return name
@@ -222,7 +225,8 @@ def _infer_l3(topo: Topology, facts: List[DeviceFacts], excluded) -> None:
             (a, a_port, a_ip, vrf), (b, b_port, b_ip, _) = first[devices[0]], first[devices[1]]
             cabled = [l for l in topo.links.values() if l.kind == LINK_PHYSICAL
                       and {l.source, l.target} == {a, b}
-                      and _port_of(l, a) == a_port and _port_of(l, b) == b_port]
+                      and _base_port(_port_of(l, a)) == _base_port(a_port)
+                      and _base_port(_port_of(l, b)) == _base_port(b_port)]
             if cabled:
                 for l in cabled:
                     l.attrs.setdefault("subnets", [])
@@ -238,6 +242,11 @@ def _infer_l3(topo: Topology, facts: List[DeviceFacts], excluded) -> None:
             for did, port, ip, vrf in devs:
                 topo.add_link(LINK_SEGMENT, did, sid, source_port=port, address=ip,
                               vrf=vrf or None)
+
+
+def _base_port(port: str) -> str:
+    """The physical port under a subinterface: Gi0/0/0.100 -> Gi0/0/0."""
+    return port.split(".")[0]
 
 
 def _port_of(link, node: str) -> str:
