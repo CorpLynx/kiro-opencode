@@ -2,7 +2,7 @@
 
 `topomap` builds topology diagrams from the network itself instead of from someone's memory. It collects from three kinds of source:
 
-- **AWS:** read-only API calls across accounts and regions.
+- **AWS:** read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account.
 - **Network devices:** an SSH crawl that follows CDP/LLDP neighbours.
 - **Files you already have:** saved `show` output and config backups, from RANCID, Oxidized or a folder of captures.
 
@@ -14,6 +14,7 @@ It links on-prem devices to their AWS VPN and Direct Connect edges, then draws t
 
 ```
 collect ─┬─ aws      boto3, read-only                       ┐
+         ├─ aws-org  OUs, accounts, policies                │
          ├─ files    saved "show" output / config backups   ├─▶ topology JSON ─▶ merge ─▶ filter ─▶ render
          └─ devices  SSH crawl over CDP/LLDP, read-only     ┘                     diff (drift between snapshots)
 ```
@@ -37,13 +38,16 @@ pip install ./tools/topomap           # files, merge, diff, filter, render: no d
 
 ```sh
 # 1. Gather
+topomap collect aws-org --profile management -o org.json        # the organization chart
 topomap collect aws --profile prod --region us-east-1 --region eu-west-1 -o aws.json
 topomap collect files ~/rancid/configs ~/captures --l3-exclude 192.168.0.0/24 -o net.json
 #    or crawl live:
 TOPOMAP_USERNAME=netops topomap collect devices --seed 10.0.0.1 --allow 10.0.0.0/16 --ask-pass -o net.json
 
-# 2. Combine: on-prem devices are linked to their AWS customer gateways and DX VIFs
-topomap merge aws.json net.json -o all.json
+# 2. Combine: accounts land in their OUs; on-prem devices are linked to their
+#    AWS customer gateways and DX VIFs
+topomap merge org.json aws.json net.json -o all.json
+topomap render org.json -o organization.drawio                 # or just the org chart
 
 # 3. Draw (format from the extension)
 topomap render all.json -o network.drawio
@@ -75,6 +79,30 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
 - **Failures:** a denied region or service becomes one warning and the rest is still collected.
 - **Peers outside the collected estate** (a VPC in another account, a TGW peer) get a dashed placeholder.
 - VPN pre-shared keys and customer gateway configurations are never read.
+
+### AWS Organizations (`collect aws-org`)
+
+![An organization chart: the root with its SCP, the management account, and Infrastructure, Sandbox, Security and Workloads OUs (Workloads holding Prod and NonProd), each OU listing its SCPs and accounts](docs/organization.png)
+
+<sub>Drawn from a mocked organization.</sub>
+
+- **Run it against the management account,** or an account that is a delegated administrator for AWS Organizations. Only those can list the whole organization. A member account gets a clear error saying so.
+- **Permissions:** the AWS-managed `AWSOrganizationsReadOnlyAccess` policy is enough. Like `collect aws`, it can only call `Describe*`/`List*`/`Get*`, plus `AssumeRole` with `--role-arn`.
+- **What it collects:**
+  - the organization, its root and the enabled policy types;
+  - every OU, nested to any depth, with its path (`Root/Workloads/Prod`);
+  - every account, with its name, status (suspended accounts are labelled), how and when it joined, and which one is the management account;
+  - delegated administrators and the services they administer;
+  - organization policies (SCPs, RCPs, tag, backup, AI opt-out, chatbot and declarative policies) on the root, OUs and accounts they're attached to.
+- **Policies** (`--policies`):
+  - `attrs` (default): policies are attributes, and SCPs are written under each OU.
+  - `nodes`: also draws each policy as a box with lines to its targets.
+  - `none`: leaves policies out.
+  - AWS-managed policies such as `FullAWSAccess` are attached everywhere, so they're hidden unless you add `--include aws-managed-policies`.
+- **Extras** (`--include`):
+  - `tags`: account tags, one API call per account.
+  - `emails`: account email addresses. These are personal data, so they're off by default.
+- **Combining with network data:** `collect aws` gives each account the same ID, so `merge org.json aws.json` draws each account inside its OU, with its regions and VPCs inside the account. An account with nothing collected inside it is drawn as an account icon; one holding VPCs is drawn as a container.
 
 ### Saved output and configs (`collect files`)
 
@@ -135,7 +163,7 @@ ipredact network.drawio -o network.redacted.drawio --key-file redact.key
 - **Lines are straight.** In dense areas they can cross icons and other containers, and port labels can overlap. Tidy up in draw.io if it matters.
 - **Junos crawling:** Junos has no `show lldp neighbors detail` for all interfaces, so the crawler can't follow Junos neighbours by address. They are still drawn.
 - **Not parsed yet:** CDP/LLDP summary tables on Cisco and Arista (only the `detail` forms), Junos `groups`/`apply-groups`, and SNMP.
-- **AWS resources not collected:** DX LAGs, TGW Connect peers, Cloud WAN, load balancers and security groups.
+- **AWS resources not collected:** DX LAGs, TGW Connect peers, Cloud WAN, load balancers and security groups. From Organizations: policy contents (only names and attachments), and SCP effects on accounts.
 - **Untested against real equipment:** the device parsers were written from known output formats and tested against made-up captures, not real devices. Please report output that doesn't parse.
 
 ## Development

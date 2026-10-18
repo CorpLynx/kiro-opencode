@@ -4,6 +4,7 @@
 
 ```
 collect ─┬─ aws      boto3, read-only API calls            ┐
+         ├─ aws-org  the AWS Organization: OUs, accounts   │
          ├─ files    saved "show" output, config backups   ├─▶ topomap/1 JSON ─▶ merge ─▶ filter ─▶ render
          └─ devices  SSH crawl over CDP/LLDP, read-only    ┘                   diff (drift between snapshots)
 ```
@@ -49,6 +50,9 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | az | `aws:az:<vpc-id>:<az-name>` (an AZ is drawn *inside* a VPC) |
 | dx-connection, dx-gateway | `aws:dx-connection:<dxcon-id>`, `aws:dx-gateway:<dxgw-id>` |
 | AWS public services (end of a public VIF) | `ext:external:aws-public` |
+| organization, org-root, ou, org-policy | `aws:organization:<o-id>`, `aws:org-root:<r-id>`, `aws:ou:<ou-id>`, `aws:org-policy:<p-id>` |
+
+`collect aws` and `collect aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
 | site | `net:site:<lower-case name>` |
 | device | `net:device:<normalize_hostname(name)>`; use `facts.device_id()` |
 | segment | `net:segment:<cidr>` |
@@ -58,7 +62,7 @@ Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you.
 
 ## Containment (`parent`)
 
-- **AWS:** `account > region > vpc > az > subnet > (nat-gateway | instance)`.
+- **AWS:** `[organization > org-root > ou > … > ] account > region > vpc > az > subnet > (nat-gateway | instance)`. The organization levels come from `collect aws-org`; OUs nest to any depth. Organization policy nodes sit in the organization.
   - An internet gateway, egress-only gateway, VPC endpoint or VPN gateway attached to a VPC has that VPC as its parent.
   - Transit gateways, customer gateways, DX gateways and DX connections sit in their region.
   - A DX gateway is global, so it sits in its account.
@@ -70,7 +74,11 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 
 | Kind | Attributes |
 | --- | --- |
-| account | `account_id`, `name` |
+| organization | `org_id`, `arn`, `feature_set`, `management_account_id` |
+| org-root | `root_id`, `arn`, `policy_types` (enabled, short names: `scp`, `rcp`, `tag`, `backup`, `ai-opt-out`, `chatbot`, `declarative-ec2`), `policies` |
+| ou | `ou_id`, `arn`, `path` (`Root/Workloads/Prod`), `policies` |
+| org-policy | `policy_id`, `type` (short name), `aws_managed`, `description` |
+| account | `account_id`, `name`; from `aws-org` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and with `--include` `tags` and `email` |
 | region | `region` |
 | vpc | `vpc_id`, `cidrs` (list), `ipv6_cidrs`, `is_default`, `account_id`, `region`, `tags` (dict) |
 | subnet | `subnet_id`, `cidr`, `ipv6_cidrs`, `az`, `public` (bool: its route table has a route to an internet gateway), `routes` (list of `{"destination", "target"}`), `tags` |
@@ -103,6 +111,7 @@ Labels should be what a person calls the thing: the Name tag if present (`prod-v
 | `vpn` | customer-gateway ↔ transit-gateway / vpn-gateway | `vpn_id`, `state`, `routing` (`bgp`/`static`), `tunnels` (list of `{"outside_ip", "inside_cidr", "status"}`), `attachment_id` (a TGW's VPN attachment is folded into this link rather than drawn separately) |
 | `dx-vif` | dx-connection → dx-gateway / vpn-gateway / `ext:external:aws-public` (directed) | `vif_id`, `vif_type` (`private`/`transit`/`public`), `vlan`, `customer_address`, `amazon_address`, `asn`, `amazon_asn`, `state` |
 | `dxgw-association` | dx-gateway ↔ transit-gateway / vpn-gateway | `association_id`, `state`, `allowed_prefixes` |
+| `policy-attachment` | org-policy → org-root / ou / account (directed) | `type` |
 | `stitch` | device ↔ customer-gateway / dx-connection | `rule` (`cgw-ip`, `dx-vif`, `manual`), `address`, the device-side port |
 
 A DX gateway attached to a transit gateway appears twice: as a `tgw-attachment` (from the TGW's side) and a `dxgw-association` (from the DX side). Both are kept, because each carries its own state.
@@ -132,6 +141,7 @@ A peer that wasn't collected (a VPC in another account, a TGW peer in another re
 | --- | --- |
 | Core | `model.py`, `facts.py`, `cli.py` |
 | AWS collector | `collectors/aws.py` |
+| AWS Organizations collector | `collectors/aws_org.py` (shares the read-only client and sessions with `aws.py`) |
 | Parsers and offline collection | `parsers/*`, `collectors/files.py` |
 | Live crawler | `collectors/devices.py` |
 | Merge, diff, filter | `merge.py`, `diff.py`, `filter.py` |

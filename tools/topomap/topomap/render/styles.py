@@ -13,12 +13,14 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_REGION, AWS_SUBNET, AWS_VPC, LINK_DX_VIF,
+from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_ORG, AWS_ORG_POLICY, AWS_ORG_ROOT, AWS_OU, AWS_REGION,
+                     AWS_SUBNET, AWS_VPC, LINK_DX_VIF, LINK_POLICY,
                      LINK_DXGW_ASSOCIATION, LINK_L3, LINK_PHYSICAL, LINK_SEGMENT, LINK_STITCH,
                      LINK_TGW_ATTACHMENT, LINK_TGW_PEERING, LINK_VGW_ATTACHMENT, LINK_VPC_PEERING,
                      LINK_VPN, NET_DEVICE, NET_EXTERNAL, NET_SEGMENT, NET_SITE, Link, Topology)
 
-CONTAINER_KINDS = frozenset({AWS_ACCOUNT, AWS_REGION, AWS_VPC, AWS_AZ, AWS_SUBNET, NET_SITE})
+CONTAINER_KINDS = frozenset({AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ACCOUNT, AWS_REGION, AWS_VPC,
+                             AWS_AZ, AWS_SUBNET, NET_SITE})
 
 AWS_LEAF_KINDS = frozenset({
     "internet-gateway", "egress-only-internet-gateway", "nat-gateway", "vpc-endpoint",
@@ -40,6 +42,9 @@ class Shape:
 # edge (gateways, firewalls, routers), then core, access, and endpoints.
 SHAPES: Dict[str, Shape] = {
     "external": Shape(60, 36, 0),
+    "org-policy": Shape(140, 36, 1, boxed=True),
+    "account-management": Shape(48, 48, 2),
+    "account-leaf": Shape(48, 48, 3),
     "customer-gateway": Shape(48, 48, 1),
     "dx-connection": Shape(48, 48, 1),
     "internet-gateway": Shape(48, 48, 2),
@@ -65,12 +70,15 @@ SHAPES: Dict[str, Shape] = {
 }
 CONTAINER_TIER = 3
 
-CONTAINER_CLASSES = ("account", "region", "vpc", "az", "subnet-public", "subnet-private",
-                     "site", "group")
+CONTAINER_CLASSES = ("organization", "org-root", "ou", "account", "region", "vpc", "az",
+                     "subnet-public", "subnet-private", "site", "group")
 
 # Colours shared by the SVG renderer (draw.io uses its own built-in styles).
 CONTAINER_COLORS: Dict[str, tuple] = {
     # class: (stroke, fill, dashed, title colour)
+    "organization": ("#232F3E", "none", False, "#232F3E"),
+    "org-root": ("#E7157B", "none", True, "#E7157B"),
+    "ou": ("#E7157B", "none", False, "#B0084D"),
     "account": ("#CD2264", "none", False, "#CD2264"),
     "region": ("#00A4A6", "none", True, "#147EBA"),
     "vpc": ("#8C4FFF", "none", False, "#6B3FD4"),
@@ -101,6 +109,7 @@ LINK_LOOKS: Dict[str, LinkLook] = {
     LINK_DX_VIF: LinkLook("#1A73E8", 4),
     LINK_DXGW_ASSOCIATION: LinkLook("#1A73E8", 2),
     LINK_STITCH: LinkLook("#E7157B", 2, "2 4"),
+    LINK_POLICY: LinkLook("#E7157B", 1, "4 3"),
 }
 DEFAULT_LINK_LOOK = LinkLook("#666666", 1.5)
 
@@ -158,6 +167,11 @@ def _base_class(topo: Topology, nid: str, has_kids: bool) -> str:
     kind = node.kind
     if kind == AWS_SUBNET:
         return "subnet-public" if node.attrs.get("public") is True else "subnet-private"
+    if kind == AWS_ACCOUNT and not has_kids:
+        # An account in an organization diagram, with nothing collected inside it.
+        return "account-management" if node.attrs.get("management") else "account-leaf"
+    if kind == AWS_ORG_POLICY:
+        return "org-policy"
     if kind in CONTAINER_KINDS:
         return kind
     if has_kids:

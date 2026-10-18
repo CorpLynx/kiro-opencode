@@ -38,7 +38,18 @@ def _details(node: Node) -> List[str]:
     a = node.attrs
     k = node.kind
     if k == "account":
-        return [_join(a.get("account_id"))]
+        status = str(a.get("status") or "")
+        return [_join(a.get("account_id")),
+                "management account" if a.get("management") else "",
+                status.lower() if status and status.upper() != "ACTIVE" else "",
+                _policy_line(a)]
+    if k == "organization":
+        return [_join(a.get("org_id"))]
+    if k in ("org-root", "ou"):
+        # Containers show one detail line: the SCPs matter more than the ID.
+        return [_policy_line(a), _join(a.get("ou_id") or a.get("root_id"))]
+    if k == "org-policy":
+        return [str(a.get("type") or "").upper()]
     if k == "region":
         return [_join(a.get("region"))]
     if k == "vpc":
@@ -71,6 +82,12 @@ def _details(node: Node) -> List[str]:
     return []
 
 
+def _policy_line(attrs: Any) -> str:
+    """The SCPs on an organization node, the policies people ask about first."""
+    scps = (attrs.get("policies") or {}).get("scp") if isinstance(attrs.get("policies"), dict) else None
+    return f"SCP: {_join(scps)}" if scps else ""
+
+
 def node_title(node: Node) -> str:
     return clip(node.label or node.id)
 
@@ -98,6 +115,8 @@ def tooltip(node: Node) -> str:
         if isinstance(value, dict):
             if all(not isinstance(v, (dict, list)) for v in value.values()):
                 value = ", ".join(f"{k}={v}" for k, v in sorted(value.items()))
+            elif all(_scalar_or_list(v) for v in value.values()):
+                value = "; ".join(f"{k}={_join(v)}" for k, v in sorted(value.items()))
             else:
                 value = f"{len(value)} entries"
         elif isinstance(value, list):
@@ -107,6 +126,14 @@ def tooltip(node: Node) -> str:
                 value = f"{len(value)} entries"
         out.append(f"{key}: {value}")
     return "\n".join(out)
+
+
+def _scalar_or_list(value: Any) -> bool:
+    """A dict value a tooltip can show inline: a scalar, or a list of them
+    (organization policies are {"scp": ["DenyRegions", ...]})."""
+    if isinstance(value, list):
+        return all(not isinstance(v, (dict, list)) for v in value)
+    return not isinstance(value, dict)
 
 
 def link_tooltip(link: Link) -> str:

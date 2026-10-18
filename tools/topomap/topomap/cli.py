@@ -23,6 +23,7 @@ from .model import Topology
 
 COLLECTORS = {
     "aws": "topomap.collectors.aws",
+    "aws-org": "topomap.collectors.aws_org",
     "files": "topomap.collectors.files",
     "devices": "topomap.collectors.devices",
 }

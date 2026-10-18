@@ -41,6 +41,10 @@ AWS_CGW = "customer-gateway"
 AWS_DX_CONNECTION = "dx-connection"
 AWS_DX_GATEWAY = "dx-gateway"
 AWS_INSTANCE = "instance"
+AWS_ORG = "organization"
+AWS_ORG_ROOT = "org-root"
+AWS_OU = "ou"
+AWS_ORG_POLICY = "org-policy"
 
 NET_SITE = "site"
 NET_DEVICE = "device"
@@ -50,6 +54,7 @@ NET_EXTERNAL = "external"    # something outside the collected estate (internet,
 NODE_KINDS = frozenset({
     AWS_ACCOUNT, AWS_REGION, AWS_VPC, AWS_AZ, AWS_SUBNET, AWS_IGW, AWS_EIGW, AWS_NAT,
     AWS_ENDPOINT, AWS_TGW, AWS_VGW, AWS_CGW, AWS_DX_CONNECTION, AWS_DX_GATEWAY, AWS_INSTANCE,
+    AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ORG_POLICY,
     NET_SITE, NET_DEVICE, NET_SEGMENT, NET_EXTERNAL,
 })
 
@@ -66,11 +71,12 @@ LINK_VGW_ATTACHMENT = "vgw-attachment"
 LINK_DX_VIF = "dx-vif"                # DX connection -> DX gateway / VGW
 LINK_DXGW_ASSOCIATION = "dxgw-association"
 LINK_STITCH = "stitch"                # on-prem device <-> AWS edge, found by merge
+LINK_POLICY = "policy-attachment"     # organization policy -> root / OU / account
 
 LINK_KINDS = frozenset({
     LINK_PHYSICAL, LINK_L3, LINK_SEGMENT, LINK_TGW_ATTACHMENT, LINK_TGW_PEERING,
     LINK_VPC_PEERING, LINK_VPN, LINK_VGW_ATTACHMENT, LINK_DX_VIF, LINK_DXGW_ASSOCIATION,
-    LINK_STITCH,
+    LINK_STITCH, LINK_POLICY,
 })
 
 
@@ -173,7 +179,8 @@ class Topology:
         if node is None:
             node = self.nodes[id] = Node(id, kind, label or id, parent, {})
         else:
-            if label and node.label == node.id:
+            if label and node.label in (node.id, node.id.split(":")[-1]):
+                # A bare ID is a placeholder; any real name replaces it.
                 node.label = label
             if parent and node.parent is None:
                 node.parent = parent

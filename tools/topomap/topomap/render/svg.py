@@ -48,6 +48,8 @@ GLYPHS: Dict[str, Callable[[], Tuple[int, int, str]]] = {
     "dx-connection": lambda: _aws_tile("DX", "#8C4FFF"),
     "dx-gateway": lambda: _aws_tile("DXGW", "#8C4FFF"),
     "instance": lambda: _aws_tile("EC2", "#ED7100"),
+    "account-leaf": lambda: _aws_tile("ACCT", "#E7157B"),
+    "account-management": lambda: _aws_tile("MGMT", "#E7157B"),
     "router": lambda: (50, 50,
         f'<circle cx="25" cy="25" r="23" fill="{CISCO_FILL}" stroke="{CISCO}" stroke-width="2"/>'
         f'<path d="M25 6 l-6 7 h12z M25 44 l-6 -7 h12z M21 25 l-8 -6 v12z M29 25 l8 -6 v12z" '
@@ -104,6 +106,7 @@ GLYPHS: Dict[str, Callable[[], Tuple[int, int, str]]] = {
         'a10 10 0 0 1 -2 20z" fill="#C9CED6" stroke="#8A929C" stroke-width="1.5"/>'),
 }
 BOXED = {"segment": ("#DAE8FC", "#6C8EBF"), "device": ("#F5F5F5", "#666666"),
+         "org-policy": ("#FDF0F6", "#E7157B"),
          "generic": ("#F5F5F5", "#666666")}
 
 

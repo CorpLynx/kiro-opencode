@@ -32,6 +32,9 @@ _AWS_NET_RESOURCE = (
     "[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;"
     "dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;"
     "fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.")
+_AWS_MGMT = ("sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E7157B;"
+             "strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;"
+             "html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.")
 _AWS_COMPUTE = ("sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#ED7100;"
                 "strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;"
                 "align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;"
@@ -68,6 +71,10 @@ VERTEX_STYLES: Dict[str, str] = {
     "transit-gateway": _AWS_NET_RESOURCE + "transit_gateway;",
     "dx-connection": _AWS_NET_RESOURCE + "direct_connect;",
     "instance": _AWS_COMPUTE + "instance2;",
+    # AWS / Management & Governance
+    "account-leaf": _AWS_MGMT + "organizations_account;",
+    "account-management": _AWS_MGMT + "organizations_management_account;",
+    "org-policy": "rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF0F6;strokeColor=#E7157B;fontColor=#232F3E;",
     # Cisco 19
     "router": _CISCO_ROUND + "rect;prIcon=router;" + _CISCO_COLORS,
     "switch-core": _CISCO_SQUARE + "rect;prIcon=l3_switch;" + _CISCO_COLORS,
@@ -93,6 +100,15 @@ VERTEX_STYLES: Dict[str, str] = {
 
 CONTAINER_STYLES: Dict[str, str] = {
     # AWS / Groups
+    "organization": _AWS_GROUP + "group_aws_cloud_alt;strokeColor=#232F3E;fillColor=none;"
+                                 "verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;"
+                                 "dashed=0;",
+    "org-root": ("fillColor=none;strokeColor=#E7157B;dashed=1;verticalAlign=top;fontStyle=1;"
+                 "fontColor=#E7157B;whiteSpace=wrap;html=1;align=left;spacingLeft=10;"
+                 + _PLAIN_GROUP_TAIL),
+    "ou": ("fillColor=none;strokeColor=#E7157B;dashed=0;verticalAlign=top;fontStyle=1;"
+           "fontColor=#B0084D;whiteSpace=wrap;html=1;align=left;spacingLeft=10;"
+           + _PLAIN_GROUP_TAIL),
     "account": _AWS_GROUP + "group_account;strokeColor=#CD2264;fillColor=none;verticalAlign=top;"
                             "align=left;spacingLeft=30;fontColor=#CD2264;dashed=0;",
     "region": _AWS_GROUP + "group_region;strokeColor=#00A4A6;fillColor=none;verticalAlign=top;"
@@ -126,6 +142,7 @@ EDGE_STYLES: Dict[str, str] = {
     "dx-vif": "strokeColor=#1A73E8;strokeWidth=4;",
     "dxgw-association": "strokeColor=#1A73E8;strokeWidth=2;",
     "stitch": "strokeColor=#E7157B;strokeWidth=2;dashed=1;dashPattern=1 3;",
+    "policy-attachment": "strokeColor=#E7157B;strokeWidth=1;dashed=1;dashPattern=4 3;",
 }
 _END_LABEL = "edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;"
 _TITLE = "text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;"
