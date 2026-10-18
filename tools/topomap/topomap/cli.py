@@ -26,6 +26,8 @@ from .model import Topology
 COLLECTORS = {
     "aws": "topomap.collectors.aws",
     "aws-org": "topomap.collectors.aws_org",
+    "gcp": "topomap.collectors.gcp",
+    "gcp-org": "topomap.collectors.gcp_org",
     "files": "topomap.collectors.files",
     "devices": "topomap.collectors.devices",
 }

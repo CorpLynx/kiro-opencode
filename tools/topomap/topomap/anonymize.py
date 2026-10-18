@@ -36,7 +36,7 @@ import sys
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .merge import read_topology
-from .model import NODE_KINDS, Topology
+from .model import LINK_KINDS, NODE_KINDS, Topology
 
 HELP = ("Replace account IDs, resource IDs, names, tags and addresses with consistent fakes, "
         "so a snapshot can be shared or committed.")
@@ -60,13 +60,25 @@ _MAC = re.compile(r"(?<![0-9A-Fa-f:.-])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?
 _IPV4 = re.compile(r"(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?!\d|\.\d)")
 _IPV6 = re.compile(r"(?<![\w:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![\w:])")
 _LABEL = re.compile(r"^(.*\S) \(([^()]+)\)$")
+_NODE_ID = re.compile(r"^((?:aws|gcp|net|ext):[a-z0-9-]+:)(.+)$")
 
 # Kinds whose label is the name a person gave the thing.
 _NAMED_KINDS = {"account": "account", "ou": "ou", "org-policy": "policy", "device": "device",
-                "site": "site", "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster"}
+                "site": "site", "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster",
+                "gcp-organization": "org", "gcp-folder": "folder", "gcp-project": "project",
+                "gcp-network": "network", "gcp-subnet": "subnet", "cloud-router": "router",
+                "cloud-vpn-gateway": "gateway", "external-vpn-gateway": "gateway",
+                "interconnect": "interconnect", "ncc-hub": "hub", "gce-instance": "instance"}
+# GCP attributes holding a name someone chose, and the fake's prefix.
+_GCP_NAMES = {"project_id": "project", "shared_vpc_host": "project", "host_project": "project",
+              "network": "network", "subnet": "subnet", "router": "router", "gateway": "gateway",
+              "interconnect": "interconnect", "interconnect_name": "interconnect",
+              "partner_name": "partner", "hub": "hub", "instance": "instance", "domain": "org",
+              "attachment": "attachment", "spoke": "spoke"}
 _GENERIC = {"root", "main", "default", "internet"}
 _FREE_TEXT = {"description": "description", "comment": "comment", "serial": "serial",
-              "sources": "source"}
+              "sources": "source", "directory_customer_id": "customer"}
+_TAGS = ("tags", "labels")  # AWS tags, GCP labels
 _MIN_NAME = 3
 IPREDACT_TIMEOUT = 300
 
@@ -90,6 +102,14 @@ _SAFE_KEYS = frozenset("""
     base_model version platform_version endpoint_public_access endpoint_private_access created
     summary aws_owned admin_access trusts_everyone trusts_own_account mfa_enabled active_access_keys nodegroups
     instance_types capacity_type ami_type desired min max
+    folder_id project_id project_number domain org_policies assured_workload assured_workload_role
+    display_name compliance_regime partner sovereign_controls active_violations
+    acknowledged_violations shared_vpc shared_vpc_host host_project network routing_mode
+    auto_subnets mtu legacy peerings peer export_custom_routes import_custom_routes secondary_ranges
+    ipv6_cidrs private_google_access purpose stack_type flow_logs router bgp_peers peer_ip peer_asn
+    interface ip_range vpn_tunnel nats gateway redundancy interconnect link_type links partner_name
+    interconnect_name cloud_router_address edge_availability_domain admin_enabled ike_version hub
+    spoke instance zone machine_type
 """.split())
 _DOC_NETS = (ipaddress.ip_network("192.0.2.0/24"), ipaddress.ip_network("198.51.100.0/24"),
              ipaddress.ip_network("203.0.113.0/24"))
@@ -125,6 +145,8 @@ class _Mapper:
         key = name.lower()
         if key in self.pending:
             return
+        if key in _STRUCTURAL:
+            return  # a kind ("shared-vpc", "interconnect") is not a name to replace
         if not always and (len(name) < _MIN_NAME or key in _GENERIC or self._is_id(name)):
             return
         self.pending[key] = (name, prefix, always)
@@ -235,6 +257,18 @@ class _Mapper:
         value = self.identifiers(value)
         return self.public_addresses(value) if self.ips == "public" else value
 
+    def ids_text(self, value: str) -> str:
+        """`text`, except that the kind of a link ID and the namespace and
+        kind of a node ID are never rewritten: a folder called "Shared"
+        must not turn "shared-vpc" links into something else."""
+        parts = value.split("|")
+        if len(parts) >= 3 and parts[0] in LINK_KINDS:
+            return "|".join([parts[0]] + [self.ids_text(p) for p in parts[1:]])
+        m = _NODE_ID.match(value)
+        if m:
+            return m.group(1) + self.text(m.group(2))
+        return self.text(value)
+
     def free_text(self, key: str, value: str) -> str:
         pair = (key, value)
         if pair not in self.free:
@@ -245,8 +279,9 @@ class _Mapper:
         if isinstance(obj, dict):
             out = {}
             for k, v in obj.items():
-                new_key = self.text(k) if isinstance(k, str) else k
-                if k == "tags" and isinstance(v, dict):
+                # Keys are schema ("shared_vpc"), not names: only IDs in them change.
+                new_key = self.identifiers(k) if isinstance(k, str) else k
+                if k in _TAGS and isinstance(v, dict):
                     out[new_key] = {self.text(tk): self._tag_value(tv) for tk, tv in v.items()}
                 else:
                     out[new_key] = self.walk(v, k)
@@ -256,7 +291,9 @@ class _Mapper:
         if isinstance(obj, str):
             if key in _FREE_TEXT and obj:
                 return self.free_text(key, obj)
-            return self.text(obj)
+            if key == "kind":
+                return obj
+            return self.ids_text(obj)
         return obj
 
     def _tag_value(self, value: Any) -> Any:
@@ -290,15 +327,23 @@ def _harvest(topo: Topology, mapper: _Mapper, keep_names: bool) -> None:
                 for name in names if isinstance(names, list) else []:
                     mapper.want(name, "policy")
         _harvest_lists(node.attrs, mapper)
+        parts = node.id.split(":")
+        if parts[0] == "gcp":
+            _harvest_gcp(node.attrs, mapper)
+            if len(parts) > 2 and node.kind not in ("gcp-organization", "gcp-folder"):
+                mapper.want(parts[2], "project")  # every other GCP ID starts with its project
     links = sorted(topo.links.values(), key=lambda l: l.id)
     for link in links:
         m = _LABEL.match(link.label or "")
         if m:
             mapper.want(m.group(1), "resource")
+        if link.source.startswith("gcp:") or link.target.startswith("gcp:"):
+            _harvest_gcp(link.attrs, mapper)
     for item in [*nodes, *links]:
-        tags = item.attrs.get("tags")
-        for value in tags.values() if isinstance(tags, dict) else ():
-            mapper.want(value, "tag", always=True)
+        for key in _TAGS:
+            tags = item.attrs.get(key)
+            for value in tags.values() if isinstance(tags, dict) else ():
+                mapper.want(value, "tag", always=True)
     mapper.assign_names()
 
 
@@ -339,7 +384,7 @@ def _canonical_links(topo: Topology) -> None:
             topo.links[link.id] = link
 
 
-_STRUCTURAL = frozenset(NODE_KINDS) | {"true", "false", "null", "none"}
+_STRUCTURAL = frozenset(NODE_KINDS) | frozenset(LINK_KINDS) | {"true", "false", "null", "none"}
 
 
 def _survivors(mapper: _Mapper, text: str) -> Dict[str, int]:
@@ -352,6 +397,9 @@ def _survivors(mapper: _Mapper, text: str) -> Dict[str, int]:
                        key=len, reverse=True):
         rest = rest.replace(fake, "")
     rest = re.sub(r'"[^"\n]*":', "", rest)
+    rest = re.sub(r"(?:aws|gcp|net|ext):[a-z0-9-]+:", "", rest)  # "gcp:network:" is schema too
+    for word in sorted(_STRUCTURAL, key=len, reverse=True):  # kinds, as in "shared-vpc|..."
+        rest = re.sub(rf"(?<![A-Za-z0-9-]){re.escape(word)}(?![A-Za-z0-9-])", "", rest)
     names = [n for n in mapper.names if len(n) >= _MIN_NAME and n not in _GENERIC
              and n not in _STRUCTURAL]
     if names:
@@ -382,6 +430,32 @@ def _harvest_lists(attrs: Dict[str, Any], mapper: "_Mapper") -> None:
                 mapper.want(item.get("name"), prefix)
                 for namespace in item.get("namespaces") or []:
                     mapper.want(namespace, "namespace")
+
+
+def _harvest_gcp(attrs: Dict[str, Any], mapper: "_Mapper") -> None:
+    """Names in GCP attributes: the resource's own, the project and network
+    it refers to, and those of its tunnels, peerings, BGP peers, NATs and
+    Assured Workload."""
+    for key, prefix in _GCP_NAMES.items():
+        mapper.want(attrs.get(key), prefix)
+    for key, prefix in (("tunnels", "tunnel"), ("peerings", "peering"), ("bgp_peers", "peer"),
+                        ("interfaces", "interface"), ("secondary_ranges", "range")):
+        for item in attrs.get(key) or []:
+            if isinstance(item, dict):
+                mapper.want(item.get("name"), prefix)
+            elif key == "peerings":
+                mapper.want(item, prefix)
+    for item in attrs.get("peerings") or []:
+        if isinstance(item, dict) and isinstance(item.get("peer"), str) and ":" in item["peer"]:
+            project, network = item["peer"].split(":", 1)
+            mapper.want(project, "project")
+            mapper.want(network, "network")
+    for name in attrs.get("nats") or []:
+        mapper.want(name, "nat")
+    workload = attrs.get("assured_workload")
+    if isinstance(workload, dict):
+        mapper.want(workload.get("name"), "workload")
+        mapper.want(workload.get("display_name"), "workload")
 
 
 def anonymize(topo: Topology, ips: str = "public", keep_names: bool = False,

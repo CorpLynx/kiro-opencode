@@ -52,6 +52,19 @@ AWS_IAM_ROLE = "iam-role"
 AWS_IAM_USER = "iam-user"
 AWS_EKS = "eks-cluster"
 
+GCP_ORG = "gcp-organization"
+GCP_FOLDER = "gcp-folder"
+GCP_PROJECT = "gcp-project"
+GCP_NETWORK = "gcp-network"            # a VPC network: global, so regions sit inside it
+GCP_REGION = "gcp-region"
+GCP_SUBNET = "gcp-subnet"
+GCP_ROUTER = "cloud-router"
+GCP_VPN_GATEWAY = "cloud-vpn-gateway"   # HA VPN or classic (target) VPN gateway
+GCP_PEER_GATEWAY = "external-vpn-gateway"  # the on-prem / other-cloud end of a VPN, as GCP records it
+GCP_INTERCONNECT = "interconnect"      # a Dedicated Interconnect, or the partner side of a Partner one
+GCP_NCC_HUB = "ncc-hub"
+GCP_INSTANCE = "gce-instance"
+
 NET_SITE = "site"
 NET_DEVICE = "device"
 NET_SEGMENT = "segment"      # a multi-access L3 network shared by 3+ devices
@@ -62,6 +75,8 @@ NODE_KINDS = frozenset({
     AWS_ENDPOINT, AWS_TGW, AWS_VGW, AWS_CGW, AWS_DX_CONNECTION, AWS_DX_GATEWAY, AWS_INSTANCE,
     AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ORG_POLICY,
     AWS_BEDROCK, AWS_BEDROCK_MODEL, AWS_IAM, AWS_IAM_ROLE, AWS_IAM_USER, AWS_EKS,
+    GCP_ORG, GCP_FOLDER, GCP_PROJECT, GCP_NETWORK, GCP_REGION, GCP_SUBNET, GCP_ROUTER,
+    GCP_VPN_GATEWAY, GCP_PEER_GATEWAY, GCP_INTERCONNECT, GCP_NCC_HUB, GCP_INSTANCE,
     NET_SITE, NET_DEVICE, NET_SEGMENT, NET_EXTERNAL,
 })
 
@@ -80,11 +95,15 @@ LINK_DXGW_ASSOCIATION = "dxgw-association"
 LINK_STITCH = "stitch"                # on-prem device <-> AWS edge, found by merge
 LINK_POLICY = "policy-attachment"     # organization policy -> root / OU / account
 LINK_TRUST = "iam-trust"              # account or principal -> the role it may assume
+LINK_SHARED_VPC = "shared-vpc"        # GCP service project -> its Shared VPC host project
+LINK_INTERCONNECT_ATTACHMENT = "interconnect-attachment"  # Cloud Router -> interconnect (a VLAN)
+LINK_NCC_SPOKE = "ncc-spoke"          # NCC hub -> the network / VPN / attachment it connects
 
 LINK_KINDS = frozenset({
     LINK_PHYSICAL, LINK_L3, LINK_SEGMENT, LINK_TGW_ATTACHMENT, LINK_TGW_PEERING,
     LINK_VPC_PEERING, LINK_VPN, LINK_VGW_ATTACHMENT, LINK_DX_VIF, LINK_DXGW_ASSOCIATION,
-    LINK_STITCH, LINK_POLICY, LINK_TRUST,
+    LINK_STITCH, LINK_POLICY, LINK_TRUST, LINK_SHARED_VPC, LINK_INTERCONNECT_ATTACHMENT,
+    LINK_NCC_SPOKE,
 })
 
 

@@ -18,7 +18,8 @@ import ipaddress
 import sys
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
-from .model import (AWS_ACCOUNT, AWS_CGW, AWS_DX_CONNECTION, LINK_DX_VIF, LINK_STITCH, NET_DEVICE, Link,
+from .model import (AWS_ACCOUNT, AWS_CGW, AWS_DX_CONNECTION, GCP_INTERCONNECT, GCP_PEER_GATEWAY,
+                    LINK_DX_VIF, LINK_INTERCONNECT_ATTACHMENT, LINK_STITCH, NET_DEVICE, Link,
                     Topology, link_id, union)
 
 HELP = "Merge topologies and stitch on-prem devices to their AWS VPN and Direct Connect edges."
@@ -27,7 +28,9 @@ PRODUCES_TOPOLOGY = True
 RULE_CGW_IP = "cgw-ip"
 RULE_DX_VIF = "dx-vif"
 RULE_MANUAL = "manual"
-RULES = (RULE_CGW_IP, RULE_DX_VIF, RULE_MANUAL)
+RULE_GCP_VPN = "gcp-vpn-peer"
+RULE_GCP_INTERCONNECT = "gcp-interconnect"
+RULES = (RULE_CGW_IP, RULE_DX_VIF, RULE_GCP_VPN, RULE_GCP_INTERCONNECT, RULE_MANUAL)
 
 Pair = Tuple[str, str]
 Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
@@ -135,13 +138,16 @@ def add_stitches(topo: Topology, auto: bool = True,
         index = device_addresses(topo)
         links += _stitch_customer_gateways(topo, index, unmatched)
         links += _stitch_vifs(topo, index)
+        links += _stitch_gcp_peers(topo, index, unmatched)
+        links += _stitch_gcp_attachments(topo, index)
         named = {end for pair in pairs for end in pair}
         unmatched = [c for c in unmatched if c not in named]
         if index:
             for cgw_id in unmatched:
                 cgw = topo.nodes[cgw_id]
                 ip = cgw.attrs.get("ip") or "no ip"
-                topo.warn(f"customer gateway {cgw.label} [{ip}] matched no device interface:"
+                what = "external VPN gateway" if cgw.kind == GCP_PEER_GATEWAY else "customer gateway"
+                topo.warn(f"{what} {cgw.label} [{ip}] matched no device interface:"
                           f" behind NAT? use --stitch DEVICE={cgw_id}")
     stitched = {frozenset((l.source, l.target)) for l in links}
     for a, b in pairs:
@@ -199,6 +205,41 @@ def _stitch_vifs(topo: Topology, index: AddressIndex) -> List[Link]:
         what = f"VIF {vif.attrs.get('vif_id') or vif.id}"
         links += _stitch_address(topo, RULE_DX_VIF, index, ip, connection, what,
                                  vif_id=vif.attrs.get("vif_id"))
+    return links
+
+
+def _stitch_gcp_peers(topo: Topology, index: AddressIndex, unmatched: List[str]) -> List[Link]:
+    """GCP's external VPN gateway is its record of the on-prem end: each of
+    its interfaces is a public address on some device."""
+    links: List[Link] = []
+    for peer in topo.by_kind(GCP_PEER_GATEWAY):
+        found: List[Link] = []
+        for iface in peer.attrs.get("interfaces") or []:
+            ip = _address(iface.get("ip") if isinstance(iface, dict) else None)
+            if ip is not None:
+                found += _stitch_address(topo, RULE_GCP_VPN, index, ip, peer.id,
+                                         f"external VPN gateway {peer.label}")
+        if not found:
+            unmatched.append(peer.id)
+        links += found
+    return links
+
+
+def _stitch_gcp_attachments(topo: Topology, index: AddressIndex) -> List[Link]:
+    """Like a VIF: the device holding the attachment's customer router
+    address is stitched to the interconnect the attachment rides on."""
+    links: List[Link] = []
+    attachments = sorted((l for l in topo.links.values() if l.kind == LINK_INTERCONNECT_ATTACHMENT),
+                         key=lambda l: l.id)
+    for att in attachments:
+        interconnect = next((e for e in (att.source, att.target)
+                             if e in topo.nodes and topo.nodes[e].kind == GCP_INTERCONNECT), None)
+        ip = _address(att.attrs.get("customer_address"))
+        if interconnect is None or ip is None:
+            continue
+        links += _stitch_address(topo, RULE_GCP_INTERCONNECT, index, ip, interconnect,
+                                 f"interconnect attachment {att.attrs.get('attachment') or att.id}",
+                                 attachment=att.attrs.get("attachment"))
     return links
 
 

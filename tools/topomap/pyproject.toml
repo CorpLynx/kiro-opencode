@@ -13,8 +13,9 @@ dependencies = []
 [project.optional-dependencies]
 aws = ["boto3>=1.26"]
 devices = ["netmiko>=4.1"]
-all = ["boto3>=1.26", "netmiko>=4.1"]
-test = ["boto3>=1.26", "moto[ec2,sts,iam,organizations,directconnect,eks]>=5.0", "netmiko>=4.1"]
+gcp = ["google-auth>=2.15", "requests>=2.25"]
+all = ["boto3>=1.26", "netmiko>=4.1", "google-auth>=2.15", "requests>=2.25"]
+test = ["boto3>=1.26", "moto[ec2,sts,iam,organizations,directconnect,eks]>=5.0", "netmiko>=4.1", "google-auth>=2.15", "requests>=2.25"]
 
 [project.scripts]
 topomap = "topomap.cli:main"

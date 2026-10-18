@@ -118,7 +118,60 @@ def _details(node: Node) -> List[str]:
         return [_join(a.get("mgmt_ip")), _join(a.get("model") or a.get("platform"))]
     if k == "segment":
         return [_join(a.get("subnet"))]
+    return _gcp_details(k, a)
+
+
+def _gcp_details(k: str, a: Any) -> List[str]:
+    if k == "gcp-organization":
+        return [_join(a.get("org_id"))]
+    if k == "gcp-folder":
+        workload = a.get("assured_workload") if isinstance(a.get("assured_workload"), dict) else {}
+        return [_assured_line(workload), _org_policy_line(a)]
+    if k == "gcp-project":
+        role = {"keys": "Assured Workloads keys", "consumer": "Assured Workloads"}.get(
+            str(a.get("assured_workload_role") or ""), "")
+        shared = {"host": "Shared VPC host", "service": "Shared VPC service"}.get(
+            str(a.get("shared_vpc") or ""), "")
+        return [role, shared, _org_policy_line(a)]
+    if k == "gcp-network":
+        routing = str(a.get("routing_mode") or "").lower()
+        return ["legacy network" if a.get("legacy") else "",
+                f"{routing} routing" if routing else "",
+                "auto subnets" if a.get("auto_subnets") else ""]
+    if k == "gcp-subnet":
+        return [_join(a.get("cidr")), _join(a.get("ipv6_cidrs")),
+                f"{len(a['secondary_ranges'])} secondary ranges" if a.get("secondary_ranges") else ""]
+    if k == "cloud-router":
+        peers = a.get("bgp_peers") or []
+        return [_asn(a.get("asn")), f"{len(peers)} BGP peers" if peers else "",
+                f"NAT: {_join(a.get('nats'))}" if a.get("nats") else ""]
+    if k == "cloud-vpn-gateway":
+        ips = [i.get("ip") for i in a.get("interfaces") or [] if isinstance(i, dict)]
+        return [("HA VPN" if a.get("type") == "ha" else "Classic VPN"), _join(ips)]
+    if k == "external-vpn-gateway":
+        ips = [i.get("ip") for i in a.get("interfaces") or [] if isinstance(i, dict)]
+        return [_join(ips) or _join(a.get("ip"))]
+    if k == "interconnect":
+        return [_join(a.get("partner_name") or a.get("location")), _join(a.get("link_type"))]
+    if k == "gce-instance":
+        return [_join((a.get("private_ips") or [])[:1]), _join(a.get("machine_type"))]
     return []
+
+
+def _assured_line(workload: Any) -> str:
+    """"AW: FEDRAMP MODERATE (us) · 2 violations" (the folder is already drawn red)."""
+    if not workload:
+        return ""
+    regime = str(workload.get("compliance_regime") or "").replace("_", " ")
+    where = f" ({workload['location']})" if workload.get("location") else ""
+    violations = workload.get("active_violations")
+    tail = f" · {violations} violations" if violations else ""
+    return f"AW: {regime}{where}{tail}"
+
+
+def _org_policy_line(attrs: Any) -> str:
+    constraints = attrs.get("org_policies") or []
+    return f"{len(constraints)} org policies" if constraints else ""
 
 
 def _policy_line(attrs: Any) -> str:
@@ -194,7 +247,8 @@ def link_tooltip(link: Link) -> str:
 def _tunnels(tunnels: Any) -> str:
     if not isinstance(tunnels, list) or not tunnels:
         return ""
-    up = sum(1 for t in tunnels if isinstance(t, dict) and str(t.get("status", "")).upper() == "UP")
+    up = sum(1 for t in tunnels if isinstance(t, dict)
+             and str(t.get("status", "")).upper() in ("UP", "ESTABLISHED"))
     return f"{up}/{len(tunnels)} tunnels up"
 
 
@@ -223,6 +277,11 @@ def _middle(link: Link) -> List[str]:
         return [_join(a.get("vif_id")), detail]
     if k == LINK_DXGW_ASSOCIATION:
         return [_join(a.get("association_id"))]
+    if k == "interconnect-attachment":
+        vlan = a.get("vlan")
+        return [_join(a.get("attachment")), f"VLAN {vlan}" if vlan not in (None, "") else ""]
+    if k == LINK_VPC_PEERING and not a.get("peering_id"):
+        return [_join(a.get("peerings"))]
     if k == LINK_STITCH:
         return [" ".join(x for x in (_join(a.get("rule")), _join(a.get("address"))) if x)]
     return []

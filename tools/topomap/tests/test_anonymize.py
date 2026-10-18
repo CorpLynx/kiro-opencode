@@ -297,6 +297,60 @@ class HardeningTest(unittest.TestCase):
         self.assertEqual(out.by_kind("vpc")[0].attrs["tags"]["Owner"], "dana")
 
 
+class GcpTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import gcp_fake
+        from topomap.collectors import gcp, gcp_org
+        from topomap.merge import merge
+        api, _ = gcp_fake.api()
+        org = gcp_org.collect(api, include=["labels"])
+        api, _ = gcp_fake.api()
+        cls.real = merge([org, gcp.collect(api, sorted(gcp_fake.NUMBERS))])
+        cls.out = anon.anonymize(cls.real, ips="public")
+        cls.text = dumped(cls.out)
+
+    def test_names_and_ids_are_replaced(self):
+        for original in ("example.net", "net-host-prod", "app-prod", "aw-keys", "partner-proj",
+                         "partner-net", "Assured Workloads", "NonProd", "prod-use4", "cr-use4",
+                         "ha-vpn-use4", "onprem-edge", "ic-dedicated-1", "Example Carrier",
+                         "att-partner", "tun-0", "to-partner", "global-hub", "vpn-spoke",
+                         "fedramp-mod-1", "FedRAMP Moderate", "nat-use4", "C0xample",
+                         "123456789012", "100000000001"):
+            self.assertNotIn(original.lower(), self.text.lower(), original)
+        self.assertFalse([w for w in self.out.meta.get("warnings", []) if "anonymize" in w])
+
+    def test_structure_and_kinds_are_kept(self):
+        # A folder called "Shared" must not rewrite the "shared-vpc" link kind.
+        self.assertEqual(self.out.validate(), [])
+        self.assertEqual(sorted(l.kind for l in self.out.links.values()),
+                         sorted(l.kind for l in self.real.links.values()))
+        self.assertEqual(len(self.out.nodes), len(self.real.nodes))
+        for node in self.out.nodes.values():
+            self.assertEqual(node.id.split(":")[:2],
+                             ["gcp", node.id.split(":")[1]])
+        regions = sorted(n.label for n in self.out.by_kind("gcp-region"))
+        self.assertEqual(regions, ["us-central1", "us-east4"])  # public facts stay
+        folder = next(n for n in self.out.by_kind("gcp-folder") if "assured_workload" in n.attrs)
+        self.assertEqual(folder.attrs["assured_workload"]["compliance_regime"], "FEDRAMP_MODERATE")
+        host = next(n for n in self.out.by_kind("gcp-project") if n.attrs.get("shared_vpc") == "host")
+        self.assertEqual(list(host.attrs["labels"].values()), ["tag-1"])
+
+    def test_strict_keeps_the_gcp_facts(self):
+        out = anon.anonymize(self.real, ips="public", strict=True)
+        router = out.by_kind("cloud-router")[0]
+        self.assertEqual(router.attrs["asn"], 64512)
+        self.assertIn("bgp_peers", router.attrs)
+        attachment = next(l for l in out.links.values() if l.kind == "interconnect-attachment"
+                          and l.attrs.get("vlan") == 100)
+        self.assertIn("customer_address", attachment.attrs)
+        org = out.by_kind("gcp-organization")[0]
+        self.assertNotIn("directory_customer_id", org.attrs)
+        host = next(n for n in out.by_kind("gcp-project") if n.attrs.get("shared_vpc") == "host")
+        self.assertNotIn("labels", host.attrs)
+
+
 class PrivateOutputTest(unittest.TestCase):
     def run_cli(self, *argv):
         with contextlib.redirect_stderr(io.StringIO()) as err, \

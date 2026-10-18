@@ -88,7 +88,7 @@ class MergeTest(unittest.TestCase):
         m = merge([self.aws, self.net])
         summary = m.meta["stitched"]
         self.assertTrue(summary["automatic"])
-        self.assertEqual(summary["counts"], {"cgw-ip": 1, "dx-vif": 1, "manual": 0})
+        self.assertEqual(summary["counts"], {"cgw-ip": 1, "dx-vif": 1, "gcp-vpn-peer": 0, "gcp-interconnect": 0, "manual": 0})
         self.assertEqual(summary["links"], sorted(stitches(m)))
         self.assertEqual(summary["unmatched_customer_gateways"], [CGW_NAT])
         warnings = "\n".join(m.meta["warnings"])

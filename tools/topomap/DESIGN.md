@@ -1,10 +1,12 @@
 # topomap design
 
-`topomap` gathers topology automatically from AWS and from network devices, merges the pieces, and draws them.
+`topomap` gathers topology automatically from AWS, Google Cloud and network devices, merges the pieces, and draws them.
 
 ```
 collect ─┬─ aws      boto3, read-only API calls            ┐
          ├─ aws-org  the AWS Organization: OUs, accounts   │
+         ├─ gcp      GCP networks, via google-auth + REST  │
+         ├─ gcp-org  GCP folders, projects, Assured Workl. │
          ├─ files    saved "show" output, config backups   ├─▶ topomap/1 JSON ─▶ merge ─▶ filter ─▶ render
          └─ devices  SSH crawl over CDP/LLDP, read-only    ┘                   diff (drift between snapshots)
 ```
@@ -15,10 +17,11 @@ Every stage reads and writes the same JSON graph (`topomap/model.py`), so stages
 
 - **Python 3.9+.** Use `from __future__ import annotations` and `typing.Optional`/`List`/`Dict`. Don't use `X | None` outside annotations.
 - **Optional dependencies:** the core (model, facts, parsers, files collector, merge/diff/filter, every renderer) is **standard library only**.
-  - `boto3` is needed only by `collectors/aws.py`, and `netmiko` only by `collectors/devices.py`.
+  - `boto3` is needed only by the AWS collectors, `google-auth` (with `requests`) only by the GCP ones, and `netmiko` only by `collectors/devices.py`.
   - Import them inside functions, never at module top level, and raise a `RuntimeError` naming the extra to install (`pip install 'topomap[aws]'`) if one is missing.
 - **Read-only, always.**
   - The AWS collector wraps every client so only `Describe*`, `List*`, `Get*` and `Search*` calls can run. The one exception is STS `AssumeRole`, allowed only on the client that fetches credentials for other accounts.
+  - The GCP collectors ask for the `cloud-platform.read-only` OAuth scope, and `collectors/gcp_api.Api` can only send GET requests.
   - The crawler only runs commands from `parsers.COMMANDS`, and refuses anything else. netmiko's own session setup (`terminal length 0`) and, when autodetecting the platform, its probe commands still reach the device. Give `--platform` to avoid the probes.
 - **Partial failure is normal.** An unreachable device, an `AccessDenied` region or an unparseable file is recorded with `Topology.warn()`, and collection carries on. In the AWS collector each service in each region is guarded, so even an unexpected exception skips only that service. Only bad arguments are fatal.
 - **No real data in the repo,** including in tests and fixtures.
@@ -56,6 +59,12 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | iam-role, iam-user | `aws:iam-role:<account-id>:<name>`, `aws:iam-user:<account-id>:<name>` |
 | eks-cluster | `aws:eks-cluster:<account-id>:<region>:<name>` |
 | organization, org-root, ou, org-policy | `aws:organization:<o-id>`, `aws:org-root:<r-id>`, `aws:ou:<ou-id>`, `aws:org-policy:<p-id>` |
+| gcp-organization, gcp-folder, gcp-project | `gcp:organization:<number>`, `gcp:folder:<number>`, `gcp:project:<project-id>` (the ID, not the number, so both GCP collectors agree) |
+| gcp-network, gcp-region | `gcp:network:<project>:<network>`, `gcp:region:<project>:<network>:<region>` (a region is drawn *inside* a network) |
+| gcp-subnet, cloud-router, cloud-vpn-gateway | `gcp:subnet:<project>:<region>:<name>`, `gcp:router:…`, `gcp:vpn-gateway:…` |
+| external-vpn-gateway | `gcp:external-vpn-gateway:<project>:<name>`; a classic VPN's peer, which has only an address, is `…:peer-<ip>` |
+| interconnect | `gcp:interconnect:<project>:<name>`; a Partner Interconnect, which has no interconnect of its own, is `…:partner-<attachment>` |
+| ncc-hub, gce-instance | `gcp:ncc-hub:<project>:<hub>`, `gcp:instance:<project>:<zone>:<name>` |
 
 `collect aws` and `collect aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
 
@@ -74,6 +83,7 @@ Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you.
   - Transit gateways, customer gateways, DX gateways and DX connections sit in their region.
   - A DX gateway is global, so it sits in its account.
   - IAM roles and users are global, so they sit in one `iam` box per account, which the renderers draw in the account's top-right corner. A Bedrock group sits in its region, with its models inside it. An EKS cluster sits in its VPC, or in the region when that VPC wasn't collected.
+- **Google Cloud:** `[gcp-organization > gcp-folder > … > ] gcp-project > gcp-network > gcp-region > gcp-subnet > gce-instance`. Cloud Routers and VPN gateways sit in their region; external VPN gateways, interconnects and NCC hubs in their project.
 - **Network:** `site > device` when the site is known. Otherwise devices sit at the top level. Segments sit at the top level.
 
 ## Node attributes (by kind)
@@ -99,6 +109,18 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 | dx-connection | `connection_id`, `location`, `bandwidth`, `state` |
 | dx-gateway | `dxgw_id`, `asn` |
 | instance | `instance_id`, `private_ips`, `public_ip`, `instance_type`, `state` |
+| gcp-organization | `org_id`, `domain`, `directory_customer_id`, `org_policies` |
+| gcp-folder | `folder_id`, `path` (`Assured Workloads/Prod`), `org_policies`, `assured_workload` (on the folder a workload governs: `{"name", "display_name", "compliance_regime", "location", "partner", "sovereign_controls", "active_violations", "acknowledged_violations"}`) |
+| gcp-project | `project_id`, `project_number`, `name`, `path`, `org_policies`, `labels` (with `--include labels`), `assured_workload_role` (`keys`/`consumer`) and `assured_workload`, `shared_vpc` (`host`/`service`), `shared_vpc_host`, `collected` (true when `collect gcp` read its networks) |
+| gcp-network | `network`, `project_id`, `routing_mode`, `auto_subnets`, `mtu`, `legacy`, `cidr` (legacy only), `peerings` (list of `{"name", "peer", "state", "export_custom_routes", "import_custom_routes"}`) |
+| gcp-region | `region` |
+| gcp-subnet | `subnet`, `cidr`, `region`, `secondary_ranges`, `ipv6_cidrs`, `private_google_access`, `purpose`, `stack_type`, `flow_logs` |
+| cloud-router | `router`, `region`, `asn`, `bgp_peers` (list of `{"name", "peer_ip", "peer_asn", "ip", "interface"}`), `interfaces`, `nats` |
+| cloud-vpn-gateway | `gateway`, `type` (`ha`/`classic`), `region`, `interfaces` (list of `{"id", "ip"}`) |
+| external-vpn-gateway | `gateway`, `redundancy`, `interfaces` (list of `{"id", "ip"}`, the keys used for stitching), `ip` |
+| interconnect | `interconnect`, `type` (`DEDICATED`/`PARTNER`), `link_type`, `links`, `location`, `state`; partner ones `partner_name`, `interconnect_name` |
+| ncc-hub | `hub`, `state` |
+| gce-instance | `instance`, `zone`, `machine_type`, `status`, `private_ips`, `public_ips` |
 | site | `name` |
 | device | `vendor`, `platform`, `model`, `os_version`, `serial`, `mgmt_ip`, `role` (see `facts.ROLES`), `interfaces` (list of `{"name", "addresses": ["10.0.0.1/30"], "description", "status", "vrf"}`), `discovered` (`"neighbor"` if only seen as someone's CDP/LLDP neighbour), `sources` |
 | segment | `subnet` |
@@ -120,14 +142,18 @@ Labels should be what a person calls the thing: the Name tag if present (`prod-v
 | `segment-member` | device → segment | `source_port`, `address`, `vrf` |
 | `tgw-attachment` | vpc / vpn / dx-gateway ↔ transit-gateway | `attachment_id`, `state`, `resource_type` |
 | `tgw-peering` | transit-gateway ↔ transit-gateway | `attachment_id`, `state` |
-| `vpc-peering` | vpc ↔ vpc | `peering_id`, `state` |
+| `vpc-peering` | vpc ↔ vpc, gcp-network ↔ gcp-network | `peering_id` (AWS), `peerings` (GCP: peering names), `state` |
 | `vgw-attachment` | vpn-gateway ↔ vpc | `state` |
 | `vpn` | customer-gateway ↔ transit-gateway / vpn-gateway | `vpn_id`, `state`, `routing` (`bgp`/`static`), `tunnels` (list of `{"outside_ip", "inside_cidr", "status"}`), `attachment_id` (a TGW's VPN attachment is folded into this link rather than drawn separately) |
 | `dx-vif` | dx-connection → dx-gateway / vpn-gateway / `ext:external:aws-public` (directed) | `vif_id`, `vif_type` (`private`/`transit`/`public`), `vlan`, `customer_address`, `amazon_address`, `asn`, `amazon_asn`, `state` |
 | `dxgw-association` | dx-gateway ↔ transit-gateway / vpn-gateway | `association_id`, `state`, `allowed_prefixes` |
 | `policy-attachment` | org-policy → org-root / ou / account (directed) | `type` |
 | `iam-trust` | account / iam-role / iam-user → iam-role (directed) | `principal` (`root`, `role`, `user`): the role's trust policy lets that principal assume it. Only drawn when the trusted account was collected too. |
-| `stitch` | device ↔ customer-gateway / dx-connection | `rule` (`cgw-ip`, `dx-vif`, `manual`), `address`, the device-side port |
+| `vpn` (GCP) | cloud-vpn-gateway ↔ external-vpn-gateway / cloud-vpn-gateway | `tunnels` (list of `{"name", "status", "detail", "peer_ip", "interface", "router", "ike_version"}`) |
+| `interconnect-attachment` | cloud-router ↔ interconnect, keyed by attachment name | `attachment`, `type`, `vlan`, `cloud_router_address`, `customer_address`, `state`, `bandwidth`, `edge_availability_domain`, `admin_enabled` |
+| `shared-vpc` | service gcp-project → host gcp-project (directed) | `host_project` |
+| `ncc-spoke` | ncc-hub → gcp-network / cloud-vpn-gateway / cloud-router (directed), keyed by spoke | `spoke`, `state` |
+| `stitch` | device ↔ customer-gateway / dx-connection / external-vpn-gateway / interconnect | `rule` (`cgw-ip`, `dx-vif`, `gcp-vpn-peer`, `gcp-interconnect`, `manual`), `address`, the device-side port |
 
 A DX gateway attached to a transit gateway appears twice: as a `tgw-attachment` (from the TGW's side) and a `dxgw-association` (from the DX side). Both are kept, because each carries its own state.
 
@@ -141,12 +167,14 @@ A peer that wasn't collected (a VPC in another account, a TGW peer in another re
 
 1. **`cgw-ip`:** a device interface address (without its prefix length) equals a customer gateway's `ip`.
 2. **`dx-vif`:** a device interface address equals the IP part of a VIF's `customer_address`. The stitch link goes from the device to that VIF's DX connection.
-3. **`manual`:** `--stitch NODE_ID=NODE_ID` pairs, for gateways behind NAT.
+3. **`gcp-vpn-peer`:** a device interface address equals one of an external VPN gateway's interface addresses.
+4. **`gcp-interconnect`:** a device interface address equals the IP part of an interconnect attachment's `customer_address`. The stitch goes to the attachment's interconnect.
+5. **`manual`:** `--stitch NODE_ID=NODE_ID` pairs, for gateways behind NAT.
 
 ## Rendering
 
 - **Formats:** `drawio`, `svg`, `mermaid` and `dot`.
-- **draw.io:** written as **uncompressed** XML, so it is readable, diffable and redactable with `tools/ip-redactor`. It uses draw.io's built-in AWS 2021 (`mxgraph.aws4.*`) shapes and group styles, and nested containers for `parent`.
+- **draw.io:** written as **uncompressed** XML, so it is readable, diffable and redactable with `tools/ip-redactor`. It uses draw.io's built-in AWS 2021 (`mxgraph.aws4.*`) shapes and group styles, the GCP icons from draw.io's own GCP sidebar (embedded as SVG images, `render/gcp_icons.py`), and nested containers for `parent`. Links are written before vertices so node labels sit on top, which means container styles must have no fill (or a fill only on leaf containers such as subnets), or they hide the links.
 - **SVG:** built in, using the same layout engine. It does not need Graphviz.
 - **Mermaid and DOT:** text, with subgraphs or clusters for containers.
 
@@ -157,6 +185,7 @@ A peer that wasn't collected (a VPC in another account, a TGW peer in another re
 | Core | `model.py`, `facts.py`, `cli.py` |
 | AWS collector | `collectors/aws.py` |
 | AWS Organizations collector | `collectors/aws_org.py` (shares the read-only client and sessions with `aws.py`) |
+| GCP collectors | `collectors/gcp_api.py` (read-only REST client, hierarchy walk), `collectors/gcp.py`, `collectors/gcp_org.py` |
 | Parsers and offline collection | `parsers/*`, `collectors/files.py` |
 | Live crawler | `collectors/devices.py` |
 | Merge, diff, filter | `merge.py`, `diff.py`, `filter.py` |

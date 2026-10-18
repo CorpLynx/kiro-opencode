@@ -17,10 +17,19 @@ from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_BEDROCK, AWS_IAM, AWS_ORG, AWS_ORG
                      AWS_REGION, AWS_SUBNET, AWS_VPC, LINK_DX_VIF, LINK_POLICY, LINK_TRUST,
                      LINK_DXGW_ASSOCIATION, LINK_L3, LINK_PHYSICAL, LINK_SEGMENT, LINK_STITCH,
                      LINK_TGW_ATTACHMENT, LINK_TGW_PEERING, LINK_VGW_ATTACHMENT, LINK_VPC_PEERING,
-                     LINK_VPN, NET_DEVICE, NET_EXTERNAL, NET_SEGMENT, NET_SITE, Link, Topology)
+                     LINK_VPN, NET_DEVICE, NET_EXTERNAL, NET_SEGMENT, NET_SITE, Link, Topology,
+                     GCP_FOLDER, GCP_INSTANCE, GCP_INTERCONNECT, GCP_NCC_HUB, GCP_NETWORK, GCP_ORG,
+                     GCP_PEER_GATEWAY, GCP_PROJECT, GCP_REGION, GCP_ROUTER, GCP_SUBNET,
+                     GCP_VPN_GATEWAY, LINK_INTERCONNECT_ATTACHMENT, LINK_NCC_SPOKE, LINK_SHARED_VPC)
 
 CONTAINER_KINDS = frozenset({AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ACCOUNT, AWS_REGION, AWS_VPC,
-                             AWS_AZ, AWS_SUBNET, AWS_BEDROCK, AWS_IAM, NET_SITE})
+                             AWS_AZ, AWS_SUBNET, AWS_BEDROCK, AWS_IAM, NET_SITE,
+                             GCP_ORG, GCP_FOLDER, GCP_PROJECT, GCP_NETWORK, GCP_REGION, GCP_SUBNET})
+
+# GCP leaf kinds and the visual class each draws as.
+GCP_LEAF_CLASSES = {GCP_ROUTER: "cloud-router", GCP_VPN_GATEWAY: "cloud-vpn-gateway",
+                    GCP_PEER_GATEWAY: "external-vpn-gateway", GCP_NCC_HUB: "ncc-hub",
+                    GCP_INSTANCE: "gce-instance"}
 
 AWS_LEAF_KINDS = frozenset({
     "internet-gateway", "egress-only-internet-gateway", "nat-gateway", "vpc-endpoint",
@@ -43,6 +52,15 @@ class Shape:
 # edge (gateways, firewalls, routers), then core, access, and endpoints.
 SHAPES: Dict[str, Shape] = {
     "external": Shape(60, 36, 0),
+    "external-vpn-gateway": Shape(42, 42, 1),
+    "interconnect": Shape(42, 38, 1),
+    "partner-interconnect": Shape(42, 29, 1),
+    "cloud-router": Shape(42, 42, 2),
+    "cloud-vpn-gateway": Shape(42, 42, 2),
+    "ncc-hub": Shape(42, 42, 2),
+    "gcp-project-leaf": Shape(42, 42, 3),
+    "gcp-project-keys": Shape(42, 42, 3),
+    "gce-instance": Shape(42, 42, 5),
     "org-policy": Shape(140, 36, 1, boxed=True),
     "account-management": Shape(48, 48, 2),
     "account-leaf": Shape(48, 48, 3),
@@ -76,7 +94,9 @@ SHAPES: Dict[str, Shape] = {
 CONTAINER_TIER = 3
 
 CONTAINER_CLASSES = ("organization", "org-root", "ou", "account", "region", "vpc", "az", "bedrock", "iam",
-                     "subnet-public", "subnet-private", "site", "group")
+                     "subnet-public", "subnet-private", "site", "group",
+                     "gcp-organization", "gcp-folder", "gcp-folder-assured", "gcp-project",
+                     "gcp-network", "gcp-region", "gcp-subnet")
 
 # Colours shared by the SVG renderer (draw.io uses its own built-in styles).
 CONTAINER_COLORS: Dict[str, tuple] = {
@@ -94,6 +114,13 @@ CONTAINER_COLORS: Dict[str, tuple] = {
     "subnet-private": ("#00A4A6", "#E6F6F7", False, "#147EBA"),
     "site": ("#7D8998", "none", False, "#5A6C86"),
     "group": ("#5A6C86", "none", True, "#5A6C86"),
+    "gcp-organization": ("#5F6368", "none", False, "#3C4043"),
+    "gcp-folder": ("#F9AB00", "#FFFBF0", False, "#B06000"),
+    "gcp-folder-assured": ("#D93025", "#FEF7F6", False, "#A50E0E"),
+    "gcp-project": ("#4285F4", "#F8FBFF", False, "#1967D2"),
+    "gcp-network": ("#34A853", "none", False, "#188038"),
+    "gcp-region": ("#9AA0A6", "none", True, "#5F6368"),
+    "gcp-subnet": ("#34A853", "#E6F4EA", False, "#188038"),
 }
 
 
@@ -118,6 +145,9 @@ LINK_LOOKS: Dict[str, LinkLook] = {
     LINK_STITCH: LinkLook("#E7157B", 2, "2 4"),
     LINK_POLICY: LinkLook("#E7157B", 1, "4 3"),
     LINK_TRUST: LinkLook("#DD344C", 1.5, "6 3"),
+    LINK_SHARED_VPC: LinkLook("#4285F4", 1.5, "6 3"),
+    LINK_INTERCONNECT_ATTACHMENT: LinkLook("#4285F4", 3),
+    LINK_NCC_SPOKE: LinkLook("#34A853", 2),
 }
 DEFAULT_LINK_LOOK = LinkLook("#666666", 1.5)
 
@@ -180,6 +210,14 @@ def _base_class(topo: Topology, nid: str, has_kids: bool) -> str:
         return "account-management" if node.attrs.get("management") else "account-leaf"
     if kind == AWS_ORG_POLICY:
         return "org-policy"
+    if kind == GCP_FOLDER:
+        return "gcp-folder-assured" if node.attrs.get("assured_workload") else "gcp-folder"
+    if kind == GCP_PROJECT and not has_kids:
+        return "gcp-project-keys" if node.attrs.get("assured_workload_role") == "keys" else "gcp-project-leaf"
+    if kind == GCP_INTERCONNECT:
+        return "partner-interconnect" if node.attrs.get("type") == "PARTNER" else "interconnect"
+    if kind in GCP_LEAF_CLASSES and not has_kids:
+        return GCP_LEAF_CLASSES[kind]
     if kind in CONTAINER_KINDS:
         return kind
     if has_kids:

@@ -36,6 +36,7 @@ ARROWS = {  # (undirected, directed)
 CLASSES = {
     "aws": "fill:#F4EFFF,stroke:#8C4FFF,color:#232F3E",
     "org": "fill:#FDF0F6,stroke:#E7157B,color:#232F3E",
+    "gcp": "fill:#E8F0FE,stroke:#4285F4,color:#202124",
     "ec2": "fill:#FFF1E5,stroke:#ED7100,color:#232F3E",
     "net": "fill:#EAF2F7,stroke:#005073,color:#232F3E",
     "fw": "fill:#F6DEDA,stroke:#B03A2E,color:#232F3E",
@@ -77,6 +78,10 @@ def _class_of(vclass: str) -> Optional[str]:
         return "iam"
     if vclass in ("account-leaf", "account-management", "org-policy"):
         return "org"
+    if vclass in ("cloud-router", "cloud-vpn-gateway", "external-vpn-gateway", "interconnect",
+                  "partner-interconnect", "ncc-hub", "gce-instance", "gcp-project-leaf",
+                  "gcp-project-keys"):
+        return "gcp"
     if vclass in GATEWAYS or vclass == "vpc-endpoint":
         return "aws"
     if vclass == "firewall":

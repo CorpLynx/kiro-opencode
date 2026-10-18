@@ -1,12 +1,13 @@
-# topomap: network and AWS topology, gathered and drawn automatically
+# topomap: network, AWS and Google Cloud topology, gathered and drawn automatically
 
 `topomap` builds topology diagrams from the network itself instead of from someone's memory. It collects from three kinds of source:
 
 - **AWS:** read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account, and with flags the Bedrock models each account can use, its custom IAM roles and users, and EKS clusters.
+- **Google Cloud:** read-only API calls across an organization's folders and projects, with Assured Workloads and org policies, and each project's VPC networks, subnets, Cloud Routers, Cloud VPN, Interconnect, peering, Shared VPC and Network Connectivity Center.
 - **Network devices:** an SSH crawl that follows CDP/LLDP neighbours.
 - **Files you already have:** saved `show` output and config backups, from RANCID, Oxidized or a folder of captures.
 
-It links on-prem devices to their AWS VPN and Direct Connect edges, then draws the result as **draw.io** (with the official AWS and Cisco icons), **SVG**, **Mermaid** or **Graphviz DOT**.
+It links on-prem devices to their AWS VPN and Direct Connect edges and to their GCP Cloud VPN and Interconnect edges, then draws the result as **draw.io** (with the official AWS and Cisco icons), **SVG**, **Mermaid** or **Graphviz DOT**.
 
 ![A hybrid lab: an AWS account with a transit gateway, VPCs and subnets, stitched over a site-to-site VPN to an on-prem Junos edge router, NX-OS core pair, Catalyst and Arista switches](docs/hybrid.png)
 
@@ -15,6 +16,8 @@ It links on-prem devices to their AWS VPN and Direct Connect edges, then draws t
 ```
 collect ─┬─ aws      boto3, read-only                       ┐
          ├─ aws-org  OUs, accounts, policies                │
+         ├─ gcp      VPCs, routers, VPN, Interconnect, NCC  │
+         ├─ gcp-org  folders, projects, Assured Workloads   │
          ├─ files    saved "show" output / config backups   ├─▶ topology JSON ─▶ merge ─▶ filter ─▶ render
          └─ devices  SSH crawl over CDP/LLDP, read-only     ┘                     diff (drift between snapshots)
 ```
@@ -24,7 +27,7 @@ Every stage reads and writes the same JSON, so stages chain through files or pip
 ## Install
 
 ```sh
-pip install './tools/topomap[all]'    # AWS + SSH crawling
+pip install './tools/topomap[all]'    # AWS + Google Cloud + SSH crawling
 pip install ./tools/topomap           # files, merge, diff, filter, render: no dependencies
 ```
 
@@ -32,6 +35,7 @@ pip install ./tools/topomap           # files, merge, diff, filter, render: no d
 | --- | --- | --- |
 | *(none)* | `collect files`, `merge`, `diff`, `filter`, `render` (all formats) | Python 3.9+ standard library |
 | `aws` | `collect aws` | `boto3` |
+| `gcp` | `collect gcp`, `collect gcp-org` | `google-auth`, `requests` |
 | `devices` | `collect devices` | `netmiko` |
 
 ## Quick start
@@ -40,6 +44,8 @@ pip install ./tools/topomap           # files, merge, diff, filter, render: no d
 # 1. Gather
 topomap collect aws-org --profile management -o org.json        # the organization chart
 topomap collect aws --profile prod --region us-east-1 --region eu-west-1 -o aws.json
+topomap collect gcp-org -o gcp-org.json                          # folders and projects
+topomap collect gcp --organization 123456789012 -o gcp.json      # their networks
 topomap collect files ~/rancid/configs ~/captures --l3-exclude 192.168.0.0/24 -o net.json
 #    or crawl live:
 TOPOMAP_USERNAME=netops topomap collect devices --seed 10.0.0.1 --allow 10.0.0.0/16 --ask-pass -o net.json
@@ -153,6 +159,37 @@ topomap render topomap-out/models.json -o topomap-out/models.svg
   - `emails`: account email addresses. These are personal data, so they're off by default.
 - **Combining with network data:** `collect aws` gives each account the same ID, so `merge org.json aws.json` draws each account inside its OU, with its regions and VPCs inside the account. After a merge, an account that `collect aws` could not reach is labelled "not collected", an empty OU "empty" and a region with nothing in it "no resources", so a bare box is never mistaken for an unscanned one. An account with nothing collected inside it is drawn as an account icon; one holding VPCs is drawn as a container.
 
+### Google Cloud organization (`collect gcp-org`)
+
+![A Google Cloud organization: an Assured Workloads folder (FedRAMP Moderate, 2 violations) holding Prod, NonProd and Shared folders and a key project; the Shared VPC host project in Shared holds its VPC, regions, subnets, a Cloud Router, HA VPN, Interconnects and an NCC hub, stitched to an on-prem router](docs/gcp.png)
+
+<sub>Drawn from a fake organization (`tests/gcp_fake.py`), merged with its networks and one on-prem router.</sub>
+
+- **Credentials:** Application Default Credentials (`gcloud auth application-default login`, a service account key in `GOOGLE_APPLICATION_CREDENTIALS`, or the metadata server). `--impersonate-service-account EMAIL` acts as a service account, and `--quota-project` names the project to bill API quota to, which some APIs need with user credentials.
+- **Read-only, twice over:** tokens are requested with the `cloud-platform.read-only` scope, and the client can only send GET requests.
+- **Permissions** on the organization: Organization Viewer and Folder Viewer (`roles/resourcemanager.organizationViewer`, `roles/resourcemanager.folderViewer`) for the hierarchy; Assured Workloads Reader (`roles/assuredworkloads.reader`) and Org Policy Viewer (`roles/orgpolicy.policyViewer`) add those parts. Anything denied is a warning, and the rest is still drawn.
+- **Which organization:** the only one the credentials can see, or `--organization ID`.
+- **What it collects:**
+  - every folder, nested to any depth, with its path (`Assured Workloads/Prod`), and every active project;
+  - **Assured Workloads:** the workload is attached to the folder it governs, which is drawn in red with its compliance regime, location and active violations (`AW: FEDRAMP MODERATE (us) · 2 violations`). Its key project is marked and drawn with a key icon. Locations come from the API; `--aw-location` adds one if yours isn't found;
+  - **org policies** (`--policies attrs`, the default, or `none`): the constraints set directly on the organization, each folder and each project (not inherited ones);
+  - with `--include labels`, project labels.
+- **Combining with network data:** `collect gcp` gives each project the same ID, so `merge gcp-org.json gcp.json` draws each project, with its networks, inside its folder.
+
+### Google Cloud networks (`collect gcp`)
+
+- **Which projects:** `--project ID` (repeatable), or every project below `--folder ID` or `--organization ID`. Projects are collected in parallel (`--workers`, default 8).
+- **Permissions:** Compute Network Viewer (`roles/compute.networkViewer`) on the projects, plus Browser (`roles/browser`) to walk folders, and Network Connectivity Center viewer for hubs (`roles/networkconnectivity.hubViewer`).
+- **What it collects:**
+  - VPC networks (global or regional routing, MTU, peerings), drawn as project › network › region › subnet;
+  - subnets, with secondary and IPv6 ranges and Private Google Access;
+  - Cloud Routers (ASN, BGP peers, NAT names);
+  - HA and classic VPN gateways, external VPN gateways and tunnels (one link per gateway pair, with each tunnel's status);
+  - Dedicated and Partner Interconnects, with each VLAN attachment as a link from the Cloud Router;
+  - VPC peering, Shared VPC (service project → host project) and Network Connectivity Center hubs and spokes;
+  - with `--include instances`, Compute Engine VMs in their subnets.
+- **Projects without the Compute Engine API** (a key project, say) are skipped and listed in `meta.compute_disabled`, with one warning for all of them.
+
 ### Saved output and configs (`collect files`)
 
 - **Platforms:** Cisco IOS/IOS-XE, Cisco NX-OS, Arista EOS and Juniper Junos.
@@ -182,6 +219,8 @@ topomap render topomap-out/models.json -o topomap-out/models.svg
 - **`merge`** unions topologies, then stitches each on-prem device to:
   - an AWS customer gateway whose IP is one of the device's addresses;
   - the Direct Connect connection of a VIF whose customer address is one of the device's addresses;
+  - a GCP external VPN gateway with an interface address on the device;
+  - the GCP Interconnect of a VLAN attachment whose customer router address is on the device;
   - anything you pair by hand with `--stitch device=node`, for gateways behind NAT. Gateways that match nothing are listed in a warning.
 - **`filter`** shrinks big estates down to a readable picture. It takes `--aws-only` / `--network-only`, `--kind`, `--exclude-kind az` (children move up), `--collapse vpc` (subnets fold into their VPC, and links are re-pointed), `--around core1 --depth 2`, `--match REGEX` and `--hide-empty` (drops regions and OUs in which nothing was found).
 - **`diff`** shows what was added, removed and changed, down to the attribute (`interfaces[Gi1/0/1].addresses: +10.0.0.9/30`). It writes text or JSON, and exits 1 when anything changed, so it can watch for drift in CI.
@@ -224,6 +263,7 @@ The text outputs (draw.io, SVG, Mermaid, DOT) can also be run through `ipredact`
 - **Lines are straight.** In dense areas they can cross icons and other containers, and port labels can overlap. Tidy up in draw.io if it matters.
 - **Junos crawling:** Junos has no `show lldp neighbors detail` for all interfaces, so the crawler can't follow Junos neighbours by address. They are still drawn.
 - **Not parsed yet:** CDP/LLDP summary tables on Cisco and Arista (only the `detail` forms), Junos `groups`/`apply-groups`, and SNMP.
+- **Google Cloud resources not collected:** firewall rules, routes, load balancers, Private Service Connect, Cloud DNS and GKE. Org policy contents (only constraint names), and inherited policies. The GCP collectors are tested against a fake API, not a real organization yet, so please report anything that looks wrong.
 - **AWS resources not collected:** DX LAGs, TGW Connect peers, Cloud WAN, load balancers and security groups. From Organizations: policy contents (only names and attachments), and SCP effects on accounts.
 - **Bedrock, IAM and EKS tests use emulators and stubs.** moto has no Bedrock API, so `--ai` is tested with stubbed answers; IAM and EKS run against moto. All three have also been run against a real lab organization, but only that one, so please report anything that looks wrong.
 - **Trust links are drawn at collection time,** between accounts collected in the same run. Merging snapshots from separate runs doesn't add links between them. A role that trusts an account outside the run keeps it in `trusted_accounts` but gets no link.

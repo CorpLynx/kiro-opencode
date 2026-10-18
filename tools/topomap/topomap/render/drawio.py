@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from ..model import Topology
-from . import labels
+from . import gcp_icons, labels
 from .layout import Box, Layout, Route
 
 # -- styles copied from draw.io's sidebars --------------------------------------
@@ -65,7 +65,27 @@ _CISCO_FREE = ("verticalLabelPosition=bottom;sketch=0;html=1;verticalAlign=top;a
                "align=center;pointerEvents=1;shape=mxgraph.cisco19.")
 _CISCO_COLORS = "fillColor=#FAFAFA;strokeColor=#005073;"
 
+def _gcp_icon(name: str) -> str:
+    image, _, _ = gcp_icons.ICONS[name]
+    return gcp_icons.PREFIX + image + ";"
+
+
+# Google Cloud's zone groups: a flat tinted panel with the title top-left.
+_GCP_ZONE = ("sketch=0;rounded=1;absoluteArcSize=1;arcSize=2;html=1;shadow=0;dashed=0;fontSize=12;"
+             "align=left;verticalAlign=top;spacing=10;spacingTop=-4;whiteSpace=wrap;fontStyle=1;"
+             + _PLAIN_GROUP_TAIL)
+
 VERTEX_STYLES: Dict[str, str] = {
+    # Google Cloud (draw.io "GCP Icons")
+    "cloud-router": _gcp_icon("cloud-router"),
+    "cloud-vpn-gateway": _gcp_icon("cloud-vpn"),
+    "external-vpn-gateway": _gcp_icon("external-ip"),
+    "interconnect": _gcp_icon("interconnect"),
+    "partner-interconnect": _gcp_icon("partner-interconnect"),
+    "ncc-hub": _gcp_icon("vpc"),
+    "gce-instance": _gcp_icon("compute-engine"),
+    "gcp-project-leaf": _gcp_icon("resource-manager"),
+    "gcp-project-keys": _gcp_icon("key-management"),
     # AWS / Network & Content Delivery, AWS / Compute
     "internet-gateway": _AWS_NET + "internet_gateway;",
     "egress-only-internet-gateway": _AWS_NET + "internet_gateway;",
@@ -110,6 +130,15 @@ VERTEX_STYLES: Dict[str, str] = {
 }
 
 CONTAINER_STYLES: Dict[str, str] = {
+    # Google Cloud
+    "gcp-organization": _GCP_ZONE + "fillColor=none;strokeColor=#5F6368;fontColor=#3C4043;",
+    "gcp-folder": _GCP_ZONE + "fillColor=none;strokeColor=#F9AB00;fontColor=#B06000;",
+    "gcp-folder-assured": _GCP_ZONE + "fillColor=none;strokeColor=#D93025;strokeWidth=2;"
+                                      "fontColor=#A50E0E;",
+    "gcp-project": _GCP_ZONE + "fillColor=none;strokeColor=#4285F4;fontColor=#1967D2;",
+    "gcp-network": _GCP_ZONE + "fillColor=none;strokeColor=#34A853;fontColor=#188038;",
+    "gcp-region": _GCP_ZONE + "fillColor=none;strokeColor=#9AA0A6;dashed=1;fontColor=#5F6368;",
+    "gcp-subnet": _GCP_ZONE + "fillColor=#E6F4EA;strokeColor=#34A853;fontColor=#188038;",
     # AWS / Groups
     "organization": _AWS_GROUP + "group_aws_cloud_alt;strokeColor=#232F3E;fillColor=none;"
                                  "verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;"
@@ -161,6 +190,9 @@ EDGE_STYLES: Dict[str, str] = {
     "stitch": "strokeColor=#E7157B;strokeWidth=2;dashed=1;dashPattern=1 3;",
     "policy-attachment": "strokeColor=#E7157B;strokeWidth=1;dashed=1;dashPattern=4 3;",
     "iam-trust": "strokeColor=#DD344C;strokeWidth=1.5;dashed=1;dashPattern=6 3;",
+    "shared-vpc": "strokeColor=#4285F4;strokeWidth=1.5;dashed=1;dashPattern=6 3;",
+    "interconnect-attachment": "strokeColor=#4285F4;strokeWidth=3;",
+    "ncc-spoke": "strokeColor=#34A853;strokeWidth=2;",
 }
 _END_LABEL = "edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;"
 _TITLE = "text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;"
