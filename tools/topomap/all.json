@@ -1,0 +1,238 @@
+{
+  "links": [],
+  "meta": {
+    "sources": [
+      {
+        "accounts": 3,
+        "collected_at": "2026-10-18T15:50:57Z",
+        "collector": "aws-org",
+        "management_account": "930738198822",
+        "organization": "o-o9mq50usoo",
+        "ous": 2
+      },
+      {
+        "accounts": [
+          "236292170987",
+          "435976456577",
+          "930738198822"
+        ],
+        "collected_at": "2026-10-18T15:55:46Z",
+        "collector": "aws",
+        "regions": [
+          "us-east-1"
+        ]
+      }
+    ],
+    "stitched": {
+      "automatic": true,
+      "counts": {
+        "cgw-ip": 0,
+        "dx-vif": 0,
+        "manual": 0
+      },
+      "links": [],
+      "unmatched_customer_gateways": []
+    }
+  },
+  "nodes": [
+    {
+      "attrs": {
+        "account_id": "236292170987",
+        "joined": "2025-05-29",
+        "joined_method": "CREATED",
+        "name": "Log Archive",
+        "path": "Root/Security",
+        "status": "ACTIVE"
+      },
+      "id": "aws:account:236292170987",
+      "kind": "account",
+      "label": "Log Archive (236292170987)",
+      "parent": "aws:ou:ou-w6at-s0ceiu3g"
+    },
+    {
+      "attrs": {
+        "account_id": "435976456577",
+        "delegated_admin_for": [
+          "config.amazonaws.com"
+        ],
+        "joined": "2025-05-29",
+        "joined_method": "CREATED",
+        "name": "Audit",
+        "path": "Root/Security",
+        "status": "ACTIVE"
+      },
+      "id": "aws:account:435976456577",
+      "kind": "account",
+      "label": "Audit (435976456577)",
+      "parent": "aws:ou:ou-w6at-s0ceiu3g"
+    },
+    {
+      "attrs": {
+        "account_id": "930738198822",
+        "joined": "2025-05-29",
+        "joined_method": "INVITED",
+        "management": true,
+        "name": "Personal-Lab",
+        "path": "Root",
+        "status": "ACTIVE"
+      },
+      "id": "aws:account:930738198822",
+      "kind": "account",
+      "label": "Personal-Lab (930738198822)",
+      "parent": "aws:org-root:r-w6at"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "az_id": "use1-az4"
+      },
+      "id": "aws:az:vpc-09d04c6eb9b424f9e:us-east-1a",
+      "kind": "az",
+      "label": "us-east-1a",
+      "parent": "aws:vpc:vpc-09d04c6eb9b424f9e"
+    },
+    {
+      "attrs": {
+        "gateway_id": "igw-0c8efc9d8df8d6f07",
+        "tags": {
+          "Name": "n8n-igw",
+          "Project": "blake-revek-music"
+        }
+      },
+      "id": "aws:igw:igw-0c8efc9d8df8d6f07",
+      "kind": "internet-gateway",
+      "label": "n8n-igw (igw-0c8efc9d8df8d6f07)",
+      "parent": "aws:vpc:vpc-09d04c6eb9b424f9e"
+    },
+    {
+      "attrs": {
+        "arn": "arn:aws:organizations::930738198822:root/o-o9mq50usoo/r-w6at",
+        "policy_types": [
+          "rcp",
+          "scp"
+        ],
+        "root_id": "r-w6at"
+      },
+      "id": "aws:org-root:r-w6at",
+      "kind": "org-root",
+      "label": "Root",
+      "parent": "aws:organization:o-o9mq50usoo"
+    },
+    {
+      "attrs": {
+        "arn": "arn:aws:organizations::930738198822:organization/o-o9mq50usoo",
+        "feature_set": "ALL",
+        "management_account_id": "930738198822",
+        "org_id": "o-o9mq50usoo"
+      },
+      "id": "aws:organization:o-o9mq50usoo",
+      "kind": "organization",
+      "label": "Organization o-o9mq50usoo"
+    },
+    {
+      "attrs": {
+        "arn": "arn:aws:organizations::930738198822:ou/o-o9mq50usoo/ou-w6at-8r5lyu42",
+        "ou_id": "ou-w6at-8r5lyu42",
+        "path": "Root/Infrastructure",
+        "policies": {
+          "scp": [
+            "aws-guardrails-WBehyc"
+          ]
+        }
+      },
+      "id": "aws:ou:ou-w6at-8r5lyu42",
+      "kind": "ou",
+      "label": "Infrastructure",
+      "parent": "aws:org-root:r-w6at"
+    },
+    {
+      "attrs": {
+        "arn": "arn:aws:organizations::930738198822:ou/o-o9mq50usoo/ou-w6at-s0ceiu3g",
+        "ou_id": "ou-w6at-s0ceiu3g",
+        "path": "Root/Security",
+        "policies": {
+          "scp": [
+            "aws-guardrails-mUzHaA"
+          ]
+        }
+      },
+      "id": "aws:ou:ou-w6at-s0ceiu3g",
+      "kind": "ou",
+      "label": "Security",
+      "parent": "aws:org-root:r-w6at"
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "id": "aws:region:236292170987:us-east-1",
+      "kind": "region",
+      "label": "us-east-1",
+      "parent": "aws:account:236292170987"
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "id": "aws:region:435976456577:us-east-1",
+      "kind": "region",
+      "label": "us-east-1",
+      "parent": "aws:account:435976456577"
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "id": "aws:region:930738198822:us-east-1",
+      "kind": "region",
+      "label": "us-east-1",
+      "parent": "aws:account:930738198822"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "cidr": "10.20.1.0/24",
+        "public": true,
+        "routes": [
+          {
+            "destination": "0.0.0.0/0",
+            "target": "igw-0c8efc9d8df8d6f07"
+          },
+          {
+            "destination": "10.20.0.0/16",
+            "target": "local"
+          }
+        ],
+        "subnet_id": "subnet-0ac0b218bf9d0e695",
+        "tags": {
+          "Name": "n8n-subnet",
+          "Project": "blake-revek-music"
+        }
+      },
+      "id": "aws:subnet:subnet-0ac0b218bf9d0e695",
+      "kind": "subnet",
+      "label": "n8n-subnet (subnet-0ac0b218bf9d0e695)",
+      "parent": "aws:az:vpc-09d04c6eb9b424f9e:us-east-1a"
+    },
+    {
+      "attrs": {
+        "account_id": "930738198822",
+        "cidrs": [
+          "10.20.0.0/16"
+        ],
+        "is_default": false,
+        "region": "us-east-1",
+        "tags": {
+          "Name": "n8n-vpc",
+          "Project": "blake-revek-music"
+        },
+        "vpc_id": "vpc-09d04c6eb9b424f9e"
+      },
+      "id": "aws:vpc:vpc-09d04c6eb9b424f9e",
+      "kind": "vpc",
+      "label": "n8n-vpc (vpc-09d04c6eb9b424f9e)",
+      "parent": "aws:region:930738198822:us-east-1"
+    }
+  ],
+  "schema": "topomap/1"
+}

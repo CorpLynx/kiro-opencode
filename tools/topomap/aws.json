@@ -1,0 +1,140 @@
+{
+  "links": [],
+  "meta": {
+    "accounts": [
+      "236292170987",
+      "435976456577",
+      "930738198822"
+    ],
+    "collected_at": "2026-10-18T15:55:46Z",
+    "collector": "aws",
+    "regions": [
+      "us-east-1"
+    ]
+  },
+  "nodes": [
+    {
+      "attrs": {
+        "account_id": "236292170987",
+        "name": "Log Archive"
+      },
+      "id": "aws:account:236292170987",
+      "kind": "account",
+      "label": "Log Archive (236292170987)"
+    },
+    {
+      "attrs": {
+        "account_id": "435976456577",
+        "name": "Audit"
+      },
+      "id": "aws:account:435976456577",
+      "kind": "account",
+      "label": "Audit (435976456577)"
+    },
+    {
+      "attrs": {
+        "account_id": "930738198822",
+        "name": "Personal-Lab"
+      },
+      "id": "aws:account:930738198822",
+      "kind": "account",
+      "label": "Personal-Lab (930738198822)"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "az_id": "use1-az4"
+      },
+      "id": "aws:az:vpc-09d04c6eb9b424f9e:us-east-1a",
+      "kind": "az",
+      "label": "us-east-1a",
+      "parent": "aws:vpc:vpc-09d04c6eb9b424f9e"
+    },
+    {
+      "attrs": {
+        "gateway_id": "igw-0c8efc9d8df8d6f07",
+        "tags": {
+          "Name": "n8n-igw",
+          "Project": "blake-revek-music"
+        }
+      },
+      "id": "aws:igw:igw-0c8efc9d8df8d6f07",
+      "kind": "internet-gateway",
+      "label": "n8n-igw (igw-0c8efc9d8df8d6f07)",
+      "parent": "aws:vpc:vpc-09d04c6eb9b424f9e"
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "id": "aws:region:236292170987:us-east-1",
+      "kind": "region",
+      "label": "us-east-1",
+      "parent": "aws:account:236292170987"
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "id": "aws:region:435976456577:us-east-1",
+      "kind": "region",
+      "label": "us-east-1",
+      "parent": "aws:account:435976456577"
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "id": "aws:region:930738198822:us-east-1",
+      "kind": "region",
+      "label": "us-east-1",
+      "parent": "aws:account:930738198822"
+    },
+    {
+      "attrs": {
+        "az": "us-east-1a",
+        "cidr": "10.20.1.0/24",
+        "public": true,
+        "routes": [
+          {
+            "destination": "0.0.0.0/0",
+            "target": "igw-0c8efc9d8df8d6f07"
+          },
+          {
+            "destination": "10.20.0.0/16",
+            "target": "local"
+          }
+        ],
+        "subnet_id": "subnet-0ac0b218bf9d0e695",
+        "tags": {
+          "Name": "n8n-subnet",
+          "Project": "blake-revek-music"
+        }
+      },
+      "id": "aws:subnet:subnet-0ac0b218bf9d0e695",
+      "kind": "subnet",
+      "label": "n8n-subnet (subnet-0ac0b218bf9d0e695)",
+      "parent": "aws:az:vpc-09d04c6eb9b424f9e:us-east-1a"
+    },
+    {
+      "attrs": {
+        "account_id": "930738198822",
+        "cidrs": [
+          "10.20.0.0/16"
+        ],
+        "is_default": false,
+        "region": "us-east-1",
+        "tags": {
+          "Name": "n8n-vpc",
+          "Project": "blake-revek-music"
+        },
+        "vpc_id": "vpc-09d04c6eb9b424f9e"
+      },
+      "id": "aws:vpc:vpc-09d04c6eb9b424f9e",
+      "kind": "vpc",
+      "label": "n8n-vpc (vpc-09d04c6eb9b424f9e)",
+      "parent": "aws:region:930738198822:us-east-1"
+    }
+  ],
+  "schema": "topomap/1"
+}
