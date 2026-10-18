@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored: it
+# holds your account IDs.
+
+region                 = "us-east-1"
+profile                = "default"
+audit_account_id       = "111122223333"
+log_archive_account_id = "444455556666"
+member_role_name       = "AWSControlTowerExecution"
+create_eks             = true # the only billed part, about $0.10/hour

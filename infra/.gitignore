@@ -1,0 +1,10 @@
+# Local Terraform state and working directory. Never commit state: it can
+# contain addresses and resource IDs from your apply.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+
+# Per-installation values. Copy terraform.tfvars.example instead.
+terraform.tfvars
+terraform.tfvars.json

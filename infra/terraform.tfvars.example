@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and edit. Never commit terraform.tfvars: it can
+# hold values specific to your account.
+
+region    = "us-east-1"
+instance_type = "t3.micro"   # or "t4g.nano" (~$3/month outside free tier)
+create_instance = true       # set false for a $0 VPC-only estate
