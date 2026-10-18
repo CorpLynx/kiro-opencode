@@ -28,6 +28,7 @@ COLLECTORS = {
     "aws-org": "topomap.collectors.aws_org",
     "files": "topomap.collectors.files",
     "devices": "topomap.collectors.devices",
+    "scan": "topomap.collectors.scan",
 }
 COMMANDS = {
     "merge": "topomap.merge",

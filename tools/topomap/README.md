@@ -16,7 +16,8 @@ It links on-prem devices to their AWS VPN and Direct Connect edges, then draws t
 collect ─┬─ aws      boto3, read-only                       ┐
          ├─ aws-org  OUs, accounts, policies                │
          ├─ files    saved "show" output / config backups   ├─▶ topology JSON ─▶ merge ─▶ filter ─▶ render
-         └─ devices  SSH crawl over CDP/LLDP, read-only     ┘                     diff (drift between snapshots)
+         ├─ devices  SSH crawl over CDP/LLDP, read-only     │                     diff (drift between snapshots)
+         └─ scan     nmap host and port discovery           ┘
 ```
 
 Every stage reads and writes the same JSON, so stages chain through files or pipes. The JSON is sorted with stable IDs, so snapshots can be committed to git and compared.
@@ -200,6 +201,21 @@ topomap filter topomap-out/everything.json --max-per-type 10 | topomap render - 
   - `--strict-host-keys` refuses devices whose host key isn't in `~/.ssh/known_hosts`. Without it, netmiko accepts any key.
 - **Autodetection:** when the platform isn't given, it is autodetected with netmiko, which sends a few probe commands of its own. Set `--platform` or put platforms in the inventory to avoid that.
 - `--save-raw DIR` keeps each device's output (mode 0600) in the format `collect files` reads, so a crawl can be replayed offline.
+
+### Home and lab networks (`collect scan`)
+
+Finds the hosts and open ports on a network with [nmap](https://nmap.org) and draws them: one segment per network, every host linked to it, the default gateway as the router, and each host's services and a guessed type (gateway, server, NAS, printer, camera, access point, media player…) on its label.
+
+```sh
+topomap collect scan 192.168.1.0/24 --save-xml topomap-out/scan -o topomap-out/lan.json
+topomap render topomap-out/lan.json -o topomap-out/lan.svg
+```
+
+- **Two nmap runs:** a host sweep (`-sn`), then `--top-ports 1000` with service detection (`-sV`) on the hosts that answered. `--ports 22,80,1-1024`, `--no-ports`, `--no-service-detection`, `--full-probes` (every service probe: exact but slow on routers), `--no-dns`, `--timing 0-5`, `--exclude ADDR` and `--os` (needs root) change that.
+- **Root or not:** with `sudo`, nmap finds hosts by ARP and reads MAC addresses itself. Without it, hosts are found with TCP pings plus this machine's ARP cache after the sweep (`--no-arp-cache` turns that off), and vendors come from nmap's own MAC prefix list.
+- **Safety:** only private, link-local and CGNAT (Tailscale) space is scanned unless you add `--allow-public`, and at most 65,536 addresses per run.
+- **Offline:** `--from-xml FILE` (repeatable) redraws saved `nmap -oX` output without scanning.
+- Needs the `nmap` program (`brew install nmap`, `apt install nmap`, `pacman -S nmap`), not a Python package.
 
 ## Combining, trimming and comparing
 

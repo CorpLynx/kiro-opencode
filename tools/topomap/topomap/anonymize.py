@@ -96,7 +96,11 @@ _SAFE_KEYS = frozenset("""
     base_model version platform_version endpoint_public_access endpoint_private_access created
     summary aws_owned admin_access trusts_everyone trusts_own_account mfa_enabled active_access_keys nodegroups
     instance_types capacity_type ami_type desired min max
+<<<<<<< Updated upstream
     resource_id found_by relationships relation inventory_sources resources summarized subnet_ids
+=======
+    open_ports port protocol device_type os
+>>>>>>> Stashed changes
 """.split())
 _DOC_NETS = (ipaddress.ip_network("192.0.2.0/24"), ipaddress.ip_network("198.51.100.0/24"),
              ipaddress.ip_network("203.0.113.0/24"))

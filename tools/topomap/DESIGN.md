@@ -105,6 +105,7 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 | site | `name` |
 | device | `vendor`, `platform`, `model`, `os_version`, `serial`, `mgmt_ip`, `role` (see `facts.ROLES`), `interfaces` (list of `{"name", "addresses": ["10.0.0.1/30"], "description", "status", "vrf"}`), `discovered` (`"neighbor"` if only seen as someone's CDP/LLDP neighbour), `sources` |
 | segment | `subnet` |
+| device (from `collect scan`) | also `hostname`, `mac`, `os`, `device_type` (`gateway`, `server`, `nas`, `printer`, `camera`, `access point`, `media`, `mobile`, `workstation`, `voip`, `hypervisor`), `open_ports` (list of `{"port", "protocol", "service", "product"}`); one interface with no name holding the scanned address |
 | bedrock | `region`, `models_shown` (models drawn), `models_offered` (what Bedrock lists in the region), `models_in_use`, `granted_all_to` (principals with an Allow on every model), `provisioned_throughput` (list of `{"name", "model_units", "status"}`) |
 | bedrock-model | `model_id`, `model_name`, `provider`, `input_modalities`, `output_modalities`, `inference_types` (`ON_DEMAND`, `PROVISIONED`, `INFERENCE_PROFILE`), `streaming`, `lifecycle`, `source` (`foundation`, `custom`, `imported`), `evidence` (`in use`, `granted`), `granted_to` (role, user or group names), `invocable` (false when the account isn't authorized, entitled or under an agreement), `base_model`, `arn` (custom and imported) |
 | iam | `account_id`, `summary` ("12 roles, 3 users") |
@@ -165,6 +166,7 @@ A peer that wasn't collected (a VPC in another account, a TGW peer in another re
 | AWS Organizations collector | `collectors/aws_org.py` (shares the read-only client and sessions with `aws.py`) |
 | Parsers and offline collection | `parsers/*`, `collectors/files.py` |
 | Live crawler | `collectors/devices.py` |
+| nmap scanner | `collectors/scan.py` (runs the `nmap` program; no Python dependency) |
 | Merge, diff, filter | `merge.py`, `diff.py`, `filter.py` |
 | Layout and renderers | `render/*` |
 

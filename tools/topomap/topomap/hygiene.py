@@ -48,6 +48,20 @@ def write_private(path: str, text: str) -> None:
         os.chmod(path, 0o600)
     except OSError:  # a filesystem without Unix modes
         pass
+    _hand_back(path)
+    if os.stat(folder).st_uid == 0:
+        _hand_back(folder)
+
+
+def _hand_back(path: str) -> None:
+    """Under sudo, give the file to the user who ran sudo: output owned by
+    root can't be read, rendered or deleted without sudo again."""
+    uid, gid = os.environ.get("SUDO_UID", ""), os.environ.get("SUDO_GID", "")
+    if hasattr(os, "geteuid") and os.geteuid() == 0 and uid.isdigit() and gid.isdigit():
+        try:
+            os.chown(path, int(uid), int(gid))
+        except OSError:
+            pass
 
 
 def stdout_file() -> Optional[str]:

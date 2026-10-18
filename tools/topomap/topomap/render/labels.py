@@ -116,7 +116,9 @@ def _details(node: Node) -> List[str]:
         ips = a.get("private_ips") or []
         return [_join(ips[:1] if isinstance(ips, list) else ips), _join(a.get("instance_type"))]
     if k == "device":
-        return [_join(a.get("mgmt_ip")), _join(a.get("model") or a.get("platform"))]
+        return [_join(a.get("mgmt_ip")),
+                _join(a.get("model") or a.get("platform") or a.get("device_type")),
+                *_port_lines(a.get("open_ports"))]
     if k == "segment":
         return [_join(a.get("subnet"))]
     if k == "aws-resource":
@@ -127,11 +129,38 @@ def _details(node: Node) -> List[str]:
     return []
 
 
+<<<<<<< Updated upstream
 def short_type(resource_type: Any) -> str:
     """"AWS::EC2::NetworkInterface" or "ec2:network-interface" -> "network interface"."""
     last = str(resource_type or "").replace("::", ":").split(":")[-1]
     words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", last)
     return words.replace("-", " ").replace("_", " ").lower()
+=======
+PORT_LINES = 5      # lines of ports on a label; the tooltip lists them all
+PORTS_PER_LINE = 2
+
+
+def _port_text(p: Any) -> str:
+    return f"{p.get('port')}/{p['service']}" if p.get("service") else str(p.get("port"))
+
+
+def _port_lines(ports: Any) -> List[str]:
+    """Open ports found by `collect scan`, two to a line: `22/ssh · 80/http`.
+    A port nmap couldn't name is just its number."""
+    if not isinstance(ports, list):
+        return []
+    items = [_port_text(p) for p in ports if isinstance(p, dict)]
+    shown = items[:PORT_LINES * PORTS_PER_LINE]
+    lines = [" · ".join(shown[i:i + PORTS_PER_LINE]) for i in range(0, len(shown), PORTS_PER_LINE)]
+    if len(items) > len(shown):
+        lines.append(f"+{len(items) - len(shown)} more")
+    return lines
+
+
+def _port_tooltip(ports: List[Any]) -> str:
+    return "; ".join(_port_text(p) + (f" ({p['protocol']})" if p.get("protocol", "tcp") != "tcp" else "")
+                     + (f" {p['product']}" if p.get("product") else "") for p in ports)
+>>>>>>> Stashed changes
 
 
 def _policy_line(attrs: Any) -> str:
@@ -174,6 +203,8 @@ def tooltip(node: Node) -> str:
         elif isinstance(value, list):
             if all(not isinstance(v, (dict, list)) for v in value):
                 value = ", ".join(str(v) for v in value)
+            elif key == "open_ports" and all(isinstance(v, dict) for v in value):
+                value = _port_tooltip(value)
             else:
                 value = f"{len(value)} entries"
         out.append(f"{key}: {value}")

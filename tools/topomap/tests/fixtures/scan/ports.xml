@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -Pn --open --top-ports 1000 -T4 -oX - -sV 192.0.2.1 192.0.2.10 192.0.2.20 192.0.2.30" start="1700000010" version="7.95" xmloutputversion="1.05">
+<host><status state="up" reason="user-set"/>
+<address addr="192.0.2.1" addrtype="ipv4"/>
+<hostnames><hostname name="gw.example.net" type="PTR"/></hostnames>
+<ports>
+<port protocol="tcp" portid="53"><state state="open" reason="syn-ack"/><service name="domain" product="dnsmasq" version="2.90" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="80"><state state="open" reason="syn-ack"/><service name="http" product="lighttpd" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="443"><state state="open" reason="syn-ack"/><service name="https" method="table" conf="3"/></port>
+</ports>
+</host>
+<host><status state="up" reason="user-set"/>
+<address addr="192.0.2.10" addrtype="ipv4"/>
+<hostnames><hostname name="lab-server.example.net" type="PTR"/></hostnames>
+<ports>
+<port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="9.8" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="8080"><state state="open" reason="syn-ack"/><service name="http" product="nginx" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="9999"><state state="open" reason="syn-ack"/></port>
+<port protocol="tcp" portid="25"><state state="closed" reason="reset"/><service name="smtp" method="table" conf="3"/></port>
+</ports>
+<os><osmatch name="Linux 5.0 - 6.2" accuracy="95"/><osmatch name="Linux 4.15" accuracy="90"/></os>
+</host>
+<host><status state="up" reason="user-set"/>
+<address addr="192.0.2.20" addrtype="ipv4"/>
+<ports>
+<port protocol="tcp" portid="631"><state state="open" reason="syn-ack"/><service name="ipp" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="9100"><state state="open" reason="syn-ack"/><service name="jetdirect" method="table" conf="3"/></port>
+</ports>
+</host>
+<host><status state="up" reason="user-set"/>
+<address addr="192.0.2.30" addrtype="ipv4"/>
+</host>
+</nmaprun>
