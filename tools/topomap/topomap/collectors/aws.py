@@ -378,6 +378,10 @@ class _Scope:
     def warn(self, message: str) -> None:
         where = f"{self.account_id} {self.region}".strip()
         self.topo.warn(f"aws {where}: {message}")
+        if self.region and self.region_node in self.topo.nodes:
+            # What's in this region is only partly known: keep it on the
+            # diagram even if nothing was found.
+            self.topo.nodes[self.region_node].attrs["incomplete"] = True
 
     def hint(self, id: str, **attrs: Any) -> str:
         known = self.hints.setdefault(id, {})
@@ -984,6 +988,19 @@ def _reparent_shared(topo: Topology) -> None:
             node.parent = home
 
 
+def _prune_empty_regions(topo: Topology) -> None:
+    """Drop regions where nothing was found. Most accounts use one or two
+    regions, and a box per empty region buries the ones that matter; in an
+    organization view it also lets a resource-less account draw as an icon.
+    Regions that couldn't be fully read (`incomplete`) stay, since empty
+    there means unknown. The region list stays in meta."""
+    parents = {n.parent for n in topo.nodes.values()}
+    linked = {end for l in topo.links.values() for end in (l.source, l.target)}
+    for node in topo.by_kind(AWS_REGION):
+        if node.id not in parents and node.id not in linked and not node.attrs.get("incomplete"):
+            del topo.nodes[node.id]
+
+
 def _fill_labels(topo: Topology) -> None:
     """Nodes only ever seen without a label get their resource ID."""
     for node in topo.nodes.values():
@@ -1006,6 +1023,7 @@ def _assemble(scopes: List[_Scope], warnings: List[str], accounts: List[str],
                 known.setdefault(key, value)
     _add_placeholders(topo, hints)
     _reparent_shared(topo)
+    _prune_empty_regions(topo)
     _fill_labels(topo)
     meta: Dict[str, Any] = {
         "collector": "aws",

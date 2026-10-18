@@ -9,6 +9,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from topomap.collectors import aws  # noqa: E402
+from topomap.model import Topology  # noqa: E402
 
 try:
     import boto3
@@ -209,6 +210,20 @@ class CoreTest(AwsTestCase):
         again.meta["collected_at"] = topo.meta["collected_at"]
         self.assertEqual(again.dumps(), topo.dumps())
 
+    def test_empty_regions_are_pruned(self):
+        from topomap.collectors.aws import _prune_empty_regions
+        topo = Topology()
+        account = f"aws:account:{ACCOUNT}"
+        topo.add_node(account, "account", account_id=ACCOUNT)
+        for region in ("us-east-1", "eu-west-1", "ap-south-1"):
+            topo.add_node(f"aws:region:{ACCOUNT}:{region}", "region", region, account)
+        topo.add_node("aws:vpc:vpc-1", "vpc", parent=f"aws:region:{ACCOUNT}:us-east-1")
+        topo.nodes[f"aws:region:{ACCOUNT}:ap-south-1"].attrs["incomplete"] = True
+        _prune_empty_regions(topo)
+        self.assertEqual(sorted(n.id for n in topo.by_kind("region")),
+                         [f"aws:region:{ACCOUNT}:ap-south-1", f"aws:region:{ACCOUNT}:us-east-1"])
+        self.assertEqual(topo.validate(), [])
+
     def test_default_regions_come_from_describe_regions(self):
         regions = {"Regions": [{"RegionName": "us-west-2"}, {"RegionName": REGION}]}
         self.overrides[("ec2", None)] = lambda c: Overlay(c, describe_regions=regions)
@@ -238,6 +253,7 @@ class PartialFailureTest(AwsTestCase):
         self.assertIn(f"aws:vpc:{ids['vpc']}", topo.nodes)
         self.assertIn(f"aws:region:{ACCOUNT}:us-west-2", topo.nodes)
         self.assertEqual(topo.children(f"aws:region:{ACCOUNT}:us-west-2"), [])
+        self.assertIs(topo.nodes[f"aws:region:{ACCOUNT}:us-west-2"].attrs["incomplete"], True)
         self.assertEqual(topo.meta["warnings"], [
             f"aws {ACCOUNT} us-west-2: cannot describe VPCs (UnauthorizedOperation); "
             "skipped EC2 in this region"])

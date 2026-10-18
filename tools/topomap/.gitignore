@@ -1,0 +1,9 @@
+# Collected topologies and rendered diagrams describe real networks: keep
+# them out of the repo (see AGENTS.md). Commit fixtures under tests/ only.
+/*.json
+/*.drawio
+/*.svg
+/*.mmd
+/*.dot
+/*.png
+/out/

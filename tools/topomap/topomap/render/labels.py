@@ -42,6 +42,7 @@ def _details(node: Node) -> List[str]:
         return [_join(a.get("account_id")),
                 "management account" if a.get("management") else "",
                 status.lower() if status and status.upper() != "ACTIVE" else "",
+                _delegated_line(a),
                 _policy_line(a)]
     if k == "organization":
         return [_join(a.get("org_id"))]
@@ -86,6 +87,14 @@ def _policy_line(attrs: Any) -> str:
     """The SCPs on an organization node, the policies people ask about first."""
     scps = (attrs.get("policies") or {}).get("scp") if isinstance(attrs.get("policies"), dict) else None
     return f"SCP: {_join(scps)}" if scps else ""
+
+
+def _delegated_line(attrs: Any) -> str:
+    """Services an account administers for the organization, by short name
+    ("config.amazonaws.com" -> "config")."""
+    services = attrs.get("delegated_admin_for") or []
+    names = [str(s).split(".")[0] for s in services]
+    return f"delegated admin: {_join(names)}" if names else ""
 
 
 def node_title(node: Node) -> str:

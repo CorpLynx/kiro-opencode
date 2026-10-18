@@ -77,6 +77,7 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
   - `--org-role-name NAME` assumes `role/NAME` in every active account of your AWS Organization.
 - **Speed:** regions and accounts are collected in parallel (`--workers`).
 - **Failures:** a denied region or service becomes one warning and the rest is still collected.
+- **Empty regions are left out,** so an account shows only the regions where something was found. A region that couldn't be fully read is kept and marked `incomplete`.
 - **Peers outside the collected estate** (a VPC in another account, a TGW peer) get a dashed placeholder.
 - VPN pre-shared keys and customer gateway configurations are never read.
 
@@ -149,6 +150,10 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
 - **Layout:** read top to bottom: internet, then edge gateways and firewalls, then routers, core switches, access switches and endpoints.
 - **Output is deterministic:** the same input gives byte-identical output.
 - **Options:** `--direction LR` reads left to right, `--title` adds a title, and `--no-link-labels` drops port and subnet labels.
+
+### Keep collected data out of git
+
+Topology JSON and diagrams describe real networks: account IDs, ARNs, addresses and tags. Write them outside the repo, or in `tools/topomap/`, where `.gitignore` keeps `*.json`, `*.drawio`, `*.svg`, `*.mmd`, `*.dot`, `*.png` and `out/` from being committed.
 
 ### Sharing diagrams safely
 

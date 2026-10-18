@@ -190,6 +190,7 @@ class OrgTest(unittest.TestCase):
         svg = render(topo, "svg")
         ET.fromstring(svg)
         self.assertIn("SCP: DenyRegions", svg)
+        self.assertIn("delegated admin: guardduty", svg)
         self.assertIn("subgraph", render(topo, "mermaid"))
 
     def test_cli(self):
