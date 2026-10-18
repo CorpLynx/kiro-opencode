@@ -1,0 +1,126 @@
+core1#show version
+Cisco IOS XE Software, Version 17.09.04a
+Cisco IOS Software [Cupertino], ISR Software (X86_64_LINUX_IOSD-UNIVERSALK9-M), Version 17.9.4a, RELEASE SOFTWARE (fc3)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2023 by Cisco Systems, Inc.
+Compiled Fri 20-Oct-23 10:44 by mcpre
+
+ROM: 16.12(2r)
+
+core1 uptime is 12 weeks, 3 days, 4 hours, 5 minutes
+Uptime for this control processor is 12 weeks, 3 days, 4 hours, 7 minutes
+System returned to ROM by Reload Command
+System image file is "bootflash:packages.conf"
+Last reload reason: Reload Command
+
+cisco ISR4451-X/K9 (2RU) processor with 7090103K/6147K bytes of memory.
+Processor board ID FGL000000A1
+Router operating mode: Autonomous
+4 Gigabit Ethernet interfaces
+32768K bytes of non-volatile configuration memory.
+16777216K bytes of physical memory.
+
+Configuration register is 0x2102
+core1#show cdp neighbors detail
+-------------------------
+Device ID: dist1.example.net
+Entry address(es): 
+  IP address: 10.20.0.2
+Platform: cisco C9300-48P,  Capabilities: Router Switch IGMP 
+Interface: GigabitEthernet0/0/1,  Port ID (outgoing port): GigabitEthernet1/0/48
+Holdtime : 155 sec
+
+Version :
+Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.9.4a, RELEASE SOFTWARE (fc3)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2023 by Cisco Systems, Inc.
+Compiled Fri 20-Oct-23 10:44 by mcpre
+
+advertisement version: 2
+VTP Management Domain: ''
+Native VLAN: 1
+Duplex: full
+Management address(es): 
+  IP address: 10.20.0.2
+
+-------------------------
+Device ID: isp-edge.example.net
+Entry address(es): 
+  IP address: 192.0.2.10
+Platform: cisco ISR4331/K9,  Capabilities: Router IGMP 
+Interface: GigabitEthernet0/0/0,  Port ID (outgoing port): GigabitEthernet0/0/2
+Holdtime : 170 sec
+
+Version :
+Cisco IOS Software [Cupertino], ISR Software (X86_64_LINUX_IOSD-UNIVERSALK9-M), Version 17.9.4a, RELEASE SOFTWARE (fc3)
+
+advertisement version: 2
+Duplex: full
+Management address(es): 
+  IP address: 192.0.2.10
+
+
+Total cdp entries displayed : 2
+core1#show lldp neighbors detail
+------------------------------------------------
+Local Intf: Gi0/0/1
+Chassis id: 0000.5e00.5302
+Port id: Gi1/0/48
+Port Description: uplink to core1
+System Name: dist1.example.net
+
+System Description: 
+Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.9.4a, RELEASE SOFTWARE (fc3)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2023 by Cisco Systems, Inc.
+Compiled Fri 20-Oct-23 10:44 by mcpre
+
+Time remaining: 101 seconds
+System Capabilities: B,R
+Enabled Capabilities: B,R
+Management Addresses:
+    IP: 10.20.0.2
+Auto Negotiation - not supported
+Physical media capabilities - not advertised
+Media Attachment Unit type - not advertised
+Vlan ID: - not advertised
+
+
+Total entries displayed: 1
+core1#show ip interface
+GigabitEthernet0/0/0 is up, line protocol is up
+  Internet address is 192.0.2.9/30
+  Broadcast address is 255.255.255.255
+  Address determined by non-volatile memory
+  MTU is 1500 bytes
+  Helper address is not set
+  Directed broadcast forwarding is disabled
+  Outgoing Common access list is not set 
+  Outgoing access list is not set
+  Inbound Common access list is not set 
+  Inbound  access list is not set
+  Proxy ARP is enabled
+GigabitEthernet0/0/1 is up, line protocol is up
+  Internet address is 10.20.1.1/30
+  Broadcast address is 255.255.255.255
+  Address determined by non-volatile memory
+  MTU is 1500 bytes
+  Helper address is not set
+  Directed broadcast forwarding is disabled
+  Outgoing access list is not set
+  Inbound  access list is not set
+  Proxy ARP is enabled
+GigabitEthernet0/0/2 is administratively down, line protocol is down
+  Internet protocol processing disabled
+GigabitEthernet0 is up, line protocol is up
+  Internet address is 10.20.250.1/24
+  Broadcast address is 255.255.255.255
+  Address determined by non-volatile memory
+  MTU is 1500 bytes
+  VPN Routing/Forwarding "Mgmt-intf"
+Loopback0 is up, line protocol is up
+  Internet address is 10.20.0.1/32
+  Broadcast address is 255.255.255.255
+  Address determined by non-volatile memory
+  MTU is 1514 bytes
+core1#show ipv6 interface

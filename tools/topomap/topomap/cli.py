@@ -80,8 +80,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     except KeyboardInterrupt:
         return 130
     except (OSError, ValueError, RuntimeError) as e:
+        # 2, like argparse: 1 is reserved for "differences found" (diff).
         print(f"topomap: error: {e}", file=sys.stderr)
-        return 1
+        return 2
     if isinstance(result, Topology):
         write_topology(result, args.output)
         for warning in result.meta.get("warnings", []):
