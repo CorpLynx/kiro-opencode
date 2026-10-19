@@ -7,6 +7,7 @@ A collection of standalone tools and editor/agent plugins. Each project lives in
 | Project | Kind | What it does |
 | --- | --- | --- |
 | [`tools/ip-redactor`](tools/ip-redactor) | CLI (Python) | Structure-preserving IPv4/IPv6 redaction for configs, logs, Office/Visio files and packet captures. It is keyed and reversible, and subnets stay together. |
+| [`tools/ipam-infoblox`](tools/ipam-infoblox) | CLI (Python) | Turns an AWS IPAM export (CSV or Excel), or the IPAM itself read through the AWS API, into an Infoblox CSV import: cleans it, chooses network containers or networks, and checks it read-only against the Infoblox API for ranges already there and conflicts, with a report for the change review. |
 | [`tools/topomap`](tools/topomap) | CLI (Python) | Gathers network and AWS topology automatically (AWS APIs, optionally every resource in an account, AWS Organizations OUs and accounts, SSH crawl over CDP/LLDP, or saved command output and config backups), stitches on-prem to AWS, and draws it as draw.io, SVG, Mermaid or DOT. |
 | [`infra/`](infra/) | Terraform | Cheap AWS estate (VPC, subnets, internet gateway, EC2, S3 VPC endpoint) that `topomap collect aws` gathers. Reviewed by hand, not in CI: it creates real billable resources and needs AWS credentials. |
 
@@ -25,7 +26,6 @@ These projects are still at the top level on their branch. They move into the la
 | Project | Kind | Notes |
 | --- | --- | --- |
 | `plugins/opencode-ipredact` | OpenCode plugin | Keeps real addresses away from the model: messages are redacted before they are sent, and addresses are restored when tools run and in replies. Built on `tools/ip-redactor`. |
-| `tools/ipam-infoblox` | CLI | Converts an AWS IPAM export into an Infoblox import, checking ranges against the Infoblox API first. |
 
 ## Layout
 
