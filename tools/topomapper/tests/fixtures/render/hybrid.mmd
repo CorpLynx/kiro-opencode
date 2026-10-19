@@ -54,45 +54,33 @@ flowchart TB
   end
   subgraph n_aws_vpc_vpc_0ext["partner (vpc-0ext)<br>172.16.0.0/16"]
   end
-  n_ext_external_internet(["Internet"])
+  n_net_device_acc1["acc1<br>10.10.0.21"]
+  n_net_device_acc2["acc2<br>10.10.0.22"]
+  n_net_device_ap1("ap1<br>10.10.0.30")
+  n_net_device_core1["core1<br>10.10.0.11"]
+  n_net_device_core2["core2<br>10.10.0.12"]
+  n_net_device_fw1{{"fw1<br>10.10.0.1"}}
+  n_net_device_lab1["R#amp;D #lt;lab#gt; #quot;core#quot; 'x'<br>10.20.0.99"]
+  n_net_device_phone1("phone1<br>10.20.0.50")
+  n_net_device_rtr1(("rtr1<br>10.10.0.2"))
+  n_net_device_rtr2(("rtr2<br>10.10.0.3"))
+  n_net_device_srv1("srv1<br>10.20.0.10<br>22/ssh · 80/http<br>443/https · 5432/postgresql")
   n_net_segment_10_10_0_0_24[/"10.10.0.0/24"/]
-  subgraph n_net_site_hq["HQ"]
-    n_net_device_acc1["acc1<br>10.255.0.21<br>C9300"]
-    n_net_device_acc2["acc2<br>10.255.0.22<br>C9300"]
-    n_net_device_ap1("ap1<br>10.255.1.10<br>AIR-AP2802I")
-    n_net_device_core1["core1<br>10.255.0.11<br>C9500"]
-    n_net_device_core2["core2<br>10.255.0.12<br>C9500"]
-    n_net_device_fw1{{"fw1<br>10.255.0.1<br>ASA5516"}}
-    n_net_device_lab1["R#amp;D #lt;lab#gt; #quot;core#quot; 'x'<br>10.255.0.99"]
-    n_net_device_phone1("phone1<br>CP-8845")
-    n_net_device_rtr1(("rtr1<br>10.255.0.2<br>ISR4331"))
-    n_net_device_rtr2(("rtr2<br>10.255.0.3<br>ISR4331"))
-    n_net_device_srv1("srv1<br>10.20.0.10")
-  end
+  n_net_segment_10_20_0_0_24[/"10.20.0.0/24"/]
   n_aws_dx_connection_dxcon_01 ==>|dxvif-01<br>VLAN 101 · transit| n_aws_dx_gateway_dxgw_01
   n_aws_dx_gateway_dxgw_01 ===|dxgw-assoc-01| n_aws_transit_gateway_tgw_01
-  n_net_device_rtr1 -.-|10.0.255.0/30| n_net_device_rtr2
-  n_ext_external_internet --- n_net_device_fw1
-  n_net_device_acc1 --- n_net_device_ap1
-  n_net_device_acc1 --- n_net_device_phone1
-  n_net_device_acc1 --- n_net_device_core1
-  n_net_device_acc1 --- n_net_device_core2
-  n_net_device_acc2 --- n_net_device_srv1
-  n_net_device_acc2 ---|R#amp;D #lt;lab#gt; #quot;core#quot; 'x'| n_net_device_lab1
-  n_net_device_acc2 --- n_net_device_core1
-  n_net_device_acc2 --- n_net_device_core2
-  n_net_device_core1 --- n_net_device_core2
-  n_net_device_core1 --- n_net_device_core2
-  n_net_device_core1 --- n_net_device_rtr1
-  n_net_device_core1 --- n_net_device_rtr2
-  n_net_device_core2 --- n_net_device_rtr1
-  n_net_device_core2 --- n_net_device_rtr2
-  n_net_device_fw1 --- n_net_device_rtr1
-  n_net_device_fw1 --- n_net_device_rtr2
+  n_net_device_acc1 ---|10.10.0.21| n_net_segment_10_10_0_0_24
+  n_net_device_acc2 ---|10.10.0.22| n_net_segment_10_10_0_0_24
+  n_net_device_ap1 ---|10.10.0.30| n_net_segment_10_10_0_0_24
+  n_net_device_core1 ---|10.10.0.11| n_net_segment_10_10_0_0_24
+  n_net_device_core2 ---|10.10.0.12| n_net_segment_10_10_0_0_24
   n_net_device_fw1 ---|10.10.0.1| n_net_segment_10_10_0_0_24
+  n_net_device_fw1 ---|10.20.0.1| n_net_segment_10_20_0_0_24
+  n_net_device_lab1 ---|10.20.0.99| n_net_segment_10_20_0_0_24
+  n_net_device_phone1 ---|10.20.0.50| n_net_segment_10_20_0_0_24
   n_net_device_rtr1 ---|10.10.0.2| n_net_segment_10_10_0_0_24
   n_net_device_rtr2 ---|10.10.0.3| n_net_segment_10_10_0_0_24
-  n_aws_customer_gateway_cgw_01 -.-|cgw-ip 203.0.113.10| n_net_device_rtr1
+  n_net_device_srv1 ---|10.20.0.10| n_net_segment_10_20_0_0_24
   n_aws_transit_gateway_tgw_01 ---|tgw-attach-00| n_aws_vpc_vpc_00
   n_aws_transit_gateway_tgw_01 ---|tgw-attach-01| n_aws_vpc_vpc_01
   n_aws_vpc_vpc_00 -.-|pcx-01| n_aws_vpc_vpc_01
@@ -102,9 +90,7 @@ flowchart TB
   class n_aws_dx_gateway_dxgw_01,n_aws_customer_gateway_cgw_01,n_aws_dx_connection_dxcon_01,n_aws_transit_gateway_tgw_01,n_aws_nat_gateway_nat_00,n_aws_internet_gateway_igw_00,n_aws_nat_gateway_nat_01,n_aws_internet_gateway_igw_01,n_aws_vpc_endpoint_vpce_01,n_aws_vpn_gateway_vgw_01 aws
   classDef ec2 fill:#FFF1E5,stroke:#ED7100,color:#232F3E
   class n_aws_instance_i_0000,n_aws_instance_i_0001,n_aws_instance_i_0010,n_aws_instance_i_0011,n_aws_instance_i_0100,n_aws_instance_i_0101,n_aws_instance_i_0110,n_aws_instance_i_0111 ec2
-  classDef ext fill:#EEEEEE,stroke:#8A929C,color:#232F3E,stroke-dasharray:4 3
-  class n_ext_external_internet ext
   classDef fw fill:#F6DEDA,stroke:#B03A2E,color:#232F3E
   class n_net_device_fw1 fw
   classDef net fill:#EAF2F7,stroke:#005073,color:#232F3E
-  class n_net_segment_10_10_0_0_24,n_net_device_acc1,n_net_device_acc2,n_net_device_ap1,n_net_device_core1,n_net_device_core2,n_net_device_lab1,n_net_device_phone1,n_net_device_rtr1,n_net_device_rtr2,n_net_device_srv1 net
+  class n_net_device_acc1,n_net_device_acc2,n_net_device_ap1,n_net_device_core1,n_net_device_core2,n_net_device_lab1,n_net_device_phone1,n_net_device_rtr1,n_net_device_rtr2,n_net_device_srv1,n_net_segment_10_10_0_0_24,n_net_segment_10_20_0_0_24 net

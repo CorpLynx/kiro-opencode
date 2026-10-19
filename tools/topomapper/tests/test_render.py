@@ -8,7 +8,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from topomapper.model import Topology, node_id, union  # noqa: E402
+from topomapper.model import Topology, union  # noqa: E402
 from topomapper.render import infer_format, render  # noqa: E402
 from topomapper.render.layout import layout  # noqa: E402
 
@@ -81,74 +81,53 @@ def aws_topology() -> Topology:
 
 
 def network_topology() -> Topology:
+    """A LAN the way `topomapper scan` sees it: devices on the subnets they
+    answered on, with the roles and ports nmap suggested."""
     t = Topology({"collector": "test"})
-    site = t.add_node(node_id("net", "site", "hq"), "site", "HQ").id
+    mgmt = t.add_node("net:segment:10.10.0.0/24", "segment", "10.10.0.0/24", subnet="10.10.0.0/24").id
+    hosts = t.add_node("net:segment:10.20.0.0/24", "segment", "10.20.0.0/24", subnet="10.20.0.0/24").id
 
-    def dev(name, role, mgmt, model, parent=site):
-        return t.add_node(f"net:device:{name}", "device", name, parent, role=role,
-                          mgmt_ip=mgmt, model=model).id
+    def dev(name, role, segment, address, **attrs):
+        nid = t.add_node(f"net:device:{name}", "device", name, role=role, mgmt_ip=address, **attrs).id
+        t.add_link("segment-member", nid, segment, address=address)
+        return nid
 
-    fw = dev("fw1", "firewall", "10.255.0.1", "ASA5516")
-    r1 = dev("rtr1", "router", "10.255.0.2", "ISR4331")
-    r2 = dev("rtr2", "router", "10.255.0.3", "ISR4331")
-    c1 = dev("core1", "switch", "10.255.0.11", "C9500")
-    c2 = dev("core2", "switch", "10.255.0.12", "C9500")
-    a1 = dev("acc1", "switch", "10.255.0.21", "C9300")
-    a2 = dev("acc2", "switch", "10.255.0.22", "C9300")
-    ap = dev("ap1", "wireless", "10.255.1.10", "AIR-AP2802I")
-    ph = dev("phone1", "phone", "", "CP-8845")
-    sv = dev("srv1", "server", "10.20.0.10", "")
-    odd = dev("lab1", "unknown", "10.255.0.99", SPECIAL)
+    dev("fw1", "firewall", mgmt, "10.10.0.1", vendor="Cisco")
+    dev("rtr1", "router", mgmt, "10.10.0.2")
+    dev("rtr2", "router", mgmt, "10.10.0.3")
+    dev("core1", "switch", mgmt, "10.10.0.11")
+    dev("core2", "switch", mgmt, "10.10.0.12")
+    dev("acc1", "switch", mgmt, "10.10.0.21")
+    dev("acc2", "switch", mgmt, "10.10.0.22")
+    dev("ap1", "wireless", mgmt, "10.10.0.30")
+    t.add_link("segment-member", "net:device:fw1", hosts, address="10.20.0.1")
+    dev("phone1", "phone", hosts, "10.20.0.50")
+    dev("srv1", "server", hosts, "10.20.0.10", os="Linux 5.X",
+        open_ports=[{"port": p, "protocol": "tcp", "service": svc}
+                    for p, svc in ((22, "ssh"), (80, "http"), (443, "https"), (5432, "postgresql"))])
+    odd = dev("lab1", "unknown", hosts, "10.20.0.99", device_type=SPECIAL)
     t.nodes[odd].label = SPECIAL
-    inet = t.add_node("ext:external:internet", "external", "Internet").id
-
-    def cable(a, ap_, b, bp, **kw):
-        t.add_link("physical", a, b, source_port=ap_, target_port=bp, protocols=["cdp"], **kw)
-
-    cable(fw, "GigabitEthernet0/1", r1, "GigabitEthernet0/0/0")
-    cable(fw, "GigabitEthernet0/2", r2, "GigabitEthernet0/0/0")
-    for r in (r1, r2):
-        cable(r, "GigabitEthernet0/0/1", c1, f"TenGigabitEthernet1/0/{1 if r == r1 else 2}")
-        cable(r, "GigabitEthernet0/0/2", c2, f"TenGigabitEthernet1/0/{1 if r == r1 else 2}")
-    cable(c1, "TenGigabitEthernet1/0/10", c2, "TenGigabitEthernet1/0/10")
-    cable(c1, "TenGigabitEthernet1/0/11", c2, "TenGigabitEthernet1/0/11")
-    for a in (a1, a2):
-        cable(c1, f"TenGigabitEthernet1/0/2{a[-1]}", a, "TenGigabitEthernet1/1/1")
-        cable(c2, f"TenGigabitEthernet1/0/2{a[-1]}", a, "TenGigabitEthernet1/1/2")
-    cable(a1, "GigabitEthernet1/0/1", ap, "GigabitEthernet0")
-    cable(a1, "GigabitEthernet1/0/2", ph, "Port 1")
-    cable(a2, "GigabitEthernet1/0/1", sv, "eth0")
-    cable(a2, "GigabitEthernet1/0/48", odd, "eth0", subnets=[SPECIAL])
-    t.add_link("physical", inet, fw, target_port="GigabitEthernet0/0")
-    t.add_link("l3", r1, r2, source_port="Tunnel0", target_port="Tunnel0", label="10.0.255.0/30",
-               subnet="10.0.255.0/30", addresses={r1: "10.0.255.1", r2: "10.0.255.2"})
-    seg = t.add_node("net:segment:10.10.0.0/24", "segment", "10.10.0.0/24", subnet="10.10.0.0/24").id
-    for d, ip in ((fw, "10.10.0.1"), (r1, "10.10.0.2"), (r2, "10.10.0.3")):
-        t.add_link("segment-member", d, seg, source_port="Vlan10", address=ip)
     return t
 
 
 def hybrid_topology() -> Topology:
     t = union([aws_topology(), network_topology()])
     t.meta = {"collector": "test"}
-    t.add_link("stitch", "net:device:rtr1", "aws:customer-gateway:cgw-01", rule="cgw-ip",
-               address="203.0.113.10")
     return t
 
 
-def big_topology(n_sites: int = 12, per_site: int = 24) -> Topology:
+def big_topology(n_segments: int = 12, per_segment: int = 24) -> Topology:
     t = Topology()
-    for s in range(n_sites):
-        site = t.add_node(f"net:site:s{s}", "site", f"site{s}").id
-        core = t.add_node(f"net:device:s{s}-core", "device", f"s{s}-core", site, role="switch").id
-        rtr = t.add_node(f"net:device:s{s}-rtr", "device", f"s{s}-rtr", site, role="router").id
-        t.add_link("physical", rtr, core, source_port="Gi0/1", target_port="Te1/1")
-        for i in range(per_site - 2):
-            acc = t.add_node(f"net:device:s{s}-acc{i}", "device", f"s{s}-acc{i}", site,
-                             role="switch" if i % 3 == 0 else "phone").id
-            t.add_link("physical", core, acc, source_port=f"Te1/{i + 2}", target_port="Gi0/1")
+    for s in range(n_segments):
+        seg = t.add_node(f"net:segment:10.{s}.0.0/24", "segment", f"10.{s}.0.0/24").id
+        rtr = t.add_node(f"net:device:s{s}-rtr", "device", f"s{s}-rtr", role="router").id
+        t.add_link("segment-member", rtr, seg, address=f"10.{s}.0.1")
         if s:
-            t.add_link("l3", rtr, f"net:device:s{s - 1}-rtr", subnet=f"10.{s}.0.0/30")
+            t.add_link("segment-member", rtr, f"net:segment:10.{s - 1}.0.0/24", address=f"10.{s - 1}.0.254")
+        for i in range(per_segment - 1):
+            host = t.add_node(f"net:device:s{s}-h{i}", "device", f"s{s}-h{i}",
+                              role=("switch", "phone", "server")[i % 3]).id
+            t.add_link("segment-member", host, seg, address=f"10.{s}.0.{i + 10}")
     return t
 
 
@@ -247,7 +226,8 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(len(vpn), 1)
         self.assertIn("1/2 tunnels up", vpn[0][2])
         self.assertIn("dxvif-01", text)
-        self.assertIn("GigabitEthernet0/0/1", text)
+        member = [c for c in cells.values() if c[3].get("edge") and "10.20.0.1" == c[2]]
+        self.assertEqual(len(member), 1)
         plain = drawio_cells(parse(render(hybrid_topology(), "drawio", link_labels=False)))
         for _, _, value, el in plain.values():
             if el.get("edge") == "1":
@@ -306,14 +286,11 @@ class RenderTest(unittest.TestCase):
 
     def test_network_reads_top_down(self):
         b = layout(network_topology()).boxes
-        order = ["ext:external:internet", "net:device:fw1", "net:device:rtr1", "net:device:core1",
-                 "net:device:acc1", "net:device:ap1"]
-        ys = [b[n].y for n in order if b[n].parent == "net:site:hq"]
+        order = ["net:device:fw1", "net:device:rtr1", "net:device:core1", "net:device:acc1",
+                 "net:device:ap1"]
+        ys = [b[n].y for n in order]
         self.assertEqual(ys, sorted(ys))
-        self.assertLess(b["net:device:fw1"].y, b["net:device:rtr1"].y)
-        self.assertLess(b["net:device:rtr1"].y, b["net:device:core1"].y)
-        self.assertLess(b["net:device:core1"].y, b["net:device:acc1"].y)
-        self.assertLess(b["net:device:acc1"].y, b["net:device:ap1"].y)
+        self.assertLess(b["net:device:rtr1"].y, b["net:device:acc1"].y)
         self.assertEqual(b["net:device:core1"].y, b["net:device:core2"].y)
 
     def test_ancestor_links_are_not_drawn(self):
@@ -323,16 +300,17 @@ class RenderTest(unittest.TestCase):
             self.assertGreaterEqual(len(route.points), 2)
 
     def test_parallel_links_are_separated(self):
-        lay = layout(network_topology())
-        pair = [r for r in lay.routes if {r.link.source, r.link.target} ==
-                {"net:device:core1", "net:device:core2"}]
+        topo = aws_topology()  # a second, redundant VPN between the same gateways
+        topo.add_link("vpn", "aws:customer-gateway:cgw-01", "aws:transit-gateway:tgw-01",
+                      key="vpn-02", vpn_id="vpn-02", state="available")
+        pair = [r for r in layout(topo).routes if r.link.kind == "vpn"]
         self.assertEqual(len(pair), 2)
         self.assertNotEqual(pair[0].points, pair[1].points)
 
     def test_bad_parents_do_not_break_layout(self):
         t = Topology()
-        t.add_node("a", "site", "a", "b")
-        t.add_node("b", "site", "b", "a")
+        t.add_node("a", "vpc", "a", "b")
+        t.add_node("b", "vpc", "b", "a")
         t.add_node("c", "device", "c", "missing", role="router")
         lay = self.assert_geometry(t)
         self.assertEqual(set(lay.boxes), {"a", "b", "c"})
@@ -369,8 +347,7 @@ class RenderTest(unittest.TestCase):
         self.assertTrue(text.startswith("flowchart LR\n"))
         self.assertIn("subgraph n_aws_vpc_vpc_00[", text)
         subgraphs = len(re.findall(r"^\s*subgraph ", text, re.M))
-        containers = [n for n in topo if n.kind in ("account", "region", "vpc", "az", "subnet",
-                                                    "site")]
+        containers = [n for n in topo if n.kind in ("account", "region", "vpc", "az", "subnet")]
         self.assertEqual(subgraphs, len(containers))
         self.assertEqual(subgraphs, len(re.findall(r"^\s*end$", text, re.M)))
         edges = [l for l in text.splitlines() if re.search(r" (---|-\.-|===|-->|-\.->|==>)", l)]

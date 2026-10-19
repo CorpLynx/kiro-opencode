@@ -116,7 +116,7 @@ def _check_kinds(option: str, kinds: Iterable[str]) -> None:
 def _in_namespace(topo: Topology, prefix: str) -> Set[str]:
     """Nodes whose ID is under `prefix`, plus `ext:` nodes linked to one of
     them: the internet beside an internet gateway is context, not another
-    estate. Stitch links cross namespaces, so they drop out on their own."""
+    estate. Links that cross namespaces drop out on their own."""
     inside = {i for i in topo.nodes if i.startswith(prefix)}
     external = set()
     for link in topo.links.values():

@@ -235,12 +235,12 @@ class HardeningTest(unittest.TestCase):
         names = [f"host{chr(97 + i)}" for i in range(11)]
         for name in names:
             t.add_node(f"net:device:{name}", "device", name)
-        t.add_link("physical", "net:device:hostb", "net:device:hostk", source_port="e0",
+        t.add_link("vpc-peering", "net:device:hostb", "net:device:hostk", source_port="e0",
                    target_port="e1")
         out = anon.anonymize(t, ips="keep")
         (link,) = out.links.values()
         self.assertLess(link.source, link.target)
-        self.assertEqual(link.id, link_id("physical", link.source, link.target,
+        self.assertEqual(link.id, link_id("vpc-peering", link.source, link.target,
                                           link.attrs["source_port"], link.attrs["target_port"]))
         self.assertEqual((link.attrs["source_port"], link.attrs["target_port"]), ("e1", "e0"))
         self.assertEqual(out.validate(), [])

@@ -5,16 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "topomapper"
 version = "0.1.0"
-description = "Gather network and AWS topology automatically, merge it, and draw it (draw.io, SVG, Mermaid, DOT)"
+description = "Gather AWS and nmap-scanned network topology automatically, merge it, and draw it (draw.io, SVG, Mermaid, DOT)"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 
 [project.optional-dependencies]
 aws = ["boto3>=1.26"]
-devices = ["netmiko>=4.1"]
-all = ["boto3>=1.26", "netmiko>=4.1"]
-test = ["boto3>=1.26", "moto[ec2,sts,iam,organizations,directconnect,eks]>=5.0", "netmiko>=4.1"]
+all = ["boto3>=1.26"]
+test = ["boto3>=1.26", "moto[ec2,sts,iam,organizations,directconnect,eks]>=5.0"]
 
 [project.scripts]
 topomapper = "topomapper.cli:main"

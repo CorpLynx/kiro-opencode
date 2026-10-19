@@ -1,6 +1,0 @@
-hostname,site
-edge1,dc1
-core*,dc1
-dist1,dc1
-leaf1,dc1
-wan1,dc1-wan

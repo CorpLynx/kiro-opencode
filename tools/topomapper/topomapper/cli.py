@@ -4,7 +4,7 @@
     topomapper aws --profile prod -o aws.json -o aws.svg   ...and keep the topology too
     topomapper merge org.json aws.json net.json -o all.drawio
 
-Sources (aws, aws-org, files, devices, scan) and the commands that work on
+Sources (aws, aws-org, scan) and the commands that work on
 topologies (merge, filter, anonymize) all take `-o`, repeatable, and its
 extension says what to write: `.json` (or stdout) is the topology itself,
 and `.drawio`, `.svg`, `.mmd` or `.dot` is the diagram, drawn on the spot.
@@ -18,7 +18,7 @@ Every subcommand lives in its own module, which exposes:
     add_arguments(parser) -> None   its own options (not -o; the CLI adds that)
     run(args) -> Topology | int     a Topology to write, or an exit status
 
-Modules must not import optional dependencies (boto3, netmiko) at import
+Modules must not import optional dependencies (boto3) at import
 time, so `topomapper --help` works with only the standard library.
 """
 
@@ -38,8 +38,6 @@ from .render import EXTENSIONS as DIAGRAMS
 COLLECTORS = {
     "aws": "topomapper.collectors.aws",
     "aws-org": "topomapper.collectors.aws_org",
-    "files": "topomapper.collectors.files",
-    "devices": "topomapper.collectors.devices",
     "scan": "topomapper.collectors.scan",
 }
 COMMANDS = {
@@ -82,7 +80,7 @@ def _add_module(subparsers, name: str, module_path: str, **kwargs) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="topomapper",
-        description="Gather network, AWS and on-prem topology automatically, merge it, and "
+        description="Gather AWS and scanned network topology automatically, merge it, and "
                     "draw it. Any command that makes a topology draws it too: -o x.drawio.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -135,11 +133,11 @@ def write_outputs(topo: Topology, args: argparse.Namespace, private: bool = True
 
 def _note_untracked(args: argparse.Namespace) -> None:
     """Say so when real data was written where git would pick it up: the
-    output files, a redirected stdout, or a `--save-raw` folder."""
+    output files, a redirected stdout, or a `scan --save-xml` folder."""
     places = [p if p != "-" else stdout_file() for p in args.output]
-    raw = getattr(args, "save_raw", None)
-    if raw:
-        places.append(os.path.join(raw, "device.txt"))
+    saved = getattr(args, "save_raw", None)  # scan --save-xml
+    if saved:
+        places.append(os.path.join(saved, "scan.xml"))
     for path in places:
         hint = untracked_hint(path) if path else None
         if hint:

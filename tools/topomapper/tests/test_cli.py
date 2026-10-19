@@ -16,9 +16,11 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from topomapper import cli  # noqa: E402
-from topomapper.collectors import files  # noqa: E402
+from topomapper.collectors import scan  # noqa: E402
 
-DEVICES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "devices")
+SCANS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "scan")
+SCAN = ("192.0.2.0/24", "--from-xml", os.path.join(SCANS, "discovery.xml"),
+        "--from-xml", os.path.join(SCANS, "ports.xml"))
 
 
 def run(*argv):
@@ -40,16 +42,16 @@ class CommandsTest(unittest.TestCase):
         return os.path.join(self.dir.name, name)
 
     def test_flat_command_and_old_form_agree(self):
-        status, flat, err = run("files", DEVICES)
+        status, flat, err = run("scan", *SCAN)
         self.assertEqual(status, 0, err)
-        status, old, err = run("collect", "files", DEVICES)
+        status, old, err = run("collect", "scan", *SCAN)
         self.assertEqual(status, 0, err)
         strip = lambda text: {k: v for k, v in json.loads(text).items() if k != "meta"}  # noqa: E731
         self.assertEqual(strip(flat), strip(old))
         self.assertTrue(json.loads(flat)["nodes"])
 
     def test_one_run_writes_the_topology_and_diagrams(self):
-        status, out, err = run("files", DEVICES, "-o", self.path("net.json"),
+        status, out, err = run("scan", *SCAN, "-o", self.path("net.json"),
                                "-o", self.path("net.drawio"), "-o", self.path("net.svg"),
                                "-o", self.path("net.mmd"), "--title", "Lab", "--direction", "LR")
         self.assertEqual(status, 0, err)
@@ -66,7 +68,7 @@ class CommandsTest(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(os.stat(self.path(name)).st_mode), 0o600, name)
 
     def test_merge_and_filter_draw_too(self):
-        run("files", DEVICES, "-o", self.path("net.json"))
+        run("scan", *SCAN, "-o", self.path("net.json"))
         status, _, err = run("merge", self.path("net.json"), "-o", self.path("all.svg"))
         self.assertEqual(status, 0, err)
         self.assertTrue(os.path.getsize(self.path("all.svg")))
@@ -77,18 +79,18 @@ class CommandsTest(unittest.TestCase):
             self.assertIn("graph topomapper {", f.read())
 
     def test_unknown_extension_is_refused_before_collecting(self):
-        with mock.patch.object(files, "run", side_effect=AssertionError("collected")):
-            status, _, err = run("files", DEVICES, "-o", self.path("net.png"))
+        with mock.patch.object(scan, "run", side_effect=AssertionError("collected")):
+            status, _, err = run("scan", *SCAN, "-o", self.path("net.png"))
         self.assertEqual(status, 2)
         self.assertIn("say what to write with the extension: .json for the topology", err)
 
     def test_stdout_still_default_and_help_lists_flat_commands(self):
-        status, out, _ = run("files", DEVICES)
+        status, out, _ = run("scan", *SCAN)
         self.assertEqual(status, 0)
         self.assertTrue(out.startswith("{"))
         status, out, _ = run("--help")
         self.assertEqual(status, 0)
-        for name in ("aws", "aws-org", "files", "devices", "merge", "render"):
+        for name in ("aws", "aws-org", "scan", "merge", "render"):
             self.assertIn(f"    {name} ", out)
         self.assertNotIn("collect", out)
         self.assertNotIn("SUPPRESS", out)

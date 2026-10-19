@@ -32,11 +32,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from ..facts import device_id, normalize_hostname
 from ..hygiene import write_private
 from ..model import LINK_SEGMENT, NET_DEVICE, NET_SEGMENT, Topology, node_id
 
 HELP = "Discover hosts and open ports on a local network with nmap, and draw them."
+
+ROLES = ("router", "switch", "firewall", "load-balancer", "wireless", "server", "phone", "unknown")
 PRODUCES_TOPOLOGY = True
 
 DEFAULT_TOP_PORTS = 1000
@@ -151,7 +152,7 @@ _MEDIA_VENDOR = re.compile(r"roku|sonos|amazon|google|nvidia|samsung|lg electron
 def classify(host: ScanHost, gateway: bool = False) -> Tuple[str, str]:
     """(role, device_type) from open ports, MAC vendor and OS guess.
 
-    `role` is one of facts.ROLES, so the renderers pick the right icon;
+    `role` is one of ROLES, so the renderers pick the right icon;
     `device_type` is the finer, best-effort guess shown on the label."""
     ports = {int(p["port"]) for p in host.ports}  # type: ignore[arg-type]
     vendor = host.mac_vendor
@@ -541,3 +542,19 @@ def run(args, runner: Optional[Runner] = None) -> Topology:
     for w in warnings:
         topo.warn(w)
     return topo
+
+
+def normalize_hostname(name: str) -> str:
+    """Lower-case and drop the domain, so "nas.example.net" and "nas" are one
+    device. An address stays as it is."""
+    name = name.strip()
+    try:
+        ipaddress.ip_address(name)
+        return name
+    except ValueError:
+        pass
+    return name.split(".")[0].lower()
+
+
+def device_id(hostname: str) -> str:
+    return node_id("net", NET_DEVICE, normalize_hostname(hostname))

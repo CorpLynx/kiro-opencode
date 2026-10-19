@@ -23,35 +23,36 @@ INSTANCE = "aws:instance:i-0a1b2c3d4e5f60001"
 TGW = "aws:transit-gateway:tgw-0a1b2c3d4e5f60001"
 CGW_HQ = "aws:customer-gateway:cgw-0a1b2c3d4e5f60001"
 DXCON = "aws:dx-connection:dxcon-ffa1b2c3"
-SITE = "net:site:hq"
-EDGE1, DXR1, CORE1, BRANCH1 = ("net:device:edge1", "net:device:dxr1", "net:device:core1",
-                               "net:device:branch1")
+SEGMENT = "net:segment:192.0.2.0/24"
+GW, SERVER = "net:device:gw", "net:device:lab-server"
+LAN_HOSTS = [GW, SERVER, "net:device:192.0.2.20", "net:device:192.0.2.30"]
 
 
 def merged():
-    """The merge fixtures, stitched: an AWS estate and an HQ site, joined at
-    edge1 (VPN) and dxr1 (Direct Connect)."""
+    """The merge fixtures: an AWS estate, and a LAN topomapper scan found."""
     return merge([Topology.load(os.path.join(FIXTURES, "aws.json")),
-                  Topology.load(os.path.join(FIXTURES, "network.json"))])
+                  Topology.load(os.path.join(FIXTURES, "lan.json"))])
 
 
-def two_sites():
-    """Two sites with three cables between them and one inside site a."""
+def two_vpcs():
+    """Two VPCs with three peering links between their instances, one inside
+    VPC a, and an outside peer linked to both of a's instances."""
     t = Topology()
-    for site in ("a", "b"):
-        t.add_node(f"net:site:{site}", "site", site.upper())
-    for name, site in (("a1", "a"), ("a2", "a"), ("b1", "b")):
-        t.add_node(f"net:device:{name}", "device", name, f"net:site:{site}")
-    t.add_node("net:device:wan", "device", "wan")
-    t.add_link("physical", "net:device:a1", "net:device:b1", source_port="Gi0/1", target_port="Gi0/1",
-               protocols=["cdp"])
-    t.add_link("physical", "net:device:a2", "net:device:b1", source_port="Gi0/1", target_port="Gi0/2",
-               protocols=["cdp"])
-    t.add_link("physical", "net:device:a1", "net:device:a2", source_port="Gi0/2", target_port="Gi0/2")
-    t.add_link("physical", "net:device:wan", "net:device:a1", source_port="Gi0/0",
-               target_port="Gi0/3")
-    t.add_link("physical", "net:device:wan", "net:device:a2", source_port="Gi0/0",
-               target_port="Gi0/3")
+    for vpc in ("a", "b"):
+        t.add_node(f"aws:vpc:vpc-{vpc}", "vpc", vpc.upper())
+    for name, vpc in (("a1", "a"), ("a2", "a"), ("b1", "b")):
+        t.add_node(f"aws:instance:i-{name}", "instance", name, f"aws:vpc:vpc-{vpc}")
+    t.add_node("ext:external:peer", "external", "peer")
+    t.add_link("vpc-peering", "aws:instance:i-a1", "aws:instance:i-b1", source_port="e1",
+               target_port="e1", state="active")
+    t.add_link("vpc-peering", "aws:instance:i-a2", "aws:instance:i-b1", source_port="e1",
+               target_port="e2", state="active")
+    t.add_link("vpc-peering", "aws:instance:i-a1", "aws:instance:i-a2", source_port="e2",
+               target_port="e2")
+    t.add_link("vpc-peering", "ext:external:peer", "aws:instance:i-a1", source_port="p0",
+               target_port="e3")
+    t.add_link("vpc-peering", "ext:external:peer", "aws:instance:i-a2", source_port="p0",
+               target_port="e3")
     return t
 
 
@@ -74,19 +75,17 @@ class FilterTest(unittest.TestCase):
         self.assertEqual(out.meta["filters"], [{"kind": ["transit-gateway", "vpc"]}])
 
     def test_exclude_container_reparents(self):
-        out = filter_topology(merged(), exclude_kinds=["az", "site"])
+        out = filter_topology(merged(), exclude_kinds=["az"])
         self.assertValid(out)
         self.assertNotIn(AZ, out.nodes)
         self.assertEqual(out.nodes[SUBNET].parent, VPC)
-        self.assertIsNone(out.nodes[EDGE1].parent)
         self.assertEqual(len(out.links), len(merged().links))
 
     def test_exclude_leaf_removes_its_links(self):
         out = filter_topology(merged(), exclude_kinds=["customer-gateway"])
         self.assertValid(out)
         self.assertFalse([l for l in out.links.values() if l.kind == "vpn"])
-        self.assertEqual([l.attrs["rule"] for l in out.links.values() if l.kind == "stitch"],
-                         ["dx-vif"])
+        self.assertTrue([l for l in out.links.values() if l.kind == "dx-vif"])
 
     def test_collapse_folds_contents(self):
         out = filter_topology(merged(), collapse=["vpc"])
@@ -96,48 +95,48 @@ class FilterTest(unittest.TestCase):
         self.assertEqual(out.nodes[VPC].attrs["collapsed"], {"az": 1, "instance": 1, "subnet": 1})
 
     def test_collapse_repoints_dedupes_and_drops_self_loops(self):
-        out = filter_topology(two_sites(), collapse=["site"])
+        out = filter_topology(two_vpcs(), collapse=["vpc"])
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), ["net:device:wan", "net:site:a", "net:site:b"])
-        between = out.links["physical|net:site:a|net:site:b"]
-        self.assertEqual(between.attrs, {"collapsed_links": 2, "protocols": ["cdp"]})
-        wan = out.links["physical|net:device:wan|net:site:a"]
-        self.assertEqual(wan.attrs, {"collapsed_links": 2, "source_port": "Gi0/0"})
-        self.assertEqual(len(out.links), 2)
+        self.assertEqual(sorted(out.nodes), ["aws:vpc:vpc-a", "aws:vpc:vpc-b", "ext:external:peer"])
+        between = out.links["vpc-peering|aws:vpc:vpc-a|aws:vpc:vpc-b"]
+        self.assertEqual(between.attrs, {"collapsed_links": 2, "state": "active"})
+        peer = out.links["vpc-peering|aws:vpc:vpc-a|ext:external:peer"]
+        self.assertEqual(peer.attrs, {"collapsed_links": 2, "target_port": "p0"})
+        self.assertEqual(len(out.links), 2)  # the link inside VPC a is gone
 
     def test_collapse_outermost_wins(self):
         out = filter_topology(merged(), collapse=["region", "vpc"])
         self.assertValid(out)
         self.assertNotIn(VPC, out.nodes)
         self.assertEqual(out.nodes[REGION].attrs["collapsed"]["vpc"], 1)
-        stitch_ends = sorted({(l.source, l.target) for l in out.links.values() if l.kind == "stitch"})
-        self.assertEqual(stitch_ends, [(REGION, DXR1), (REGION, EDGE1)])
+        for link in out.links.values():
+            self.assertNotEqual(link.source, link.target)
 
     def test_around_with_depth_and_ancestors(self):
-        out = filter_topology(merged(), around="edge1", depth=1)
+        out = filter_topology(merged(), around="gw", depth=1)
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), sorted([EDGE1, CORE1, CGW_HQ, SITE, REGION, ACCOUNT]))
-        self.assertEqual(out.meta["filters"], [{"around": EDGE1, "depth": 1}])
-        out = filter_topology(merged(), around=EDGE1, depth=2)
-        self.assertIn(TGW, out.nodes)
-        self.assertIn(DXR1, out.nodes)
-        self.assertEqual(sorted(filter_topology(merged(), around=EDGE1, depth=0).nodes),
-                         sorted([EDGE1, SITE]))
+        self.assertEqual(sorted(out.nodes), sorted([GW, SEGMENT]))
+        self.assertEqual(out.meta["filters"], [{"around": GW, "depth": 1}])
+        out = filter_topology(merged(), around=GW, depth=2)
+        self.assertEqual(sorted(out.nodes), sorted(LAN_HOSTS + [SEGMENT]))
+        self.assertEqual(sorted(filter_topology(merged(), around=GW, depth=0).nodes), [GW])
+        out = filter_topology(merged(), around=INSTANCE, depth=0)
+        self.assertEqual(sorted(out.nodes), sorted([INSTANCE, SUBNET, AZ, VPC, REGION, ACCOUNT]))
 
     def test_around_container_includes_contents(self):
         out = filter_topology(merged(), around=VPC, depth=1)
         for expected in (AZ, SUBNET, INSTANCE, TGW):
             self.assertIn(expected, out.nodes)
-        self.assertNotIn(EDGE1, out.nodes)
+        self.assertNotIn(GW, out.nodes)
 
     def test_around_unknown_node(self):
         with self.assertRaisesRegex(ValueError, "no node"):
             filter_topology(merged(), around="nowhere")
 
     def test_match(self):
-        out = filter_topology(merged(), match=r"^(edge|dxr)\d")
+        out = filter_topology(merged(), match=r"^lab-")
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), sorted([EDGE1, DXR1, SITE]))
+        self.assertEqual(sorted(out.nodes), [SERVER])
         out = filter_topology(merged(), match="(?i)PROD")
         self.assertIn(VPC, out.nodes)
         with self.assertRaisesRegex(ValueError, "--match"):
@@ -148,28 +147,27 @@ class FilterTest(unittest.TestCase):
         net = filter_topology(merged(), network_only=True)
         for out in (aws, net):
             self.assertValid(out)
-            self.assertFalse([l for l in out.links.values() if l.kind == "stitch"])
         self.assertTrue(all(i.startswith("aws:") for i in aws.nodes))
-        self.assertEqual(sorted(net.nodes), sorted([SITE, EDGE1, DXR1, CORE1, BRANCH1]))
+        self.assertEqual(sorted(net.nodes), sorted(LAN_HOSTS + [SEGMENT]))
         with self.assertRaises(ValueError):
             filter_topology(merged(), aws_only=True, network_only=True)
 
     def test_namespace_keeps_linked_externals(self):
         topo = merged()
         topo.add_node("ext:external:internet", "external", "Internet")
-        topo.add_link("physical", EDGE1, "ext:external:internet", source_port="GigabitEthernet0/0/0")
+        topo.add_link("segment-member", GW, "ext:external:internet")
         self.assertIn("ext:external:internet", filter_topology(topo, network_only=True).nodes)
         self.assertNotIn("ext:external:internet", filter_topology(topo, aws_only=True).nodes)
 
     def test_combined(self):
-        out = filter_topology(merged(), network_only=True, kinds=["device"], exclude_kinds=["site"],
-                              around=EDGE1, depth=2)
+        out = filter_topology(merged(), network_only=True, kinds=["device"],
+                              exclude_kinds=["segment"], around=GW, depth=2)
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), sorted([EDGE1, CORE1, DXR1]))
+        self.assertEqual(sorted(out.nodes), sorted(LAN_HOSTS))
         self.assertTrue(all(n.parent is None for n in out.nodes.values()))
         self.assertEqual(out.meta["filters"], [{"only": "network", "kind": ["device"],
-                                                "around": EDGE1, "depth": 2,
-                                                "exclude_kind": ["site"]}])
+                                                "around": GW, "depth": 2,
+                                                "exclude_kind": ["segment"]}])
         again = filter_topology(out, collapse=["device"])
         self.assertEqual(len(again.meta["filters"]), 2)
 
@@ -199,10 +197,10 @@ class FilterCliTest(unittest.TestCase):
         self.assertEqual(topo.meta["filters"][0]["collapse"], ["vpc"])
 
     def test_cli_around_and_errors(self):
-        status, out, _ = self.run_cli(["filter", "-", "--around", "dxr1", "--depth", "1"],
+        status, out, _ = self.run_cli(["filter", "-", "--around", "gw", "--depth", "1"],
                                       stdin=merged().dumps())
         self.assertEqual(status, 0)
-        self.assertIn(DXCON, Topology.loads(out).nodes)
+        self.assertIn(SEGMENT, Topology.loads(out).nodes)
         status, _, err = self.run_cli(["filter", "--depth", "2"], stdin=merged().dumps())
         self.assertEqual(status, 2)
         self.assertIn("--depth needs --around", err)

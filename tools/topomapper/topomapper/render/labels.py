@@ -6,13 +6,11 @@ are plain text; each renderer escapes them for its own format.
 
 from __future__ import annotations
 
-import ipaddress
 import re
 from typing import Any, List, Tuple
 
-from ..model import (LINK_DX_VIF, LINK_DXGW_ASSOCIATION, LINK_L3, LINK_PHYSICAL, LINK_SEGMENT,
-                     LINK_STITCH, LINK_TGW_ATTACHMENT, LINK_TGW_PEERING, LINK_VPC_PEERING,
-                     LINK_VPN, Link, Node)
+from ..model import (LINK_DX_VIF, LINK_DXGW_ASSOCIATION, LINK_SEGMENT, LINK_TGW_ATTACHMENT,
+                     LINK_TGW_PEERING, LINK_VPC_PEERING, LINK_VPN, Link, Node)
 
 MAX_CHARS = 44
 OK_STATES = {"", "available", "up", "active", "attached", "associated", "accepted", "running",
@@ -244,11 +242,6 @@ def _tunnels(tunnels: Any) -> str:
 def _middle(link: Link) -> List[str]:
     a = link.attrs
     k = link.kind
-    if k == LINK_PHYSICAL:
-        return [_join(a.get("subnets"))]
-    if k == LINK_L3:
-        vrf = a.get("vrf")
-        return [_join(a.get("subnet")), f"vrf {vrf}" if vrf else ""]
     if k == LINK_SEGMENT:
         return [_join(a.get("address"))]
     if k in (LINK_TGW_ATTACHMENT, LINK_TGW_PEERING):
@@ -266,43 +259,11 @@ def _middle(link: Link) -> List[str]:
         return [_join(a.get("vif_id")), detail]
     if k == LINK_DXGW_ASSOCIATION:
         return [_join(a.get("association_id"))]
-    if k == LINK_STITCH:
-        return [" ".join(x for x in (_join(a.get("rule")), _join(a.get("address"))) if x)]
     return []
 
 
-_IF_SHORT = (("HundredGigE", "Hu"), ("FortyGigabitEthernet", "Fo"), ("TwentyFiveGigE", "Twe"),
-             ("TenGigabitEthernet", "Te"), ("GigabitEthernet", "Gi"), ("FastEthernet", "Fa"),
-             ("Port-Channel", "Po"), ("Ethernet", "Eth"), ("Loopback", "Lo"), ("Tunnel", "Tu"),
-             ("Management", "Mgmt"))
-
-
-def short_port(name: str) -> str:
-    """Cisco-style short interface names, so port labels fit on a link;
-    the full name stays in the tooltip."""
-    for full, short in _IF_SHORT:
-        if name.startswith(full) and name[len(full):len(full) + 1].isdigit():
-            return short + name[len(full):]
-    return name
-
-
-def _end(link: Link, node_id: str, port_key: str) -> str:
-    port = short_port(str(link.attrs.get(port_key) or ""))
-    if link.kind == LINK_L3:
-        addr = (link.attrs.get("addresses") or {}).get(node_id) if isinstance(
-            link.attrs.get("addresses"), dict) else None
-        if addr:
-            return clip(f"{port} .{_host_part(str(addr))}" if port else str(addr), 28)
-    return clip(port, 28)
-
-
-def _host_part(addr: str) -> str:
-    """Last octet / hextet: the subnet is already in the middle label."""
-    try:
-        ip = ipaddress.ip_address(addr)
-    except ValueError:
-        return addr
-    return str(ip).split(".")[-1] if ip.version == 4 else str(ip).split(":")[-1]
+def _end(link: Link, port_key: str) -> str:
+    return clip(str(link.attrs.get(port_key) or ""), 28)
 
 
 def link_labels(link: Link) -> Tuple[List[str], str, str]:
@@ -317,4 +278,4 @@ def link_labels(link: Link) -> Tuple[List[str], str, str]:
     state = str(link.attrs.get("state") or "")
     if state.lower() not in OK_STATES:
         middle.append(f"[{clip(state, 20)}]")
-    return middle, _end(link, link.source, "source_port"), _end(link, link.target, "target_port")
+    return middle, _end(link, "source_port"), _end(link, "target_port")

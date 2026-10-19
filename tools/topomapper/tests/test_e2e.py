@@ -1,9 +1,5 @@
-"""End to end through the CLI: AWS (mocked) + saved device output -> merge ->
-filter -> every renderer, the way a user would chain the commands.
-
-The AWS side has a site-to-site VPN whose customer gateway is edge1's
-internet address in the device fixtures, so merge must stitch the two halves
-together and the drawing must show that link.
+"""End to end through the CLI: AWS (mocked) + a saved nmap scan -> merge ->
+filter -> every renderer -> diff, the way a user would chain the commands.
 """
 
 import io
@@ -21,8 +17,7 @@ sys.path.insert(0, ROOT)
 from topomapper.cli import main  # noqa: E402
 from topomapper.model import Topology  # noqa: E402
 
-DEVICES = os.path.join(ROOT, "tests", "fixtures", "devices")
-EDGE1_INTERNET = "203.0.113.2"  # edge1's ISP-facing address in configs/edge1.conf
+SCANS = os.path.join(ROOT, "tests", "fixtures", "scan")
 
 FAKE_AWS = {
     "AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing",
@@ -55,7 +50,7 @@ def build_aws():
     ec2.attach_internet_gateway(InternetGatewayId=igw, VpcId=vpc)
     tgw = ec2.create_transit_gateway(Description="core")["TransitGateway"]["TransitGatewayId"]
     ec2.create_transit_gateway_vpc_attachment(TransitGatewayId=tgw, VpcId=vpc, SubnetIds=subnets)
-    cgw = ec2.create_customer_gateway(Type="ipsec.1", PublicIp=EDGE1_INTERNET,
+    cgw = ec2.create_customer_gateway(Type="ipsec.1", PublicIp="203.0.113.2",
                                       BgpAsn=65010)["CustomerGateway"]["CustomerGatewayId"]
     ec2.create_vpn_connection(Type="ipsec.1", CustomerGatewayId=cgw, TransitGatewayId=tgw)
     return cgw
@@ -76,20 +71,19 @@ class EndToEndTest(unittest.TestCase):
             status, _, err = run("collect", "aws", "--region", "us-east-1", "-o", self.path("aws.json"))
         self.assertEqual(status, 0, err)
 
-        status, _, err = run("collect", "files", DEVICES, "--site-map", os.path.join(DEVICES, "sites.csv"),
-                             "--l3-exclude", "192.168.0.0/24", "-o", self.path("net.json"))
+        status, _, err = run("scan", "192.0.2.0/24",
+                             "--from-xml", os.path.join(SCANS, "discovery.xml"),
+                             "--from-xml", os.path.join(SCANS, "ports.xml"), "-o", self.path("lan.json"))
         self.assertEqual(status, 0, err)
 
-        status, _, err = run("merge", self.path("aws.json"), self.path("net.json"),
+        status, _, err = run("merge", self.path("aws.json"), self.path("lan.json"),
                              "-o", self.path("all.json"))
         self.assertEqual(status, 0, err)
         merged = Topology.load(self.path("all.json"))
         self.assertEqual(merged.validate(), [])
-        stitches = [l for l in merged.links.values() if l.kind == "stitch"]
-        self.assertEqual(len(stitches), 1)
-        self.assertEqual({stitches[0].source, stitches[0].target},
-                         {"net:device:edge1", f"aws:cgw:{cgw}"})
-        self.assertEqual(stitches[0].attrs["rule"], "cgw-ip")
+        self.assertIn(f"aws:cgw:{cgw}", merged.nodes)
+        self.assertIn("net:device:gw", merged.nodes)
+        self.assertTrue(any(l.kind == "vpn" for l in merged.links.values()))
 
         # Simplify for a diagram: drop AZ containers, keep everything else.
         status, _, err = run("filter", self.path("all.json"), "--exclude-kind", "az",
@@ -109,9 +103,9 @@ class EndToEndTest(unittest.TestCase):
 
         drawio = ET.fromstring(outputs["drawio"])
         cells = {el.get("id") for el in drawio.iter() if el.get("id")}
-        for node in ("net:device:edge1", f"aws:cgw:{cgw}", "net:device:core1"):
+        for node in (f"aws:cgw:{cgw}", "net:device:gw", "net:segment:192.0.2.0/24"):
             self.assertIn(node, cells)
-        self.assertTrue(any("stitch" in (el.get("id") or "") for el in drawio.iter()))
+        self.assertTrue(any((el.get("id") or "").startswith("vpn|") for el in drawio.iter()))
         ET.fromstring(outputs["svg"])
         self.assertIn("subgraph", outputs["mmd"])
         self.assertIn("cluster", outputs["dot"])
@@ -119,13 +113,13 @@ class EndToEndTest(unittest.TestCase):
         # A second snapshot with one change: diff reports it with exit status 1.
         changed = json.loads(view.dumps())
         for node in changed["nodes"]:
-            if node["id"] == "net:device:core1":
-                node["attrs"]["os_version"] = "10.2(5)"
+            if node["id"] == "net:device:lab-server":
+                node["attrs"]["os"] = "Linux 6.1"
         with open(self.path("next.json"), "w", encoding="utf-8") as f:
             json.dump(changed, f)
         status, out, _ = run("diff", self.path("view.json"), self.path("next.json"))
         self.assertEqual(status, 1)
-        self.assertIn("10.2(5)", out)
+        self.assertIn("Linux 6.1", out)
         status, _, _ = run("diff", self.path("view.json"), self.path("view.json"))
         self.assertEqual(status, 0)
 

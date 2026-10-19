@@ -7,9 +7,9 @@ always becomes the same fake and the picture keeps its shape:
 
 * **AWS IDs** keep their prefix and length (`vpc-0a1b...` becomes
   `vpc-0000000000000001`); account IDs become `1000000000NN`.
-* **Names** (account, OU, policy, device and site names, Name tags and
+* **Names** (account, OU, policy and host names, Name tags and
   other tag values) become `account-1`, `ou-2`, `device-3`, ...
-* **Free text** (descriptions, serial numbers, source file names) is
+* **Free text** (descriptions, comments, serial numbers) is
   replaced whole.
 * **Addresses** go through `ipredact` when it's installed, which keeps
   prefixes and containment true. `--ips public` is the dependency-free
@@ -68,7 +68,7 @@ _LABEL = re.compile(r"^(.*\S) \(([^()]+)\)$")
 
 # Kinds whose label is the name a person gave the thing.
 _NAMED_KINDS = {"account": "account", "ou": "ou", "org-policy": "policy", "device": "device",
-                "site": "site", "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster",
+                "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster",
                 "aws-resource": "resource"}
 _GENERIC = {"root", "main", "default", "internet"}
 _FREE_TEXT = {"description": "description", "comment": "comment", "serial": "serial",
@@ -291,7 +291,7 @@ def _harvest(topo: Topology, mapper: _Mapper, keep_names: bool) -> None:
             mapper.want(m.group(1), prefix)
         elif node.kind in _NAMED_KINDS and node.label and node.label != node.id:
             mapper.want(node.label, prefix)
-        if node.kind in ("device", "site"):
+        if node.kind == "device":
             mapper.want(node.id.rsplit(":", 1)[-1], prefix)
         for attr in ("name", "hostname", "device_name", "cluster_name", "role_name", "user_name"):
             mapper.want(node.attrs.get(attr), prefix)

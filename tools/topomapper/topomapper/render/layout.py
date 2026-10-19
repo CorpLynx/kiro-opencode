@@ -8,7 +8,7 @@ because every arrangement packs blocks with gaps between them.
 
 How a container arranges its children:
 
-* **Generic (sites, regions, accounts, the top level, subnets):** links
+* **Generic (regions, accounts, the top level, subnets):** links
   between descendants are lifted to the children that contain them, so a
   TGW attachment to an instance's VPC pulls the TGW towards that VPC.
   Each connected group is drawn in layers by breadth-first distance from
@@ -341,8 +341,8 @@ class _Engine:
             if self.anchor_tier(n) == top:
                 layer[n] = 0
                 queue.append(n)
-        # 0-1 BFS: linked containers (a site stitched to an account, two
-        # peered VPCs) sit side by side rather than one below the other.
+        # 0-1 BFS: linked containers (two peered VPCs, a VPN between
+        # accounts) sit side by side rather than one below the other.
         while queue:
             u = queue.popleft()
             for v in sorted(adj[u], key=self.sort_key):
@@ -408,9 +408,8 @@ class _Engine:
 
     def _steps_down(self, u: str, v: str) -> bool:
         """Whether a link puts `v` one layer below `u`. Not between a
-        container and a peer of container rank or lower (a site and the
-        account it is stitched to, two peered VPCs, a site and its LAN
-        segment): those read better side by side."""
+        container and a peer of container rank or lower (two peered VPCs,
+        a VPN between accounts): those read better side by side."""
         if not (self.is_container(u) or self.is_container(v)):
             return True
         return min(self.tier(u), self.tier(v)) < styles.CONTAINER_TIER

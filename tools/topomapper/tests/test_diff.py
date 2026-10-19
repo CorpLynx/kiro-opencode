@@ -12,7 +12,7 @@ from topomapper.diff import diff  # noqa: E402
 from topomapper.model import Topology  # noqa: E402
 
 VPC = "aws:vpc:vpc-0a1"
-CORE, EDGE = "net:device:core1", "net:device:edge1"
+CORE, EDGE = "net:device:core1", "net:segment:10.0.0.0/30"
 
 
 def snapshot():
@@ -23,14 +23,13 @@ def snapshot():
     t.add_node(CORE, "device", "core1", os_version="17.3", sources=["backups/core1.cfg"],
                interfaces=[{"name": "Gi1/0/1", "addresses": ["10.0.0.2/30"], "status": "up"},
                            {"name": "Vlan10", "addresses": ["10.20.10.1/24"], "status": "up"}])
-    t.add_node(EDGE, "device", "edge1")
-    t.add_link("physical", CORE, EDGE, source_port="Gi1/0/1", target_port="Gi0/0/1",
-               protocols=["cdp", "lldp"])
+    t.add_node(EDGE, "segment", "10.0.0.0/30", subnet="10.0.0.0/30")
+    t.add_link("segment-member", CORE, EDGE, address="10.0.0.2", vlans=[10, 20])
     return t
 
 
-def physical(t):
-    return next(l for l in t.links.values() if l.kind == "physical")
+def member(t):
+    return next(l for l in t.links.values() if l.kind == "segment-member")
 
 
 def run_cli(argv):
@@ -57,14 +56,14 @@ class DiffTest(unittest.TestCase):
     def test_added_and_removed(self):
         new = snapshot()
         del new.nodes[EDGE]
-        del new.links[physical(new).id]
+        del new.links[member(new).id]
         new.add_node("aws:vpc:vpc-0b2", "vpc", "staging (vpc-0b2)", "aws:account:123456789012")
         new.add_link("vpc-peering", VPC, "aws:vpc:vpc-0b2", key="pcx-1", peering_id="pcx-1")
         result = diff(snapshot(), new)
         self.assertEqual(result.nodes.added, ["aws:vpc:vpc-0b2"])
         self.assertEqual(result.nodes.removed, [EDGE])
         self.assertEqual(result.links.added, ["vpc-peering|aws:vpc:vpc-0a1|aws:vpc:vpc-0b2|pcx-1"])
-        self.assertEqual(result.links.removed, [physical(snapshot()).id])
+        self.assertEqual(result.links.removed, [member(snapshot()).id])
         self.assertEqual(result.counts()["nodes"], {"added": 1, "removed": 1, "changed": 0})
 
     def test_changed_fields_and_attributes(self):
@@ -83,7 +82,7 @@ class DiffTest(unittest.TestCase):
     def test_lists_are_sets(self):
         new = snapshot()
         new.nodes[VPC].attrs["cidrs"] = ["10.11.0.0/16", "10.10.0.0/16"]
-        physical(new).attrs["protocols"] = ["lldp", "cdp"]
+        member(new).attrs["vlans"] = [20, 10]
         self.assertTrue(diff(snapshot(), new).identical)
         new.nodes[VPC].attrs["cidrs"] = ["10.11.0.0/16", "10.12.0.0/16"]
         change = diff(snapshot(), new).nodes.changed[0].changes[0]
@@ -113,11 +112,11 @@ class DiffTest(unittest.TestCase):
 
     def test_link_changes(self):
         new = snapshot()
-        physical(new).attrs["protocols"] = ["lldp"]
-        physical(new).label = "uplink"
+        member(new).attrs["vlans"] = [20]
+        member(new).label = "uplink"
         result = diff(snapshot(), new)
         self.assertEqual(len(result.links.changed), 1)
-        self.assertEqual([c.path for c in result.links.changed[0].changes], ["label", "protocols"])
+        self.assertEqual([c.path for c in result.links.changed[0].changes], ["label", "vlans"])
 
     def test_null_and_missing_are_the_same(self):
         new = snapshot()
@@ -127,15 +126,15 @@ class DiffTest(unittest.TestCase):
     def test_text_format(self):
         new = snapshot()
         del new.nodes[EDGE]
-        del new.links[physical(new).id]
+        del new.links[member(new).id]
         new.add_node("aws:vpc:vpc-0b2", "vpc", "staging (vpc-0b2)")
         new.nodes[CORE].attrs["os_version"] = "17.6"
         text = diff(snapshot(), new).format_text()
         self.assertEqual(text.splitlines()[0],
                          "nodes: 1 added, 1 removed, 1 changed; links: 0 added, 1 removed, 0 changed")
         for expected in ("Added nodes:\n  + vpc staging (vpc-0b2)  [aws:vpc:vpc-0b2]",
-                         "Removed nodes:\n  - device edge1  [net:device:edge1]",
-                         "Removed links:\n  - physical core1 ↔ edge1  [physical|",
+                         "Removed nodes:\n  - segment 10.0.0.0/30  [net:segment:10.0.0.0/30]",
+                         "Removed links:\n  - segment-member core1 ↔ 10.0.0.0/30  [segment-member|",
                          "Changed nodes:\n  ~ device core1  [net:device:core1]\n"
                          "      os_version: 17.3 → 17.6"):
             self.assertIn(expected, text)

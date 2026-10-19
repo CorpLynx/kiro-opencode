@@ -29,7 +29,7 @@ SHAPES = {
 GATEWAYS = {"internet-gateway", "egress-only-internet-gateway", "nat-gateway", "vpn-gateway",
             "customer-gateway", "transit-gateway", "dx-connection", "dx-gateway"}
 ARROWS = {  # (undirected, directed)
-    "l3": ("-.-", "-.->"), "vpn": ("-.-", "-.->"), "stitch": ("-.-", "-.->"),
+    "vpn": ("-.-", "-.->"),
     "vpc-peering": ("-.-", "-.->"), "tgw-peering": ("-.-", "-.->"), "iam-trust": ("-.-", "-.->"),
     "dx-vif": ("===", "==>"), "dxgw-association": ("===", "==>"),
 }

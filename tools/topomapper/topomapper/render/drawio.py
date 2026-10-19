@@ -141,8 +141,6 @@ CONTAINER_STYLES: Dict[str, str] = {
     "subnet-private": _AWS_GROUP + "group_security_group;grStroke=0;strokeColor=#00A4A6;"
                                    "fillColor=#E6F6F7;verticalAlign=top;align=left;spacingLeft=30;"
                                    "fontColor=#147EBA;dashed=0;",
-    "site": _AWS_GROUP + "group_corporate_data_center;strokeColor=#7D8998;fillColor=none;"
-                         "verticalAlign=top;align=left;spacingLeft=30;fontColor=#5A6C86;dashed=0;",
     "group": ("fillColor=none;strokeColor=#5A6C86;dashed=1;verticalAlign=top;fontStyle=0;"
               "fontColor=#5A6C86;whiteSpace=wrap;html=1;" + _PLAIN_GROUP_TAIL),
     "aws-service": ("fillColor=none;strokeColor=#7D8998;dashed=1;verticalAlign=top;fontStyle=1;"
@@ -152,8 +150,6 @@ CONTAINER_STYLES: Dict[str, str] = {
 
 _EDGE_BASE = "html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;"
 EDGE_STYLES: Dict[str, str] = {
-    "physical": "strokeColor=#333333;strokeWidth=1.5;",
-    "l3": "strokeColor=#3C78D8;strokeWidth=1.5;dashed=1;",
     "segment-member": "strokeColor=#6C8EBF;strokeWidth=1.5;",
     "tgw-attachment": "strokeColor=#8C4FFF;strokeWidth=2;",
     "tgw-peering": "strokeColor=#8C4FFF;strokeWidth=2;dashed=1;dashPattern=8 4;",
@@ -162,7 +158,6 @@ EDGE_STYLES: Dict[str, str] = {
     "vpn": "strokeColor=#C98B00;strokeWidth=2;dashed=1;",
     "dx-vif": "strokeColor=#1A73E8;strokeWidth=4;",
     "dxgw-association": "strokeColor=#1A73E8;strokeWidth=2;",
-    "stitch": "strokeColor=#E7157B;strokeWidth=2;dashed=1;dashPattern=1 3;",
     "policy-attachment": "strokeColor=#E7157B;strokeWidth=1;dashed=1;dashPattern=4 3;",
     "iam-trust": "strokeColor=#DD344C;strokeWidth=1.5;dashed=1;dashPattern=6 3;",
     "related": "strokeColor=#879196;strokeWidth=1;dashed=1;dashPattern=3 3;",

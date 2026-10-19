@@ -15,13 +15,12 @@ from typing import Dict, List, Optional
 
 from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_BEDROCK, AWS_IAM, AWS_ORG, AWS_ORG_POLICY, AWS_ORG_ROOT, AWS_OU,
                      AWS_REGION, AWS_SERVICE, AWS_SUBNET, AWS_VPC, LINK_DX_VIF, LINK_POLICY,
-                     LINK_RELATED, LINK_TRUST,
-                     LINK_DXGW_ASSOCIATION, LINK_L3, LINK_PHYSICAL, LINK_SEGMENT, LINK_STITCH,
+                     LINK_RELATED, LINK_TRUST, LINK_DXGW_ASSOCIATION, LINK_SEGMENT,
                      LINK_TGW_ATTACHMENT, LINK_TGW_PEERING, LINK_VGW_ATTACHMENT, LINK_VPC_PEERING,
-                     LINK_VPN, NET_DEVICE, NET_EXTERNAL, NET_SEGMENT, NET_SITE, Link, Topology)
+                     LINK_VPN, NET_DEVICE, NET_EXTERNAL, NET_SEGMENT, Link, Topology)
 
 CONTAINER_KINDS = frozenset({AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ACCOUNT, AWS_REGION, AWS_VPC,
-                             AWS_AZ, AWS_SUBNET, AWS_BEDROCK, AWS_IAM, AWS_SERVICE, NET_SITE})
+                             AWS_AZ, AWS_SUBNET, AWS_BEDROCK, AWS_IAM, AWS_SERVICE})
 
 AWS_LEAF_KINDS = frozenset({
     "internet-gateway", "egress-only-internet-gateway", "nat-gateway", "vpc-endpoint",
@@ -78,7 +77,7 @@ SHAPES: Dict[str, Shape] = {
 CONTAINER_TIER = 3
 
 CONTAINER_CLASSES = ("organization", "org-root", "ou", "account", "region", "vpc", "az", "bedrock", "iam",
-                     "subnet-public", "subnet-private", "site", "group", "aws-service")
+                     "subnet-public", "subnet-private", "group", "aws-service")
 
 # Colours shared by the SVG renderer (draw.io uses its own built-in styles).
 CONTAINER_COLORS: Dict[str, tuple] = {
@@ -94,7 +93,6 @@ CONTAINER_COLORS: Dict[str, tuple] = {
     "iam": ("#DD344C", "#FEF5F6", False, "#B02A3D"),
     "subnet-public": ("#7AA116", "#F2F6E8", False, "#248814"),
     "subnet-private": ("#00A4A6", "#E6F6F7", False, "#147EBA"),
-    "site": ("#7D8998", "none", False, "#5A6C86"),
     "group": ("#5A6C86", "none", True, "#5A6C86"),
     "aws-service": ("#7D8998", "none", True, "#232F3E"),
 }
@@ -108,8 +106,6 @@ class LinkLook:
 
 
 LINK_LOOKS: Dict[str, LinkLook] = {
-    LINK_PHYSICAL: LinkLook("#333333", 1.5),
-    LINK_L3: LinkLook("#3C78D8", 1.5, "6 4"),
     LINK_SEGMENT: LinkLook("#6C8EBF", 1.5),
     LINK_TGW_ATTACHMENT: LinkLook("#8C4FFF", 2),
     LINK_TGW_PEERING: LinkLook("#8C4FFF", 2, "8 4"),
@@ -118,7 +114,6 @@ LINK_LOOKS: Dict[str, LinkLook] = {
     LINK_VPN: LinkLook("#C98B00", 2, "6 4"),
     LINK_DX_VIF: LinkLook("#1A73E8", 4),
     LINK_DXGW_ASSOCIATION: LinkLook("#1A73E8", 2),
-    LINK_STITCH: LinkLook("#E7157B", 2, "2 4"),
     LINK_POLICY: LinkLook("#E7157B", 1, "4 3"),
     LINK_TRUST: LinkLook("#DD344C", 1.5, "6 3"),
     LINK_RELATED: LinkLook("#879196", 1, "3 3"),
