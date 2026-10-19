@@ -2,14 +2,14 @@
 
 A topology is a set of nodes and links:
 
-* A **node** is anything drawn as a box or icon: a device, a VPC, a subnet,
-  a transit gateway. Nodes nest through `parent` (account > region > VPC >
-  AZ > subnet, or site > device). Renderers draw parents as containers.
-* A **link** is a line between two nodes: a cable seen by CDP/LLDP, a
-  shared subnet, a TGW attachment, a VPN.
+* A **node** is anything drawn as a box or icon: an account, a VPC, a
+  subnet, a transit gateway. Nodes nest through `parent` (account > region >
+  VPC > AZ > subnet). Renderers draw parents as containers.
+* A **link** is a line between two nodes: a TGW attachment, a VPN, a VPC
+  peering.
 
 IDs are deterministic strings built from what identifies the thing
-("aws:vpc:vpc-0abc", "net:device:core1"), so collecting twice, or from two
+("aws:vpc:vpc-0abc", "aws:account:123456789012"), so collecting twice, or from two
 sources, yields the same IDs and merging is a plain union. The JSON form is
 sorted, so snapshots diff cleanly in git.
 
@@ -54,9 +54,6 @@ AWS_EKS = "eks-cluster"
 AWS_SERVICE = "aws-service"           # one service's resources in a region (or account-wide)
 AWS_RESOURCE = "aws-resource"         # any resource --all-resources found, by ARN
 
-NET_SITE = "site"
-NET_DEVICE = "device"
-NET_SEGMENT = "segment"      # a multi-access L3 network shared by 3+ devices
 NET_EXTERNAL = "external"    # something outside the collected estate (internet, a peer)
 
 NODE_KINDS = frozenset({
@@ -65,14 +62,11 @@ NODE_KINDS = frozenset({
     AWS_ORG, AWS_ORG_ROOT, AWS_OU, AWS_ORG_POLICY,
     AWS_BEDROCK, AWS_BEDROCK_MODEL, AWS_IAM, AWS_IAM_ROLE, AWS_IAM_USER, AWS_EKS,
     AWS_SERVICE, AWS_RESOURCE,
-    NET_SITE, NET_DEVICE, NET_SEGMENT, NET_EXTERNAL,
+    NET_EXTERNAL,
 })
 
 # -- link kinds --------------------------------------------------------------
 
-LINK_PHYSICAL = "physical"            # CDP/LLDP neighbour
-LINK_L3 = "l3"                        # two devices with addresses in the same subnet
-LINK_SEGMENT = "segment-member"       # device -> segment
 LINK_TGW_ATTACHMENT = "tgw-attachment"
 LINK_TGW_PEERING = "tgw-peering"
 LINK_VPC_PEERING = "vpc-peering"
@@ -80,15 +74,14 @@ LINK_VPN = "vpn"                      # customer gateway <-> TGW / VGW
 LINK_VGW_ATTACHMENT = "vgw-attachment"
 LINK_DX_VIF = "dx-vif"                # DX connection -> DX gateway / VGW
 LINK_DXGW_ASSOCIATION = "dxgw-association"
-LINK_STITCH = "stitch"                # on-prem device <-> AWS edge, found by merge
 LINK_POLICY = "policy-attachment"     # organization policy -> root / OU / account
 LINK_TRUST = "iam-trust"              # account or principal -> the role it may assume
 LINK_RELATED = "related"              # an AWS Config relationship between two resources
 
 LINK_KINDS = frozenset({
-    LINK_PHYSICAL, LINK_L3, LINK_SEGMENT, LINK_TGW_ATTACHMENT, LINK_TGW_PEERING,
+    LINK_TGW_ATTACHMENT, LINK_TGW_PEERING,
     LINK_VPC_PEERING, LINK_VPN, LINK_VGW_ATTACHMENT, LINK_DX_VIF, LINK_DXGW_ASSOCIATION,
-    LINK_STITCH, LINK_POLICY, LINK_TRUST, LINK_RELATED,
+    LINK_POLICY, LINK_TRUST, LINK_RELATED,
 })
 
 
@@ -100,7 +93,7 @@ def node_id(namespace: str, kind: str, *parts: str) -> str:
 def link_id(kind: str, source: str, target: str, source_port: str = "", target_port: str = "",
             key: str = "", directed: bool = False) -> str:
     """Deterministic link ID. Undirected links get the same ID whichever end
-    reported them, so a cable seen from both switches is one link. Ports and
+    reported them, so a peering seen from both VPCs is one link. Ports and
     `key` (a VPN or attachment ID) tell apart parallel links between the same
     two nodes."""
     ends = [(source, source_port), (target, target_port)]
@@ -225,7 +218,7 @@ class Topology:
         return link
 
     def warn(self, message: str) -> None:
-        """Record a non-fatal problem (an unreachable device, a denied API call)."""
+        """Record a non-fatal problem (a denied API call, an unreachable region)."""
         warnings: List[str] = self.meta.setdefault("warnings", [])
         if message not in warnings:
             warnings.append(message)
@@ -315,7 +308,7 @@ class Topology:
 
 
 def union(topologies: Iterable[Topology]) -> Topology:
-    """Plain union by ID (no stitching): the building block for merge."""
+    """Plain union by ID: the building block for merge."""
     out = Topology()
     sources: List[Any] = []
     for topo in topologies:

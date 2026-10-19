@@ -7,9 +7,9 @@ always becomes the same fake and the picture keeps its shape:
 
 * **AWS IDs** keep their prefix and length (`vpc-0a1b...` becomes
   `vpc-0000000000000001`); account IDs become `1000000000NN`.
-* **Names** (account, OU, policy, device and site names, Name tags and
-  other tag values) become `account-1`, `ou-2`, `device-3`, ...
-* **Free text** (descriptions, serial numbers, source file names) is
+* **Names** (account, OU, policy, role and user names, Name tags and
+  other tag values) become `account-1`, `ou-2`, `role-3`, ...
+* **Free text** (descriptions, comments, serial numbers) is
   replaced whole.
 * **Addresses** go through `ipredact` when it's installed, which keeps
   prefixes and containment true. `--ips public` is the dependency-free
@@ -67,8 +67,8 @@ _IPV6 = re.compile(r"(?<![\w:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![\w:
 _LABEL = re.compile(r"^(.*\S) \(([^()]+)\)$")
 
 # Kinds whose label is the name a person gave the thing.
-_NAMED_KINDS = {"account": "account", "ou": "ou", "org-policy": "policy", "device": "device",
-                "site": "site", "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster",
+_NAMED_KINDS = {"account": "account", "ou": "ou", "org-policy": "policy",
+                "iam-role": "role", "iam-user": "user", "eks-cluster": "cluster",
                 "aws-resource": "resource"}
 _GENERIC = {"root", "main", "default", "internet"}
 _FREE_TEXT = {"description": "description", "comment": "comment", "serial": "serial",
@@ -85,11 +85,10 @@ _SAFE_KEYS = frozenset("""
     tgw_id vgw_id cgw_id connection_id dxgw_id instance_id cidr cidrs ipv6_cidrs is_default public
     routes destination target route_tables id attachment peering_id attachment_id public_ips
     private_ips connectivity service endpoint_type asn ip location bandwidth state private_ips
-    public_ip instance_type vendor platform model os_version mgmt_ip role interfaces addresses
-    vrf discovered subnet subnets protocols source_port target_port rule address vpn_id routing
+    public_ip instance_type source_port target_port vpn_id routing
     tunnels outside_ip inside_cidr vif_id vif_type vlan customer_address amazon_address amazon_asn
     association_id allowed_prefixes vif_attachments resource_type external collapsed
-    collapsed_links device_name hostname
+    collapsed_links device_name
     model_id model_name provider input_modalities output_modalities inference_types streaming
     lifecycle source models_shown models_offered models_in_use bedrock_models_shown
     bedrock_models_offered evidence invocable
@@ -97,7 +96,6 @@ _SAFE_KEYS = frozenset("""
     summary aws_owned admin_access trusts_everyone trusts_own_account mfa_enabled active_access_keys nodegroups
     instance_types capacity_type ami_type desired min max
     resource_id found_by relationships relation inventory_sources resources summarized subnet_ids
-    open_ports port protocol device_type os
 """.split())
 _DOC_NETS = (ipaddress.ip_network("192.0.2.0/24"), ipaddress.ip_network("198.51.100.0/24"),
              ipaddress.ip_network("203.0.113.0/24"))
@@ -291,9 +289,7 @@ def _harvest(topo: Topology, mapper: _Mapper, keep_names: bool) -> None:
             mapper.want(m.group(1), prefix)
         elif node.kind in _NAMED_KINDS and node.label and node.label != node.id:
             mapper.want(node.label, prefix)
-        if node.kind in ("device", "site"):
-            mapper.want(node.id.rsplit(":", 1)[-1], prefix)
-        for attr in ("name", "hostname", "device_name", "cluster_name", "role_name", "user_name"):
+        for attr in ("name", "device_name", "cluster_name", "role_name", "user_name"):
             mapper.want(node.attrs.get(attr), prefix)
         if node.kind == "bedrock-model" and node.attrs.get("source") in ("custom", "imported"):
             mapper.want(node.label, "model")
@@ -329,7 +325,7 @@ def _bare(end: str) -> str:
 
 
 def _canonical_links(topo: Topology) -> None:
-    """Renaming can reorder two ends ("device-10" sorts before "device-2"),
+    """Renaming can reorder two ends ("vpc-10" sorts before "vpc-2"),
     but an undirected link must keep source < target, with ports and the ID
     following, or `diff` and `merge` will see a different link."""
     for link in list(topo.links.values()):

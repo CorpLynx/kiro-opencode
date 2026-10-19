@@ -12,7 +12,7 @@ from topomapper.diff import diff  # noqa: E402
 from topomapper.model import Topology  # noqa: E402
 
 VPC = "aws:vpc:vpc-0a1"
-CORE, EDGE = "net:device:core1", "net:device:edge1"
+CORE, EDGE = "aws:transit-gateway:tgw-core1", "aws:vpc:vpc-0e1"
 
 
 def snapshot():
@@ -20,17 +20,17 @@ def snapshot():
     t.add_node("aws:account:123456789012", "account", "acct")
     t.add_node(VPC, "vpc", "prod (vpc-0a1)", "aws:account:123456789012",
                cidrs=["10.10.0.0/16", "10.11.0.0/16"], tags={"Name": "prod", "Owner": "net"})
-    t.add_node(CORE, "device", "core1", os_version="17.3", sources=["backups/core1.cfg"],
-               interfaces=[{"name": "Gi1/0/1", "addresses": ["10.0.0.2/30"], "status": "up"},
-                           {"name": "Vlan10", "addresses": ["10.20.10.1/24"], "status": "up"}])
-    t.add_node(EDGE, "device", "edge1")
-    t.add_link("physical", CORE, EDGE, source_port="Gi1/0/1", target_port="Gi0/0/1",
-               protocols=["cdp", "lldp"])
+    t.add_node(CORE, "transit-gateway", "core1", asn=64512, sources=["exports/core1.json"],
+               route_tables=[{"id": "tgw-rtb-1", "routes": ["10.0.0.0/30"], "state": "available"},
+                             {"id": "tgw-rtb-2", "routes": ["10.20.10.0/24"], "state": "available"}])
+    t.add_node(EDGE, "vpc", "edge (vpc-0e1)", cidrs=["10.0.0.0/30"])
+    t.add_link("tgw-attachment", CORE, EDGE, attachment_id="tgw-attach-1",
+               subnet_ids=["subnet-a", "subnet-b"])
     return t
 
 
-def physical(t):
-    return next(l for l in t.links.values() if l.kind == "physical")
+def attachment(t):
+    return next(l for l in t.links.values() if l.kind == "tgw-attachment")
 
 
 def run_cli(argv):
@@ -50,40 +50,40 @@ class DiffTest(unittest.TestCase):
         new = snapshot()
         new.meta["collected_at"] = "2026-02-01T00:00:00Z"
         new.warn("region eu-west-1: AccessDenied")
-        new.nodes[CORE].attrs["sources"] = ["ssh://core1.example.net"]
+        new.nodes[CORE].attrs["sources"] = ["exports/core1-new.json"]
         self.assertTrue(diff(snapshot(), new).identical)
         self.assertFalse(diff(snapshot(), new, ignore_attrs=()).identical)
 
     def test_added_and_removed(self):
         new = snapshot()
         del new.nodes[EDGE]
-        del new.links[physical(new).id]
+        del new.links[attachment(new).id]
         new.add_node("aws:vpc:vpc-0b2", "vpc", "staging (vpc-0b2)", "aws:account:123456789012")
         new.add_link("vpc-peering", VPC, "aws:vpc:vpc-0b2", key="pcx-1", peering_id="pcx-1")
         result = diff(snapshot(), new)
         self.assertEqual(result.nodes.added, ["aws:vpc:vpc-0b2"])
         self.assertEqual(result.nodes.removed, [EDGE])
         self.assertEqual(result.links.added, ["vpc-peering|aws:vpc:vpc-0a1|aws:vpc:vpc-0b2|pcx-1"])
-        self.assertEqual(result.links.removed, [physical(snapshot()).id])
+        self.assertEqual(result.links.removed, [attachment(snapshot()).id])
         self.assertEqual(result.counts()["nodes"], {"added": 1, "removed": 1, "changed": 0})
 
     def test_changed_fields_and_attributes(self):
         new = snapshot()
         node = new.nodes[CORE]
         node.label, node.parent = "core1-new", "aws:account:123456789012"
-        node.attrs["os_version"] = "17.6"
+        node.attrs["asn"] = 64513
         new.nodes[VPC].attrs["tags"]["Owner"] = "platform"
         changes = {c.path: c for item in diff(snapshot(), new).nodes.changed for c in item.changes}
         self.assertEqual((changes["label"].old, changes["label"].new), ("core1", "core1-new"))
         self.assertEqual(str(changes["parent"]), "parent: (none) → aws:account:123456789012")
-        self.assertEqual(changes["os_version"].new, "17.6")
+        self.assertEqual(changes["asn"].new, 64513)
         self.assertEqual((changes["tags.Owner"].old, changes["tags.Owner"].new), ("net", "platform"))
         self.assertNotIn("tags.Name", changes)
 
     def test_lists_are_sets(self):
         new = snapshot()
         new.nodes[VPC].attrs["cidrs"] = ["10.11.0.0/16", "10.10.0.0/16"]
-        physical(new).attrs["protocols"] = ["lldp", "cdp"]
+        attachment(new).attrs["subnet_ids"] = ["subnet-b", "subnet-a"]
         self.assertTrue(diff(snapshot(), new).identical)
         new.nodes[VPC].attrs["cidrs"] = ["10.11.0.0/16", "10.12.0.0/16"]
         change = diff(snapshot(), new).nodes.changed[0].changes[0]
@@ -93,51 +93,51 @@ class DiffTest(unittest.TestCase):
 
     def test_named_list_items_are_matched_by_name(self):
         new = snapshot()
-        ifaces = new.nodes[CORE].attrs["interfaces"]
-        ifaces.reverse()
-        ifaces[0]["status"] = "down"
-        ifaces[1]["addresses"].append("10.0.0.9/30")
+        tables = new.nodes[CORE].attrs["route_tables"]
+        tables.reverse()
+        tables[0]["state"] = "deleting"
+        tables[1]["routes"].append("10.0.0.8/30")
         paths = [str(c) for c in diff(snapshot(), new).nodes.changed[0].changes]
-        self.assertEqual(paths, ["interfaces[Gi1/0/1].addresses: +10.0.0.9/30",
-                                 "interfaces[Vlan10].status: up → down"])
+        self.assertEqual(paths, ["route_tables[tgw-rtb-1].routes: +10.0.0.8/30",
+                                 "route_tables[tgw-rtb-2].state: available → deleting"])
 
     def test_ignore_attr_by_name_and_path(self):
         new = snapshot()
-        new.nodes[CORE].attrs["interfaces"][0]["status"] = "down"
-        new.nodes[CORE].attrs["os_version"] = "17.6"
+        new.nodes[CORE].attrs["route_tables"][0]["state"] = "deleting"
+        new.nodes[CORE].attrs["asn"] = 64513
         new.nodes[VPC].attrs["tags"]["Owner"] = "platform"
-        result = diff(snapshot(), new, ignore_attrs=("sources", "status", "os_version", "tags.Owner"))
+        result = diff(snapshot(), new, ignore_attrs=("sources", "state", "asn", "tags.Owner"))
         self.assertTrue(result.identical)
-        result = diff(snapshot(), new, ignore_attrs=("interfaces.status",))
-        self.assertEqual(sorted(i.id for i in result.nodes.changed), [VPC, CORE])
+        result = diff(snapshot(), new, ignore_attrs=("route_tables.state",))
+        self.assertEqual(sorted(i.id for i in result.nodes.changed), [CORE, VPC])
 
     def test_link_changes(self):
         new = snapshot()
-        physical(new).attrs["protocols"] = ["lldp"]
-        physical(new).label = "uplink"
+        attachment(new).attrs["subnet_ids"] = ["subnet-b"]
+        attachment(new).label = "uplink"
         result = diff(snapshot(), new)
         self.assertEqual(len(result.links.changed), 1)
-        self.assertEqual([c.path for c in result.links.changed[0].changes], ["label", "protocols"])
+        self.assertEqual([c.path for c in result.links.changed[0].changes], ["label", "subnet_ids"])
 
     def test_null_and_missing_are_the_same(self):
         new = snapshot()
-        new.nodes[EDGE].attrs["mgmt_ip"] = None
+        new.nodes[EDGE].attrs["ipv6_cidrs"] = None
         self.assertTrue(diff(snapshot(), new).identical)
 
     def test_text_format(self):
         new = snapshot()
         del new.nodes[EDGE]
-        del new.links[physical(new).id]
+        del new.links[attachment(new).id]
         new.add_node("aws:vpc:vpc-0b2", "vpc", "staging (vpc-0b2)")
-        new.nodes[CORE].attrs["os_version"] = "17.6"
+        new.nodes[CORE].attrs["asn"] = 64513
         text = diff(snapshot(), new).format_text()
         self.assertEqual(text.splitlines()[0],
                          "nodes: 1 added, 1 removed, 1 changed; links: 0 added, 1 removed, 0 changed")
         for expected in ("Added nodes:\n  + vpc staging (vpc-0b2)  [aws:vpc:vpc-0b2]",
-                         "Removed nodes:\n  - device edge1  [net:device:edge1]",
-                         "Removed links:\n  - physical core1 ↔ edge1  [physical|",
-                         "Changed nodes:\n  ~ device core1  [net:device:core1]\n"
-                         "      os_version: 17.3 → 17.6"):
+                         "Removed nodes:\n  - vpc edge (vpc-0e1)  [aws:vpc:vpc-0e1]",
+                         "Removed links:\n  - tgw-attachment core1 ↔ edge (vpc-0e1)  [tgw-attachment|",
+                         "Changed nodes:\n  ~ transit-gateway core1  [aws:transit-gateway:tgw-core1]\n"
+                         "      asn: 64512 → 64513"):
             self.assertIn(expected, text)
         order = [text.index(h) for h in ("Added nodes", "Removed nodes", "Removed links",
                                          "Changed nodes")]
@@ -146,16 +146,16 @@ class DiffTest(unittest.TestCase):
 
     def test_json_format(self):
         new = snapshot()
-        new.nodes[CORE].attrs["os_version"] = "17.6"
-        new.nodes[CORE].attrs["vendor"] = "cisco"
-        new.add_node("net:device:dist1", "device", "dist1")
+        new.nodes[CORE].attrs["asn"] = 64513
+        new.nodes[CORE].attrs["description"] = "core"
+        new.add_node("aws:transit-gateway:tgw-dist1", "transit-gateway", "dist1")
         d = json.loads(json.dumps(diff(snapshot(), new).to_dict()))
         self.assertFalse(d["identical"])
-        self.assertEqual(d["nodes"]["added"], [{"id": "net:device:dist1", "kind": "device",
-                                                "label": "dist1"}])
+        self.assertEqual(d["nodes"]["added"], [{"id": "aws:transit-gateway:tgw-dist1",
+                                                "kind": "transit-gateway", "label": "dist1"}])
         self.assertEqual(d["nodes"]["changed"], [{"id": CORE, "changes": [
-            {"path": "os_version", "old": "17.3", "new": "17.6"},
-            {"path": "vendor", "new": "cisco"}]}])
+            {"path": "asn", "old": 64512, "new": 64513},
+            {"path": "description", "new": "core"}]}])
         summary = diff(snapshot(), new).to_dict(summary=True)
         self.assertEqual(set(summary), {"identical", "counts"})
 
@@ -174,20 +174,20 @@ class DiffCliTest(unittest.TestCase):
         old = self.save("old.json", snapshot())
         same = self.save("same.json", snapshot())
         changed = snapshot()
-        changed.nodes[CORE].attrs["os_version"] = "17.6"
+        changed.nodes[CORE].attrs["asn"] = 64513
         new = self.save("new.json", changed)
 
         status, out, _ = run_cli(["diff", old, same])
         self.assertEqual((status, out), (0, "no differences\n"))
         status, out, _ = run_cli(["diff", old, new])
         self.assertEqual(status, 1)
-        self.assertIn("os_version: 17.3 → 17.6", out)
+        self.assertIn("asn: 64512 → 64513", out)
         status, out, _ = run_cli(["diff", old, new, "--format", "json", "--summary"])
         self.assertEqual(status, 1)
         self.assertEqual(json.loads(out)["counts"]["nodes"]["changed"], 1)
         status, out, _ = run_cli(["diff", old, new, "--summary"])
         self.assertEqual(out.count("\n"), 1)
-        status, _, _ = run_cli(["diff", old, new, "--ignore-attr", "os_version"])
+        status, _, _ = run_cli(["diff", old, new, "--ignore-attr", "asn"])
         self.assertEqual(status, 0)
 
     def test_errors_exit_2(self):

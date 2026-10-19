@@ -18,6 +18,7 @@ ACCOUNT = "111122223333"
 OTHER = "444455556666"
 ORG, ROOT, OU = "o-example0001", "r-0001", "ou-0001-example1"
 VPC, SUBNET = "vpc-0123456789abcdef0", "subnet-0123abcd"
+INSTANCE = "i-0123456789abcdef1"
 
 
 def sample():
@@ -37,10 +38,9 @@ def sample():
                subnet_id=SUBNET, cidr="10.20.1.0/24")
     t.add_node("aws:customer-gateway:cgw-0123456789abcdef0", "customer-gateway",
                "cgw-0123456789abcdef0", ip="203.0.113.10", device_name="acme-edge1")
-    t.add_node("net:device:acme-edge1", "device", "acme-edge1", mgmt_ip="203.0.113.10",
-               serial="FOC1234ABCD", sources=["configs/acme-edge1.conf"],
-               interfaces=[{"name": "Gi0/0", "addresses": ["198.51.100.7/30"],
-                            "description": "uplink to Acme carrier"}])
+    t.add_node(f"aws:instance:{INSTANCE}", "instance", f"acme-edge1 ({INSTANCE})", f"aws:subnet:{SUBNET}",
+               instance_id=INSTANCE, private_ips=["10.20.1.7"], public_ip="203.0.113.10",
+               description="uplink to Acme carrier", sources=["exports/acme-edge1.json"])
     t.add_link("vpn", "aws:customer-gateway:cgw-0123456789abcdef0", f"aws:vpc:{VPC}",
                label="vpn-0123456789abcdef0")
     return t
@@ -57,7 +57,7 @@ class AnonymizeTest(unittest.TestCase):
 
     def test_nothing_identifying_survives(self):
         for original in (ACCOUNT, OTHER, ORG, ROOT, OU, VPC, SUBNET, "acme", "Acme", "dana",
-                         "ops@", "FOC1234ABCD", "carrier", "0123456789abcdef0"):
+                         "ops@", "edge1", "carrier", "0123456789abcdef"):
             self.assertNotIn(original, self.text, original)
         self.assertEqual(self.out.validate(), [])
         self.assertNotIn("warnings", self.out.meta)
@@ -87,17 +87,15 @@ class AnonymizeTest(unittest.TestCase):
         vpc = self.out.by_kind("vpc")[0]
         self.assertEqual(sorted(vpc.attrs["tags"]), ["Name", "Owner"])
         self.assertTrue(all(v.startswith(("tag-", "resource-", "vpc-")) for v in vpc.attrs["tags"].values()))
-        device = self.out.by_kind("device")[0]
-        self.assertEqual(device.attrs["serial"], "serial-1")
-        self.assertEqual(device.attrs["sources"], ["source-1"])
-        self.assertEqual(device.attrs["interfaces"][0]["description"], "description-1")
-        self.assertEqual(device.attrs["interfaces"][0]["name"], "Gi0/0")
+        instance = self.out.by_kind("instance")[0]
+        self.assertEqual(instance.attrs["description"], "description-1")
+        self.assertEqual(instance.attrs["sources"], ["source-1"])
 
     def test_same_value_same_fake(self):
-        device = self.out.by_kind("device")[0]
+        instance = self.out.by_kind("instance")[0]
         cgw = self.out.by_kind("customer-gateway")[0]
-        self.assertEqual(cgw.attrs["device_name"], device.label)
-        self.assertEqual(cgw.attrs["ip"], device.attrs["mgmt_ip"])
+        self.assertEqual(cgw.attrs["device_name"], instance.label.split(" (")[0])
+        self.assertEqual(cgw.attrs["ip"], instance.attrs["public_ip"])
 
     def test_deterministic_and_input_untouched(self):
         original = sample()
@@ -108,21 +106,25 @@ class AnonymizeTest(unittest.TestCase):
 
     def test_public_addresses_move_to_documentation_ranges(self):
         t = Topology()
-        t.add_node("net:device:r1", "device", "r1", mgmt_ip="8.8.8.8",
-                   interfaces=[{"name": "e0", "addresses": ["10.1.2.3/24", "1.1.1.1/30"]}])
-        out = anon.anonymize(t, ips="public").by_kind("device")[0]
-        mgmt = out.attrs["mgmt_ip"]
-        public = out.attrs["interfaces"][0]["addresses"][1]
-        self.assertTrue(mgmt.startswith("192.0.2."))
-        self.assertTrue(public.startswith("192.0.2.") and public.endswith("/30"))
-        self.assertNotEqual(mgmt, public.split("/")[0])
-        self.assertEqual(out.attrs["interfaces"][0]["addresses"][0], "10.1.2.3/24")
+        t.add_node("aws:vpc:vpc-1", "vpc", "vpc-1", cidrs=["10.1.0.0/16", "1.1.1.0/30"])
+        t.add_node("aws:instance:i-1", "instance", "i-1", "aws:vpc:vpc-1", public_ip="8.8.8.8",
+                   private_ips=["10.1.2.3"])
+        out = anon.anonymize(t, ips="public")
+        instance, vpc = out.by_kind("instance")[0], out.by_kind("vpc")[0]
+        public, cidr = instance.attrs["public_ip"], vpc.attrs["cidrs"][1]
+        self.assertTrue(public.startswith("192.0.2."))
+        self.assertTrue(cidr.startswith("192.0.2.") and cidr.endswith("/30"))
+        self.assertNotEqual(public, cidr.split("/")[0])
+        self.assertEqual(instance.attrs["private_ips"], ["10.1.2.3"])
+        self.assertEqual(vpc.attrs["cidrs"][0], "10.1.0.0/16")
 
     def test_keep_leaves_addresses_and_keep_names_leaves_names(self):
         t = Topology()
-        t.add_node("net:device:coreswitch", "device", "coreswitch", mgmt_ip="8.8.8.8")
-        out = anon.anonymize(t, ips="keep", keep_names=True).by_kind("device")[0]
-        self.assertEqual((out.label, out.attrs["mgmt_ip"]), ("coreswitch", "8.8.8.8"))
+        t.add_node("aws:iam-role:123456789012:coreapp", "iam-role", "coreapp", role_name="coreapp")
+        t.add_node("aws:instance:i-1", "instance", "i-1", public_ip="8.8.8.8")
+        out = anon.anonymize(t, ips="keep", keep_names=True)
+        self.assertEqual(out.by_kind("iam-role")[0].label, "coreapp")
+        self.assertEqual(out.by_kind("instance")[0].attrs["public_ip"], "8.8.8.8")
 
     def test_bad_mode(self):
         with self.assertRaises(ValueError):
@@ -232,15 +234,15 @@ class BedrockGrantsTest(unittest.TestCase):
 class HardeningTest(unittest.TestCase):
     def test_link_order_survives_renaming(self):
         t = Topology()
-        names = [f"host{chr(97 + i)}" for i in range(11)]
+        names = [f"app{chr(97 + i)}" for i in range(11)]
         for name in names:
-            t.add_node(f"net:device:{name}", "device", name)
-        t.add_link("physical", "net:device:hostb", "net:device:hostk", source_port="e0",
-                   target_port="e1")
+            t.add_node(f"aws:iam-role:{ACCOUNT}:{name}", "iam-role", name, role_name=name)
+        t.add_link("vpc-peering", f"aws:iam-role:{ACCOUNT}:appb", f"aws:iam-role:{ACCOUNT}:appk",
+                   source_port="e0", target_port="e1")
         out = anon.anonymize(t, ips="keep")
         (link,) = out.links.values()
         self.assertLess(link.source, link.target)
-        self.assertEqual(link.id, link_id("physical", link.source, link.target,
+        self.assertEqual(link.id, link_id("vpc-peering", link.source, link.target,
                                           link.attrs["source_port"], link.attrs["target_port"]))
         self.assertEqual((link.attrs["source_port"], link.attrs["target_port"]), ("e1", "e0"))
         self.assertEqual(out.validate(), [])
@@ -250,16 +252,16 @@ class HardeningTest(unittest.TestCase):
         t = Topology()
         t.add_node(f"aws:vpc:{real_one}", "vpc", "x1")
         t.add_node(f"aws:vpc:{real_two}", "vpc", "x2")
-        t.add_node("net:device:device-1", "device", "device-1")
-        t.add_node("net:device:coreswitch", "device", "coreswitch")
+        t.add_node(f"aws:iam-role:{ACCOUNT}:role-1", "iam-role", "role-1")
+        t.add_node(f"aws:iam-role:{ACCOUNT}:coreapp", "iam-role", "coreapp")
         out = anon.anonymize(t, ips="keep")
         ids = {n.id.split(":", 2)[2] for n in out.by_kind("vpc")}
         self.assertEqual(len(ids), 2)
         self.assertFalse(ids & {real_one, real_two})
         self.assertNotIn("warnings", out.meta)
-        labels = sorted(n.label for n in out.by_kind("device"))
+        labels = sorted(n.label for n in out.by_kind("iam-role"))
         self.assertEqual(len(set(labels)), 2)
-        self.assertNotIn("coreswitch", labels)
+        self.assertNotIn("coreapp", labels)
 
     def test_strict_drops_unfamiliar_and_free_text_attributes(self):
         t = sample()
@@ -267,10 +269,8 @@ class HardeningTest(unittest.TestCase):
         out = anon.anonymize(t, ips="public", strict=True)
         vpc = out.by_kind("vpc")[0]
         self.assertEqual(sorted(vpc.attrs), ["cidrs", "vpc_id"])
-        device = out.by_kind("device")[0]
-        self.assertNotIn("serial", device.attrs)
-        self.assertNotIn("sources", device.attrs)
-        self.assertEqual(sorted(device.attrs["interfaces"][0]), ["addresses", "name"])
+        instance = out.by_kind("instance")[0]
+        self.assertEqual(sorted(instance.attrs), ["instance_id", "private_ips", "public_ip"])
         self.assertIs(out.meta["strict"], True)
         self.assertNotIn("dana", dumped(out))
         self.assertIn("owner_notes", anon.anonymize(t, ips="public").by_kind("vpc")[0].attrs)
@@ -321,16 +321,6 @@ class PrivateOutputTest(unittest.TestCase):
             os.chmod(real, 0o644)
             self.run_cli("filter", src, "-o", real)
             self.assertEqual(mode(real), 0o600)
-
-    @unittest.skipUnless(shutil.which("git"), "needs git")
-    def test_save_raw_folder_gets_the_git_note(self):
-        with tempfile.TemporaryDirectory() as d:
-            subprocess.run(["git", "init", "-q", d], check=True)
-            ns = mock.Mock(output="-", save_raw=os.path.join(d, "raw"))
-            err = io.StringIO()
-            with contextlib.redirect_stderr(err):
-                cli._note_untracked(ns)
-            self.assertIn("raw", err.getvalue())
 
     @unittest.skipUnless(shutil.which("git") and sys.platform in ("darwin", "linux"), "needs git")
     def test_redirected_stdout_gets_the_git_note(self):

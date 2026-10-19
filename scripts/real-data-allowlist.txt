@@ -1,2 +1,1 @@
 # Tokens the check would flag but that are not real data.
-001122334455   # example MAC address in the topomapper parsers

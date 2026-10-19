@@ -1,0 +1,125 @@
+{
+  "links": [
+    {
+      "attrs": {
+        "type": "scp"
+      },
+      "directed": true,
+      "id": "policy-attachment|aws:org-policy:p-0000deny0001|aws:ou:ou-0000-prod0001",
+      "kind": "policy-attachment",
+      "source": "aws:org-policy:p-0000deny0001",
+      "target": "aws:ou:ou-0000-prod0001"
+    },
+    {
+      "attrs": {
+        "type": "scp"
+      },
+      "directed": true,
+      "id": "policy-attachment|aws:org-policy:p-FullAWSAccess|aws:org-root:r-0000",
+      "kind": "policy-attachment",
+      "source": "aws:org-policy:p-FullAWSAccess",
+      "target": "aws:org-root:r-0000"
+    }
+  ],
+  "meta": {
+    "accounts": [
+      "111122223333",
+      "123456789012"
+    ],
+    "collector": "aws-org",
+    "ous": [
+      "ou-0000-prod0001"
+    ]
+  },
+  "nodes": [
+    {
+      "attrs": {
+        "account_id": "111122223333",
+        "management": true,
+        "path": "Root",
+        "status": "ACTIVE"
+      },
+      "id": "aws:account:111122223333",
+      "kind": "account",
+      "label": "example-management",
+      "parent": "aws:org-root:r-0000"
+    },
+    {
+      "attrs": {
+        "account_id": "123456789012",
+        "path": "Root/Prod",
+        "status": "ACTIVE"
+      },
+      "id": "aws:account:123456789012",
+      "kind": "account",
+      "label": "example-prod",
+      "parent": "aws:ou:ou-0000-prod0001"
+    },
+    {
+      "attrs": {
+        "aws_managed": false,
+        "policy_id": "p-0000deny0001",
+        "type": "scp"
+      },
+      "id": "aws:org-policy:p-0000deny0001",
+      "kind": "org-policy",
+      "label": "DenyRegions",
+      "parent": "aws:organization:o-exampleorg1"
+    },
+    {
+      "attrs": {
+        "aws_managed": true,
+        "policy_id": "p-FullAWSAccess",
+        "type": "scp"
+      },
+      "id": "aws:org-policy:p-FullAWSAccess",
+      "kind": "org-policy",
+      "label": "FullAWSAccess",
+      "parent": "aws:organization:o-exampleorg1"
+    },
+    {
+      "attrs": {
+        "policies": {
+          "scp": [
+            "FullAWSAccess"
+          ]
+        },
+        "policy_types": [
+          "scp"
+        ],
+        "root_id": "r-0000"
+      },
+      "id": "aws:org-root:r-0000",
+      "kind": "org-root",
+      "label": "Root",
+      "parent": "aws:organization:o-exampleorg1"
+    },
+    {
+      "attrs": {
+        "feature_set": "ALL",
+        "management_account_id": "111122223333",
+        "org_id": "o-exampleorg1"
+      },
+      "id": "aws:organization:o-exampleorg1",
+      "kind": "organization",
+      "label": "Organization (o-exampleorg1)"
+    },
+    {
+      "attrs": {
+        "ou_id": "ou-0000-prod0001",
+        "path": "Root/Prod",
+        "policies": {
+          "scp": [
+            "FullAWSAccess",
+            "DenyRegions"
+          ]
+        }
+      },
+      "id": "aws:ou:ou-0000-prod0001",
+      "kind": "ou",
+      "label": "Prod",
+      "parent": "aws:org-root:r-0000"
+    }
+  ],
+  "schema": "topomap/1"
+}

@@ -26,279 +26,23 @@
     },
     {
       "attrs": {
-        "addresses": {
-          "net:device:rtr1": "10.0.255.1",
-          "net:device:rtr2": "10.0.255.2"
-        },
-        "source_port": "Tunnel0",
-        "subnet": "10.0.255.0/30",
-        "target_port": "Tunnel0"
+        "type": "scp"
       },
-      "id": "l3|net:device:rtr1[Tunnel0]|net:device:rtr2[Tunnel0]",
-      "kind": "l3",
-      "label": "10.0.255.0/30",
-      "source": "net:device:rtr1",
-      "target": "net:device:rtr2"
+      "directed": true,
+      "id": "policy-attachment|aws:org-policy:p-0000deny0001|aws:ou:ou-0000-prod0001",
+      "kind": "policy-attachment",
+      "source": "aws:org-policy:p-0000deny0001",
+      "target": "aws:ou:ou-0000-prod0001"
     },
     {
       "attrs": {
-        "target_port": "GigabitEthernet0/0"
+        "type": "scp"
       },
-      "id": "physical|ext:external:internet|net:device:fw1[GigabitEthernet0/0]",
-      "kind": "physical",
-      "source": "ext:external:internet",
-      "target": "net:device:fw1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "GigabitEthernet1/0/1",
-        "target_port": "GigabitEthernet0"
-      },
-      "id": "physical|net:device:acc1[GigabitEthernet1/0/1]|net:device:ap1[GigabitEthernet0]",
-      "kind": "physical",
-      "source": "net:device:acc1",
-      "target": "net:device:ap1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "GigabitEthernet1/0/2",
-        "target_port": "Port 1"
-      },
-      "id": "physical|net:device:acc1[GigabitEthernet1/0/2]|net:device:phone1[Port 1]",
-      "kind": "physical",
-      "source": "net:device:acc1",
-      "target": "net:device:phone1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/1/1",
-        "target_port": "TenGigabitEthernet1/0/21"
-      },
-      "id": "physical|net:device:acc1[TenGigabitEthernet1/1/1]|net:device:core1[TenGigabitEthernet1/0/21]",
-      "kind": "physical",
-      "source": "net:device:acc1",
-      "target": "net:device:core1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/1/2",
-        "target_port": "TenGigabitEthernet1/0/21"
-      },
-      "id": "physical|net:device:acc1[TenGigabitEthernet1/1/2]|net:device:core2[TenGigabitEthernet1/0/21]",
-      "kind": "physical",
-      "source": "net:device:acc1",
-      "target": "net:device:core2"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "GigabitEthernet1/0/1",
-        "target_port": "eth0"
-      },
-      "id": "physical|net:device:acc2[GigabitEthernet1/0/1]|net:device:srv1[eth0]",
-      "kind": "physical",
-      "source": "net:device:acc2",
-      "target": "net:device:srv1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "GigabitEthernet1/0/48",
-        "subnets": [
-          "R&D <lab> \"core\" 'x'"
-        ],
-        "target_port": "eth0"
-      },
-      "id": "physical|net:device:acc2[GigabitEthernet1/0/48]|net:device:lab1[eth0]",
-      "kind": "physical",
-      "source": "net:device:acc2",
-      "target": "net:device:lab1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/1/1",
-        "target_port": "TenGigabitEthernet1/0/22"
-      },
-      "id": "physical|net:device:acc2[TenGigabitEthernet1/1/1]|net:device:core1[TenGigabitEthernet1/0/22]",
-      "kind": "physical",
-      "source": "net:device:acc2",
-      "target": "net:device:core1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/1/2",
-        "target_port": "TenGigabitEthernet1/0/22"
-      },
-      "id": "physical|net:device:acc2[TenGigabitEthernet1/1/2]|net:device:core2[TenGigabitEthernet1/0/22]",
-      "kind": "physical",
-      "source": "net:device:acc2",
-      "target": "net:device:core2"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/0/10",
-        "target_port": "TenGigabitEthernet1/0/10"
-      },
-      "id": "physical|net:device:core1[TenGigabitEthernet1/0/10]|net:device:core2[TenGigabitEthernet1/0/10]",
-      "kind": "physical",
-      "source": "net:device:core1",
-      "target": "net:device:core2"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/0/11",
-        "target_port": "TenGigabitEthernet1/0/11"
-      },
-      "id": "physical|net:device:core1[TenGigabitEthernet1/0/11]|net:device:core2[TenGigabitEthernet1/0/11]",
-      "kind": "physical",
-      "source": "net:device:core1",
-      "target": "net:device:core2"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/0/1",
-        "target_port": "GigabitEthernet0/0/1"
-      },
-      "id": "physical|net:device:core1[TenGigabitEthernet1/0/1]|net:device:rtr1[GigabitEthernet0/0/1]",
-      "kind": "physical",
-      "source": "net:device:core1",
-      "target": "net:device:rtr1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/0/2",
-        "target_port": "GigabitEthernet0/0/1"
-      },
-      "id": "physical|net:device:core1[TenGigabitEthernet1/0/2]|net:device:rtr2[GigabitEthernet0/0/1]",
-      "kind": "physical",
-      "source": "net:device:core1",
-      "target": "net:device:rtr2"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/0/1",
-        "target_port": "GigabitEthernet0/0/2"
-      },
-      "id": "physical|net:device:core2[TenGigabitEthernet1/0/1]|net:device:rtr1[GigabitEthernet0/0/2]",
-      "kind": "physical",
-      "source": "net:device:core2",
-      "target": "net:device:rtr1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "TenGigabitEthernet1/0/2",
-        "target_port": "GigabitEthernet0/0/2"
-      },
-      "id": "physical|net:device:core2[TenGigabitEthernet1/0/2]|net:device:rtr2[GigabitEthernet0/0/2]",
-      "kind": "physical",
-      "source": "net:device:core2",
-      "target": "net:device:rtr2"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "GigabitEthernet0/1",
-        "target_port": "GigabitEthernet0/0/0"
-      },
-      "id": "physical|net:device:fw1[GigabitEthernet0/1]|net:device:rtr1[GigabitEthernet0/0/0]",
-      "kind": "physical",
-      "source": "net:device:fw1",
-      "target": "net:device:rtr1"
-    },
-    {
-      "attrs": {
-        "protocols": [
-          "cdp"
-        ],
-        "source_port": "GigabitEthernet0/2",
-        "target_port": "GigabitEthernet0/0/0"
-      },
-      "id": "physical|net:device:fw1[GigabitEthernet0/2]|net:device:rtr2[GigabitEthernet0/0/0]",
-      "kind": "physical",
-      "source": "net:device:fw1",
-      "target": "net:device:rtr2"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.1",
-        "source_port": "Vlan10"
-      },
-      "id": "segment-member|net:device:fw1[Vlan10]|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:fw1",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.2",
-        "source_port": "Vlan10"
-      },
-      "id": "segment-member|net:device:rtr1[Vlan10]|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:rtr1",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.3",
-        "source_port": "Vlan10"
-      },
-      "id": "segment-member|net:device:rtr2[Vlan10]|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:rtr2",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "203.0.113.10",
-        "rule": "cgw-ip"
-      },
-      "id": "stitch|aws:customer-gateway:cgw-01|net:device:rtr1",
-      "kind": "stitch",
-      "source": "aws:customer-gateway:cgw-01",
-      "target": "net:device:rtr1"
+      "directed": true,
+      "id": "policy-attachment|aws:org-policy:p-FullAWSAccess|aws:org-root:r-0000",
+      "kind": "policy-attachment",
+      "source": "aws:org-policy:p-FullAWSAccess",
+      "target": "aws:org-root:r-0000"
     },
     {
       "attrs": {
@@ -381,11 +125,22 @@
   "nodes": [
     {
       "attrs": {
+        "account_id": "111122223333",
+        "management": true
+      },
+      "id": "aws:account:111122223333",
+      "kind": "account",
+      "label": "example-management",
+      "parent": "aws:org-root:r-0000"
+    },
+    {
+      "attrs": {
         "account_id": "123456789012"
       },
       "id": "aws:account:123456789012",
       "kind": "account",
-      "label": "example-prod"
+      "label": "example-prod",
+      "parent": "aws:ou:ou-0000-prod0001"
     },
     {
       "id": "aws:az:vpc-00:us-east-1a",
@@ -591,6 +346,63 @@
     },
     {
       "attrs": {
+        "policy_id": "p-0000deny0001",
+        "type": "scp"
+      },
+      "id": "aws:org-policy:p-0000deny0001",
+      "kind": "org-policy",
+      "label": "DenyRegions",
+      "parent": "aws:organization:o-example0001"
+    },
+    {
+      "attrs": {
+        "policy_id": "p-FullAWSAccess",
+        "type": "scp"
+      },
+      "id": "aws:org-policy:p-FullAWSAccess",
+      "kind": "org-policy",
+      "label": "FullAWSAccess",
+      "parent": "aws:organization:o-example0001"
+    },
+    {
+      "attrs": {
+        "policies": {
+          "scp": [
+            "FullAWSAccess"
+          ]
+        },
+        "root_id": "r-0000"
+      },
+      "id": "aws:org-root:r-0000",
+      "kind": "org-root",
+      "label": "Root",
+      "parent": "aws:organization:o-example0001"
+    },
+    {
+      "attrs": {
+        "org_id": "o-example0001"
+      },
+      "id": "aws:organization:o-example0001",
+      "kind": "organization",
+      "label": "Organization (o-example0001)"
+    },
+    {
+      "attrs": {
+        "ou_id": "ou-0000-prod0001",
+        "policies": {
+          "scp": [
+            "FullAWSAccess",
+            "DenyRegions"
+          ]
+        }
+      },
+      "id": "aws:ou:ou-0000-prod0001",
+      "kind": "ou",
+      "label": "Prod",
+      "parent": "aws:org-root:r-0000"
+    },
+    {
+      "attrs": {
         "region": "us-east-1"
       },
       "id": "aws:region:123456789012:us-east-1",
@@ -750,145 +562,6 @@
       "kind": "vpn-gateway",
       "label": "vgw-01",
       "parent": "aws:vpc:vpc-01"
-    },
-    {
-      "id": "ext:external:internet",
-      "kind": "external",
-      "label": "Internet"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.21",
-        "model": "C9300",
-        "role": "switch"
-      },
-      "id": "net:device:acc1",
-      "kind": "device",
-      "label": "acc1",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.22",
-        "model": "C9300",
-        "role": "switch"
-      },
-      "id": "net:device:acc2",
-      "kind": "device",
-      "label": "acc2",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.1.10",
-        "model": "AIR-AP2802I",
-        "role": "wireless"
-      },
-      "id": "net:device:ap1",
-      "kind": "device",
-      "label": "ap1",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.11",
-        "model": "C9500",
-        "role": "switch"
-      },
-      "id": "net:device:core1",
-      "kind": "device",
-      "label": "core1",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.12",
-        "model": "C9500",
-        "role": "switch"
-      },
-      "id": "net:device:core2",
-      "kind": "device",
-      "label": "core2",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.1",
-        "model": "ASA5516",
-        "role": "firewall"
-      },
-      "id": "net:device:fw1",
-      "kind": "device",
-      "label": "fw1",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.99",
-        "model": "R&D <lab> \"core\" 'x'",
-        "role": "unknown"
-      },
-      "id": "net:device:lab1",
-      "kind": "device",
-      "label": "R&D <lab> \"core\" 'x'",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "",
-        "model": "CP-8845",
-        "role": "phone"
-      },
-      "id": "net:device:phone1",
-      "kind": "device",
-      "label": "phone1",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.2",
-        "model": "ISR4331",
-        "role": "router"
-      },
-      "id": "net:device:rtr1",
-      "kind": "device",
-      "label": "rtr1",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.255.0.3",
-        "model": "ISR4331",
-        "role": "router"
-      },
-      "id": "net:device:rtr2",
-      "kind": "device",
-      "label": "rtr2",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.20.0.10",
-        "model": "",
-        "role": "server"
-      },
-      "id": "net:device:srv1",
-      "kind": "device",
-      "label": "srv1",
-      "parent": "net:site:hq"
-    },
-    {
-      "attrs": {
-        "subnet": "10.10.0.0/24"
-      },
-      "id": "net:segment:10.10.0.0/24",
-      "kind": "segment",
-      "label": "10.10.0.0/24"
-    },
-    {
-      "id": "net:site:hq",
-      "kind": "site",
-      "label": "HQ"
     }
   ],
   "schema": "topomap/1"

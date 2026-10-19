@@ -24,7 +24,7 @@ from .model import Link, Node, Topology
 HELP = "Show what changed between two topology snapshots (exit status 1 if anything did)."
 PRODUCES_TOPOLOGY = False
 
-# `sources` records which file or host a device came from: noise for drift.
+# `sources` records where a node was read from: noise for drift.
 DEFAULT_IGNORE = ("sources",)
 # Fields that name an item in a list of dicts, tried in this order.
 IDENTITY_KEYS = ("id", "name", "destination", "outside_ip", "vif_id")

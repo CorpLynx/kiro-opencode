@@ -3,7 +3,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from topomapper.model import (LINK_PHYSICAL, SCHEMA, Topology, link_id, node_id,  # noqa: E402
+from topomapper.model import (LINK_VPC_PEERING, SCHEMA, Topology, link_id, node_id,  # noqa: E402
                            union)
 
 
@@ -19,8 +19,8 @@ class ModelTest(unittest.TestCase):
 
     def test_ids_are_deterministic(self):
         self.assertEqual(node_id("aws", "vpc", "vpc-1"), "aws:vpc:vpc-1")
-        self.assertEqual(link_id("physical", "b", "a", "p2", "p1"),
-                         link_id("physical", "a", "b", "p1", "p2"))
+        self.assertEqual(link_id("vpc-peering", "b", "a", "p2", "p1"),
+                         link_id("vpc-peering", "a", "b", "p1", "p2"))
         self.assertNotEqual(link_id("vpn", "a", "b", directed=True),
                             link_id("vpn", "b", "a", directed=True))
 
@@ -34,15 +34,15 @@ class ModelTest(unittest.TestCase):
 
     def test_links_are_canonical(self):
         t = Topology()
-        for n in ("net:device:a", "net:device:b"):
-            t.add_node(n, "device")
-        one = t.add_link(LINK_PHYSICAL, "net:device:b", "net:device:a",
-                         source_port="Gi0/2", target_port="Gi0/1", protocols=["cdp"])
-        two = t.add_link(LINK_PHYSICAL, "net:device:a", "net:device:b",
-                         source_port="Gi0/1", target_port="Gi0/2", protocols=["lldp"])
+        for n in ("aws:vpc:vpc-a", "aws:vpc:vpc-b"):
+            t.add_node(n, "vpc")
+        one = t.add_link(LINK_VPC_PEERING, "aws:vpc:vpc-b", "aws:vpc:vpc-a",
+                         source_port="eth2", target_port="eth1", sources=["scan-1.xml"])
+        two = t.add_link(LINK_VPC_PEERING, "aws:vpc:vpc-a", "aws:vpc:vpc-b",
+                         source_port="eth1", target_port="eth2", sources=["scan-2.xml"])
         self.assertIs(one, two)
-        self.assertEqual((one.source, one.attrs["source_port"]), ("net:device:a", "Gi0/1"))
-        self.assertEqual(one.attrs["protocols"], ["cdp", "lldp"])
+        self.assertEqual((one.source, one.attrs["source_port"]), ("aws:vpc:vpc-a", "eth1"))
+        self.assertEqual(one.attrs["sources"], ["scan-1.xml", "scan-2.xml"])
 
     def test_round_trip_and_sorted(self):
         t = self.build()
