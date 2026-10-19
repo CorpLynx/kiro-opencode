@@ -13,7 +13,7 @@ three parts, applied in this order:
    which is how `--exclude-kind az` gives a flatter VPC.
 3. **Collapse.** `--collapse vpc` folds everything inside each VPC into it,
    re-pointing links that ended inside at the VPC. `--max-per-type N` folds
-   the resources `collect aws --all-resources` found, where one box holds
+   the resources `topomap aws --all-resources` found, where one box holds
    more than N of a type, into one "286 × certificate" node.
 
 Links survive only if both ends do, so the result always passes

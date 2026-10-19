@@ -1,6 +1,6 @@
 """AWS services by the name ARNs use for them (`arn:aws:<service>:...`).
 
-`collect aws --all-resources` groups what it finds by service, and the
+`topomap aws --all-resources` groups what it finds by service, and the
 renderers draw each resource with its service's icon. Each entry is
 (display name, draw.io AWS 2021 icon, icon colour, short text for SVG tiles).
 The icon names and colours come from draw.io's own AWS 2021 sidebar, so

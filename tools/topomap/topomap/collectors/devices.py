@@ -549,7 +549,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                          help=f"login and per-command timeout (default: {DEFAULT_TIMEOUT:g})")
     running.add_argument("--save-raw", metavar="DIR",
                          help="also save each device's output to DIR/<hostname>.txt (mode 0600), "
-                              "for 'topomap collect files'")
+                              "for 'topomap files'")
 
 
 def run(args: argparse.Namespace) -> Topology:

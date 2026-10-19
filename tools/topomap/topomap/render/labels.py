@@ -145,7 +145,7 @@ def _port_text(p: Any) -> str:
 
 
 def _port_lines(ports: Any) -> List[str]:
-    """Open ports found by `collect scan`, two to a line: `22/ssh · 80/http`.
+    """Open ports found by `topomap scan`, two to a line: `22/ssh · 80/http`.
     A port nmap couldn't name is just its number."""
     if not isinstance(ports, list):
         return []

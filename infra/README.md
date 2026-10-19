@@ -3,7 +3,7 @@
 This folder holds a tiny Terraform estate (VPC, public and private subnets,
 an internet gateway, one small EC2 instance and a free S3 gateway VPC
 endpoint) built on purpose to be gathered by [`tools/topomap`](../tools/topomap)'s
-`collect aws`.
+`topomap aws`.
 
 ## What topomap catches here
 
@@ -34,7 +34,7 @@ terraform apply
 Then collect it with topomap:
 
 ```sh
-topomap collect aws --profile default --region us-east-1 \
+topomap aws --profile default --region us-east-1 \
     --include instances,endpoints -o aws.json
 topomap render aws.json -o aws.drawio
 ```

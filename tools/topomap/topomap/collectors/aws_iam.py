@@ -1,6 +1,6 @@
 """Custom IAM roles and users in an account (read-only).
 
-`collect aws --iam` adds one `iam-role` node per role and one `iam-user`
+`topomap aws --iam` adds one `iam-role` node per role and one `iam-user`
 node per user. They sit in an `iam` box, one per account, which the
 renderers pin to the account's top-right corner so IAM is always in the
 same place. Roles that AWS owns (service-linked

@@ -33,7 +33,7 @@ Undo it at once with `terraform destroy`.
 
 ## Seeing it in topomap
 
-`collect aws-org` shows the policy by name on the root. `collect aws` marks
+`topomap aws-org` shows the policy by name on the root. `topomap aws` marks
 every region it blocks, labelled `SCP blocks EC2, EKS`, and prints one
 warning per blocked service and region. `filter --hide-empty` leaves those
 regions off a diagram.

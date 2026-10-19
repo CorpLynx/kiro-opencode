@@ -8,7 +8,7 @@ A collection of standalone tools and editor/agent plugins. Each project lives in
 | --- | --- | --- |
 | [`tools/ip-redactor`](tools/ip-redactor) | CLI (Python) | Structure-preserving IPv4/IPv6 redaction for configs, logs, Office/Visio files and packet captures. It is keyed and reversible, and subnets stay together. |
 | [`tools/topomap`](tools/topomap) | CLI (Python) | Gathers network and AWS topology automatically (AWS APIs, optionally every resource in an account, AWS Organizations OUs and accounts, SSH crawl over CDP/LLDP, or saved command output and config backups), stitches on-prem to AWS, and draws it as draw.io, SVG, Mermaid or DOT. |
-| [`infra/`](infra/) | Terraform | Cheap AWS estate (VPC, subnets, internet gateway, EC2, S3 VPC endpoint) that `topomap collect aws` gathers. Reviewed by hand, not in CI: it creates real billable resources and needs AWS credentials. |
+| [`infra/`](infra/) | Terraform | Cheap AWS estate (VPC, subnets, internet gateway, EC2, S3 VPC endpoint) that `topomap aws` gathers. Reviewed by hand, not in CI: it creates real billable resources and needs AWS credentials. |
 
 ### In review ([PR #1](https://github.com/CorpLynx/kiro-opencode/pull/1))
 

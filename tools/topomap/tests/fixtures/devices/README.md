@@ -3,7 +3,7 @@
 Made-up saved output for a small lab. The devices reference each other consistently, so collecting the whole directory gives one connected topology across vendors.
 
 ```
-topomap collect files tests/fixtures/devices --site-map tests/fixtures/devices/sites.csv --l3-exclude 192.168.0.0/24
+topomap files tests/fixtures/devices --site-map tests/fixtures/devices/sites.csv --l3-exclude 192.168.0.0/24
 ```
 
 All addresses are RFC 1918 or documentation ranges. Names are under `example.net`, and serial numbers and MACs (`00:00:5e:00:53:xx`) are invented.

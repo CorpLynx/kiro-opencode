@@ -1,4 +1,4 @@
-# A cheap, throwaway AWS estate that topomap's `collect aws` gathers.
+# A cheap, throwaway AWS estate that `topomap aws` gathers.
 #
 # Everything here is free or near-free: VPC, subnets, route tables and the
 # internet gateway cost nothing; the S3 gateway VPC endpoint costs nothing;

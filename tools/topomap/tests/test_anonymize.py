@@ -425,7 +425,7 @@ if __name__ == "__main__":
 
 
 class InventoryTest(unittest.TestCase):
-    """What `collect aws --all-resources` adds: ARNs in IDs, IAM unique IDs
+    """What `topomap aws --all-resources` adds: ARNs in IDs, IAM unique IDs
     and UUIDs as resource IDs."""
 
     def test_arns_unique_ids_and_uuids_are_replaced(self):
