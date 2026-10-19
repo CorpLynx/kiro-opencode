@@ -13,6 +13,6 @@ output "iam_roles" {
 }
 
 output "topomap_command" {
-  value       = "topomap collect aws --profile ${var.profile} --org-role-name ${var.member_role_name} --region ${var.region} --iam --eks --skip-network -o topomap-out/iam-eks.json"
+  value       = "topomap aws --profile ${var.profile} --org-role-name ${var.member_role_name} --region ${var.region} --iam --eks --skip-network -o topomap-out/iam-eks.json"
   description = "Collects the management account directly and every member account through the member role."
 }

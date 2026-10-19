@@ -1,5 +1,5 @@
 # The cheapest EKS cluster that still has everything topomap's
-# `collect aws --eks` reads. Only the control plane is billed (about
+# `topomap aws --eks` reads. Only the control plane is billed (about
 # $0.10/hour, ~$2.40/day); set create_eks = false to tear it down.
 #
 #   VPC         two private subnets, no internet gateway and no NAT (free)

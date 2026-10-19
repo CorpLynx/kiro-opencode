@@ -129,13 +129,13 @@ def _details(node: Node) -> List[str]:
     return []
 
 
-<<<<<<< Updated upstream
 def short_type(resource_type: Any) -> str:
     """"AWS::EC2::NetworkInterface" or "ec2:network-interface" -> "network interface"."""
     last = str(resource_type or "").replace("::", ":").split(":")[-1]
     words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", last)
     return words.replace("-", " ").replace("_", " ").lower()
-=======
+
+
 PORT_LINES = 5      # lines of ports on a label; the tooltip lists them all
 PORTS_PER_LINE = 2
 
@@ -145,7 +145,7 @@ def _port_text(p: Any) -> str:
 
 
 def _port_lines(ports: Any) -> List[str]:
-    """Open ports found by `collect scan`, two to a line: `22/ssh · 80/http`.
+    """Open ports found by `topomap scan`, two to a line: `22/ssh · 80/http`.
     A port nmap couldn't name is just its number."""
     if not isinstance(ports, list):
         return []
@@ -160,7 +160,6 @@ def _port_lines(ports: Any) -> List[str]:
 def _port_tooltip(ports: List[Any]) -> str:
     return "; ".join(_port_text(p) + (f" ({p['protocol']})" if p.get("protocol", "tcp") != "tcp" else "")
                      + (f" {p['product']}" if p.get("product") else "") for p in ports)
->>>>>>> Stashed changes
 
 
 def _policy_line(attrs: Any) -> str:

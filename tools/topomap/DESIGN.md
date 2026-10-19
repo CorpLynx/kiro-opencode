@@ -36,7 +36,7 @@ Each command module exposes:
 - `add_arguments(parser)`
 - `run(args)`
 
-`cli.py` wires them up and adds `-o/--output` to commands that produce a topology. See the docstring in `cli.py`.
+`cli.py` wires them up as top-level commands (`topomap aws`; the older `topomap collect aws` is an unlisted alias). To every command that produces a topology it adds a repeatable `-o/--output`, whose extension picks the output (`.json` for the topology, `.drawio`/`.svg`/`.mmd`/`.dot` to draw it, refused before `run()` otherwise), and the drawing options `render` has. Modules don't handle output themselves. See the docstring in `cli.py`.
 
 ## IDs
 
@@ -59,9 +59,9 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | aws-resource | `aws:resource:<arn>` (from `--all-resources`). A resource the fallback found without an ARN is `aws:resource:<account-id>:<region>:<CloudFormation type>:<identifier>`. EC2 network resources keep the IDs above instead. A summary from `filter --max-per-type` is `aws:resource:<parent>/<type>`. |
 | aws-service | `aws:service:<account-id>:<region or "global">:<ARN service name>` (the box holding one service's resources) |
 
-`collect aws` and `collect aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
+`topomap aws` and `topomap aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
 
-Both collectors describe themselves in `meta` the same way: `collector`, `collected_at`, and `accounts` (and, for `aws-org`, `ous`) as sorted lists of IDs. `collect aws` also records `regions` and `region_source`.
+Both collectors describe themselves in `meta` the same way: `collector`, `collected_at`, and `accounts` (and, for `aws-org`, `ous`) as sorted lists of IDs. `topomap aws` also records `regions` and `region_source`.
 | site | `net:site:<lower-case name>` |
 | device | `net:device:<normalize_hostname(name)>`; use `facts.device_id()` |
 | segment | `net:segment:<cidr>` |
@@ -71,7 +71,7 @@ Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you.
 
 ## Containment (`parent`)
 
-- **AWS:** `[organization > org-root > ou > … > ] account > region > vpc > az > subnet > (nat-gateway | instance)`. The organization levels come from `collect aws-org`; OUs nest to any depth. Organization policy nodes sit in the organization.
+- **AWS:** `[organization > org-root > ou > … > ] account > region > vpc > az > subnet > (nat-gateway | instance)`. The organization levels come from `topomap aws-org`; OUs nest to any depth. Organization policy nodes sit in the organization.
   - An internet gateway, egress-only gateway, VPC endpoint or VPN gateway attached to a VPC has that VPC as its parent.
   - Transit gateways, customer gateways, DX gateways and DX connections sit in their region.
   - A DX gateway is global, so it sits in its account.
@@ -89,7 +89,7 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 | org-root | `root_id`, `arn`, `policy_types` (enabled, short names: `scp`, `rcp`, `tag`, `backup`, `ai-opt-out`, `chatbot`, `declarative-ec2`), `policies` |
 | ou | `ou_id`, `arn`, `path` (`Root/Workloads/Prod`), `policies`, `empty` (true when it holds no OUs or accounts) |
 | org-policy | `policy_id`, `type` (short name), `aws_managed`, `description` |
-| account | `account_id`, `name`, `collected` (true when `collect aws` reached it; after a merge, false for accounts only the organization listed); from `aws-org` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and with `--include` `tags` and `email` |
+| account | `account_id`, `name`, `collected` (true when `topomap aws` reached it; after a merge, false for accounts only the organization listed); from `aws-org` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and with `--include` `tags` and `email` |
 | region | `region`, `empty` (true when nothing was found in it), `bedrock_models_shown`, `bedrock_models_offered`, `scp_denied` (services a service control policy blocks there, such as `["EC2"]`), `inventory_sources` (with `--all-resources`: which of `config`, `resource-explorer`, `cloud-control`, `tagging` it was read through) |
 | vpc | `vpc_id`, `cidrs` (list), `ipv6_cidrs`, `is_default`, `account_id`, `region`, `tags` (dict, only with `--include tags`; this goes for every kind that has `tags`) |
 | subnet | `subnet_id`, `cidr`, `ipv6_cidrs`, `az`, `public` (bool: its route table has a route to an internet gateway), `routes` (list of `{"destination", "target"}`), `tags` |
@@ -105,7 +105,7 @@ Every attribute is optional, but renderers, merge and stitching rely on these na
 | site | `name` |
 | device | `vendor`, `platform`, `model`, `os_version`, `serial`, `mgmt_ip`, `role` (see `facts.ROLES`), `interfaces` (list of `{"name", "addresses": ["10.0.0.1/30"], "description", "status", "vrf"}`), `discovered` (`"neighbor"` if only seen as someone's CDP/LLDP neighbour), `sources` |
 | segment | `subnet` |
-| device (from `collect scan`) | also `hostname`, `mac`, `os`, `device_type` (`gateway`, `server`, `nas`, `printer`, `camera`, `access point`, `media`, `mobile`, `workstation`, `voip`, `hypervisor`), `open_ports` (list of `{"port", "protocol", "service", "product"}`); one interface with no name holding the scanned address |
+| device (from `topomap scan`) | also `hostname`, `mac`, `os`, `device_type` (`gateway`, `server`, `nas`, `printer`, `camera`, `access point`, `media`, `mobile`, `workstation`, `voip`, `hypervisor`), `open_ports` (list of `{"port", "protocol", "service", "product"}`); one interface with no name holding the scanned address |
 | bedrock | `region`, `models_shown` (models drawn), `models_offered` (what Bedrock lists in the region), `models_in_use`, `granted_all_to` (principals with an Allow on every model), `provisioned_throughput` (list of `{"name", "model_units", "status"}`) |
 | bedrock-model | `model_id`, `model_name`, `provider`, `input_modalities`, `output_modalities`, `inference_types` (`ON_DEMAND`, `PROVISIONED`, `INFERENCE_PROFILE`), `streaming`, `lifecycle`, `source` (`foundation`, `custom`, `imported`), `evidence` (`in use`, `granted`), `granted_to` (role, user or group names), `invocable` (false when the account isn't authorized, entitled or under an agreement), `base_model`, `arn` (custom and imported) |
 | iam | `account_id`, `summary` ("12 roles, 3 users") |

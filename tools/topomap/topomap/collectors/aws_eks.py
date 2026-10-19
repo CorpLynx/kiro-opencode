@@ -1,6 +1,6 @@
 """EKS clusters in an account and region (read-only).
 
-`collect aws --eks` adds one `eks-cluster` node per cluster, inside the VPC
+`topomap aws --eks` adds one `eks-cluster` node per cluster, inside the VPC
 it runs in (or in the region when that VPC wasn't collected). The cluster's
 facts sit in its attributes: version and status, who can reach its API
 endpoint, its logging, the IAM role it uses and its OIDC issuer (which is

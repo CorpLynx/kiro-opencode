@@ -1,4 +1,4 @@
-"""Every resource in an account, for `collect aws --all-resources` (read-only).
+"""Every resource in an account, for `topomap aws --all-resources` (read-only).
 
 AWS has no single "list everything" call, so each region is asked through
 whichever inventory services the account has turned on, and their answers

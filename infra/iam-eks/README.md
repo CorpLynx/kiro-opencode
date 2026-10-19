@@ -2,7 +2,7 @@
 
 A small Terraform stack, separate from the network lab in `../` (its own
 state), that gives [`tools/topomap`](../../tools/topomap) something to find
-with `collect aws --iam --eks`. It spans the management account and two
+with `topomap aws --iam --eks`. It spans the management account and two
 member accounts of an AWS Organization (built for a Control Tower landing
 zone's Audit and Log Archive accounts).
 
@@ -45,7 +45,7 @@ terraform apply                                # the cluster takes ~10-15 minute
 Collect it (`terraform output topomap_command` prints this with your values):
 
 ```sh
-topomap collect aws --profile default --org-role-name AWSControlTowerExecution \
+topomap aws --profile default --org-role-name AWSControlTowerExecution \
     --region us-east-1 --iam --eks --skip-network -o topomap-out/iam-eks.json
 topomap render topomap-out/iam-eks.json -o topomap-out/iam-eks.svg
 ```

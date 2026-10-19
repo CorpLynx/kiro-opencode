@@ -31,36 +31,58 @@ pip install ./tools/topomap           # files, merge, diff, filter, render: no d
 
 | Extra | Adds | Needs |
 | --- | --- | --- |
-| *(none)* | `collect files`, `merge`, `diff`, `filter`, `render` (all formats) | Python 3.9+ standard library |
-| `aws` | `collect aws` | `boto3` |
-| `devices` | `collect devices` | `netmiko` |
+| *(none)* | `topomap files`, `merge`, `diff`, `filter`, `render` (all formats) | Python 3.9+ standard library |
+| `aws` | `topomap aws` | `boto3` |
+| `devices` | `topomap devices` | `netmiko` |
 
 ## Quick start
 
+One command collects and draws; the extension of `-o` says what to write:
+
 ```sh
-# 1. Gather
-topomap collect aws-org --profile management -o org.json        # the organization chart
-topomap collect aws --profile prod --region us-east-1 --region eu-west-1 -o aws.json
-topomap collect files ~/rancid/configs ~/captures --l3-exclude 192.168.0.0/24 -o net.json
-#    or crawl live:
-TOPOMAP_USERNAME=netops topomap collect devices --seed 10.0.0.1 --allow 10.0.0.0/16 --ask-pass -o net.json
-
-# 2. Combine: accounts land in their OUs; on-prem devices are linked to their
-#    AWS customer gateways and DX VIFs
-topomap merge org.json aws.json net.json -o all.json
-topomap render org.json -o organization.drawio                 # or just the org chart
-
-# 3. Draw (format from the extension)
-topomap render all.json -o network.drawio
-topomap filter all.json --aws-only --collapse vpc | topomap render - -o aws-overview.svg
-
-# 4. Later: what changed?
-topomap diff last-month.json all.json      # exit status 1 if anything did
+topomap aws --profile prod -o aws.drawio                       # an AWS account, drawn
+topomap aws-org --profile management -o org.svg                # the organization chart
+topomap files ~/rancid/configs ~/captures -o net.drawio        # on-prem, from saved output
 ```
+
+To combine sources, keep each one's topology (`.json`) and merge them. Accounts land in their OUs, and on-prem devices are linked to their AWS customer gateways and DX VIFs:
+
+```sh
+topomap aws-org --profile management -o org.json
+topomap aws --profile prod --region us-east-1 --region eu-west-1 -o aws.json
+topomap files ~/rancid/configs --l3-exclude 192.168.0.0/24 -o net.json
+#   or crawl live:  TOPOMAP_USERNAME=netops topomap devices --seed 10.0.0.1 --allow 10.0.0.0/16 --ask-pass -o net.json
+
+topomap merge org.json aws.json net.json -o all.json -o all.drawio   # keep the result, and draw it
+topomap filter all.json --aws-only --collapse vpc -o aws-overview.svg
+topomap diff last-month.json all.json                                 # later: what changed? (exit 1 if anything did)
+```
+
+### Commands and outputs
+
+| Command | Does |
+| --- | --- |
+| [`aws`](#topomap-aws) | Collect AWS networking (VPCs, subnets, gateways, TGWs, VPN, Direct Connect), and optionally Bedrock, IAM, EKS or every resource |
+| [`aws-org`](#topomap-aws-org) | Collect an AWS Organization: OUs, accounts, policies, delegated admins |
+| [`files`](#topomap-files) | Collect from saved `show` output and config backups, without touching devices |
+| [`devices`](#topomap-devices) | Crawl network devices over SSH, following CDP/LLDP neighbours |
+| [`scan`](#topomap-scan) | Discover hosts and open ports on a local network with nmap |
+| [`merge`](#topomap-merge) | Combine topologies, and link on-prem devices to their AWS edges |
+| [`filter`](#topomap-filter) | Cut a topology down to what you want to draw |
+| [`render`](#topomap-render) | Draw a topology saved earlier |
+| [`diff`](#topomap-diff) | Show what changed between two snapshots |
+| [`anonymize`](#topomap-anonymize) | Replace IDs, names and addresses with fakes, for sharing |
+
+Every flag is listed under [Command reference](#command-reference); `topomap COMMAND --help` shows the same.
+
+- **`-o` picks the output by extension,** for every command that makes a topology: `.json` writes the topology, and `.drawio`, `.svg`, `.mmd` or `.dot` draws it. Repeat `-o` for several at once. With no `-o`, the topology JSON goes to stdout, so commands still chain with pipes (`topomap aws ... | topomap filter - --aws-only -o view.svg`).
+- **Drawing options** (`--direction LR`, `--title`, `--no-link-labels`) work on all of them, as they do on `render`.
+- **An unknown extension is refused straight away,** before a long collection starts.
+- The older two-word form, `topomap collect aws`, still works.
 
 ## Collecting
 
-### AWS (`collect aws`)
+### AWS (`topomap aws`)
 
 - **What it collects:**
   - accounts, regions and VPCs;
@@ -89,8 +111,8 @@ topomap diff last-month.json all.json      # exit status 1 if anything did
 topomap works in the AWS GovCloud (US) partition. Credentials only work in their own partition, so a GovCloud profile is separate from a commercial one.
 
 ```sh
-topomap collect aws-org --profile gov-management -o topomap-out/gov-org.json
-topomap collect aws --profile gov-management --region us-gov-west-1 --region us-gov-east-1 \
+topomap aws-org --profile gov-management -o topomap-out/gov-org.json
+topomap aws --profile gov-management --region us-gov-west-1 --region us-gov-east-1 \
     --iam -o topomap-out/gov.json
 ```
 
@@ -103,7 +125,7 @@ topomap collect aws --profile gov-management --region us-gov-west-1 --region us-
 
 ### Bedrock, IAM and EKS (`--ai`, `--iam`, `--eks`)
 
-Three flags on `collect aws` add what the network collection doesn't cover. Each is off by default, read-only, and works across every account `collect aws` reaches (`--org-role-name` for the whole organization).
+Three flags on `topomap aws` add what the network collection doesn't cover. Each is off by default, read-only, and works across every account `topomap aws` reaches (`--org-role-name` for the whole organization).
 
 | Flag | Adds | Needs (read-only) |
 | --- | --- | --- |
@@ -120,8 +142,8 @@ Bedrock access was written against the API's documentation, checked once against
 An organization-wide picture of which accounts can use which models:
 
 ```sh
-topomap collect aws-org --profile management -o topomap-out/org.json
-topomap collect aws --profile management --org-role-name OrganizationAccountAccessRole \
+topomap aws-org --profile management -o topomap-out/org.json
+topomap aws --profile management --org-role-name OrganizationAccountAccessRole \
     --ai --skip-network -o topomap-out/ai.json
 topomap merge topomap-out/org.json topomap-out/ai.json -o topomap-out/org-ai.json
 topomap filter topomap-out/org-ai.json --kind bedrock-model --hide-empty -o topomap-out/models.json
@@ -132,10 +154,10 @@ topomap render topomap-out/models.json -o topomap-out/models.svg
 
 ### Every resource in an account (`--all-resources`)
 
-`collect aws --all-resources` draws everything in the account, not only the network: every Lambda function, bucket, queue, table, key, role, log group and the rest, each with its service's AWS icon.
+`topomap aws --all-resources` draws everything in the account, not only the network: every Lambda function, bucket, queue, table, key, role, log group and the rest, each with its service's AWS icon.
 
 ```sh
-topomap collect aws --profile prod --all-resources -o topomap-out/everything.json
+topomap aws --profile prod --all-resources -o topomap-out/everything.json
 topomap filter topomap-out/everything.json --max-per-type 10 | topomap render - -o topomap-out/everything.drawio
 ```
 
@@ -154,14 +176,14 @@ topomap filter topomap-out/everything.json --max-per-type 10 | topomap render - 
 - **Without `--skip-network`** you get the full VPC picture with resources placed in it. With `--skip-network`, VPCs and subnets come from the inventory itself and are still drawn as VPCs and subnets.
 - **Not collected:** resource configurations (only identity, type, tags and relationships), and resources Config and Resource Explorer don't record or index. Config's compliance and inventory reports aren't resources and are left out.
 
-### AWS Organizations (`collect aws-org`)
+### AWS Organizations (`topomap aws-org`)
 
 ![An organization chart: the root with its SCP, the management account, and Infrastructure, Sandbox, Security and Workloads OUs (Workloads holding Prod and NonProd), each OU listing its SCPs and accounts](docs/organization.png)
 
 <sub>Drawn from a mocked organization.</sub>
 
 - **Run it against the management account,** or an account that is a delegated administrator for AWS Organizations. Only those can list the whole organization. A member account gets a clear error saying so.
-- **Permissions:** the AWS-managed `AWSOrganizationsReadOnlyAccess` policy is enough. Like `collect aws`, it can only call `Describe*`/`List*`/`Get*`, plus `AssumeRole` with `--role-arn`.
+- **Permissions:** the AWS-managed `AWSOrganizationsReadOnlyAccess` policy is enough. Like `topomap aws`, it can only call `Describe*`/`List*`/`Get*`, plus `AssumeRole` with `--role-arn`.
 - **What it collects:**
   - the organization, its root and the enabled policy types;
   - every OU, nested to any depth, with its path (`Root/Workloads/Prod`);
@@ -176,9 +198,9 @@ topomap filter topomap-out/everything.json --max-per-type 10 | topomap render - 
 - **Extras** (`--include`):
   - `tags`: account tags, one API call per account.
   - `emails`: account email addresses. These are personal data, so they're off by default.
-- **Combining with network data:** `collect aws` gives each account the same ID, so `merge org.json aws.json` draws each account inside its OU, with its regions and VPCs inside the account. After a merge, an account that `collect aws` could not reach is labelled "not collected", an empty OU "empty" and a region with nothing in it "no resources", so a bare box is never mistaken for an unscanned one. An account with nothing collected inside it is drawn as an account icon; one holding VPCs is drawn as a container.
+- **Combining with network data:** `topomap aws` gives each account the same ID, so `merge org.json aws.json` draws each account inside its OU, with its regions and VPCs inside the account. After a merge, an account that `topomap aws` could not reach is labelled "not collected", an empty OU "empty" and a region with nothing in it "no resources", so a bare box is never mistaken for an unscanned one. An account with nothing collected inside it is drawn as an account icon; one holding VPCs is drawn as a container.
 
-### Saved output and configs (`collect files`)
+### Saved output and configs (`topomap files`)
 
 - **Platforms:** Cisco IOS/IOS-XE, Cisco NX-OS, Arista EOS and Juniper Junos.
 - **What it reads:**
@@ -190,7 +212,7 @@ topomap filter topomap-out/everything.json --max-per-type 10 | topomap render - 
 - **Sites:** `--site NAME`, or `--site-map sites.csv` (`hostname,site`, with `*` wildcards).
 - **Layer 3:** a subnet shared by two devices becomes a link, or is added to their cable if there is one. A subnet shared by three or more becomes a segment. Use `--l3-exclude` for the management network, which otherwise connects everything to everything.
 
-### Live crawl (`collect devices`)
+### Live crawl (`topomap devices`)
 
 - **What it does:** logs into `--seed` devices (or an `--inventory` CSV/JSON) over SSH and runs the same read-only commands. It then follows CDP/LLDP neighbours breadth-first.
 - **Safety:**
@@ -200,14 +222,14 @@ topomap filter topomap-out/everything.json --max-per-type 10 | topomap render - 
   - **Passwords** come only from `$TOPOMAP_PASSWORD` or an `--ask-pass` prompt, never from the command line or an inventory file. Keys in the SSH agent or given with `--key-file` work too.
   - `--strict-host-keys` refuses devices whose host key isn't in `~/.ssh/known_hosts`. Without it, netmiko accepts any key.
 - **Autodetection:** when the platform isn't given, it is autodetected with netmiko, which sends a few probe commands of its own. Set `--platform` or put platforms in the inventory to avoid that.
-- `--save-raw DIR` keeps each device's output (mode 0600) in the format `collect files` reads, so a crawl can be replayed offline.
+- `--save-raw DIR` keeps each device's output (mode 0600) in the format `topomap files` reads, so a crawl can be replayed offline.
 
-### Home and lab networks (`collect scan`)
+### Home and lab networks (`topomap scan`)
 
 Finds the hosts and open ports on a network with [nmap](https://nmap.org) and draws them: one segment per network, every host linked to it, the default gateway as the router, and each host's services and a guessed type (gateway, server, NAS, printer, camera, access point, media player…) on its label.
 
 ```sh
-topomap collect scan 192.168.1.0/24 --save-xml topomap-out/scan -o topomap-out/lan.json
+topomap scan 192.168.1.0/24 --save-xml topomap-out/scan -o topomap-out/lan.json
 topomap render topomap-out/lan.json -o topomap-out/lan.svg
 ```
 
@@ -258,6 +280,222 @@ topomap render sample.json -o sample.svg
   - **Checks:** the output is searched for the original IDs, names and public addresses, and anything that survived is a warning. Fakes never equal a real value, and link order stays canonical, so `diff` and `merge` work on anonymized snapshots.
 
 The text outputs (draw.io, SVG, Mermaid, DOT) can also be run through `ipredact` directly, but that doesn't touch IDs or names.
+
+## Command reference
+
+Every command prints this with `topomap COMMAND --help`. Flags marked *repeatable* can be given several times.
+
+### Options shared by every command that makes a topology
+
+`aws`, `aws-org`, `files`, `devices`, `scan`, `merge`, `filter` and `anonymize` all take these:
+
+| Flag | What it does |
+| --- | --- |
+| `-o, --output FILE` | Where to write, chosen by extension: `.json` writes the topology; `.drawio`, `.svg`, `.mmd`/`.mermaid` or `.dot`/`.gv` draws it. Repeatable, to write several at once. Default: the topology JSON on stdout. Any other extension is refused before anything runs. |
+| `--direction {TB,LR}` | Diagram reading order: top-to-bottom (default) or left-to-right. |
+| `--title TITLE` | Title drawn above the diagram. |
+| `--no-link-labels` | Leave ports, subnets and VPN/VIF IDs off the links. |
+
+The drawing options only matter when an `-o` names a diagram. Files are written readable by you only (mode 0600), except from `anonymize`.
+
+### `topomap aws`
+
+Collect VPCs, subnets, gateways, transit gateways, VPNs, peering and Direct Connect from one or more AWS accounts, read-only. Details: [AWS](#aws-topomap-aws).
+
+```
+topomap aws [--profile NAME] [--region NAME] [--role-arn ARN | --org-role-name NAME]
+            [--ai] [--iam] [--eks] [--all-resources] [--skip-network] [--include LIST] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `--profile NAME` | AWS profile to use. Repeatable, for several accounts. Default: boto3's credential chain. |
+| `--region NAME` | Region to collect. Repeatable. Default: every region enabled for the account. |
+| `--role-arn ARN` | Assume this role from each profile and collect its account. Repeatable. The profiles' own accounts are then left out unless `--org-role-name` covers them. |
+| `--external-id ID` | External ID to pass when assuming roles. |
+| `--role-session-name NAME` | Session name for assumed roles (default: `topomap`). |
+| `--org-role-name NAME` | List the organization's accounts and assume `arn:aws:iam::<id>:role/NAME` in each; the caller's own account is collected directly. |
+| `--include LIST` | Comma-separated extras: `instances` (EC2 instances), `endpoints` (VPC endpoints), `tags` (keep resource tags), `relationships` (with `--all-resources`, draw AWS Config's relationships between resources). |
+| `--ai` | Also collect the Bedrock models each account uses or is granted, per region. See [Bedrock, IAM and EKS](#bedrock-iam-and-eks---ai---iam---eks). |
+| `--iam` | Also collect custom IAM roles and users: trust, policy names, MFA and access-key age. No credentials or policy documents are read. |
+| `--iam-all` | With `--iam`, include service-linked and IAM Identity Center roles too. |
+| `--eks` | Also collect EKS clusters: version, endpoint access, node groups, Fargate profiles and add-ons. |
+| `--all-resources` | Also collect every resource in the account, from AWS Config and Resource Explorer, placed in its VPC or subnet when known. See [Every resource](#every-resource-in-an-account---all-resources). |
+| `--skip-network` | Skip the VPC, gateway, TGW, VPN and Direct Connect collection: a faster run when you only want `--ai`, `--iam`, `--eks` or `--all-resources`. |
+| `--workers N` | Account-and-region pairs collected in parallel (default: 8). |
+
+### `topomap aws-org`
+
+Collect an AWS Organization from its management account (or a delegated administrator), read-only. Details: [AWS Organizations](#aws-organizations-topomap-aws-org).
+
+```
+topomap aws-org [--profile NAME] [--role-arn ARN] [--policies {attrs,nodes,none}] [--include LIST] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `--profile NAME` | AWS profile for the management account. Default: boto3's credential chain. |
+| `--role-arn ARN` | Assume this role in the management account first. |
+| `--external-id ID` | External ID to pass when assuming the role. |
+| `--role-session-name NAME` | Session name for the assumed role (default: `topomap`). |
+| `--policies {attrs,nodes,none}` | How to show organization policies: `attrs` writes them on the root, OUs and accounts they're attached to (default); `nodes` also draws each policy as a box linked to its targets; `none` leaves them out. |
+| `--include LIST` | Comma-separated extras: `tags` (account tags, one call per account), `emails` (account email addresses, personal data, so off by default), `aws-managed-policies` (`FullAWSAccess` and the like, attached everywhere so hidden by default). |
+
+### `topomap files`
+
+Build a topology from files you already have: saved `show` output, captures and config backups (RANCID, Oxidized, a folder). Nothing is contacted. Details: [Saved output and configs](#saved-output-and-configs-topomap-files).
+
+```
+topomap files PATH [PATH ...] [--platform NAME] [--site NAME | --site-map CSV] [--glob PATTERN] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `PATH` | Files or directories to read; directories are read recursively, skipping hidden and binary files. |
+| `--platform {cisco_ios,cisco_nxos,arista_eos,juniper_junos}` | Platform to assume when a file doesn't make it obvious. |
+| `--site NAME` | Put every device in this site. |
+| `--site-map CSV` | CSV of `hostname,site` rows (hostnames may use `*` wildcards); overrides `--site` for the devices it names. |
+| `--no-l3` | Don't infer layer-3 links and segments from shared subnets. |
+| `--l3-exclude CIDR` | Ignore subnets inside CIDR when inferring layer-3 links, e.g. the management network. Repeatable. |
+| `--glob PATTERN` | Only read files whose name matches, e.g. `'*.txt'`. Repeatable. |
+
+### `topomap devices`
+
+Crawl network devices over SSH from one or more seeds, following CDP/LLDP neighbours and running only read-only `show` commands. Details: [Live crawl](#live-crawl-topomap-devices).
+
+```
+topomap devices --seed HOST [--allow CIDR] [--inventory FILE] [--username USER] [--ask-pass | --key-file FILE] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `--seed HOST` | A device to start from. Repeatable. |
+| `--inventory FILE` | CSV or JSON list of devices: `host`, and optionally `platform`, `site`, `role`, `port`. Never passwords. |
+| `--allow CIDR` | Also crawl discovered neighbours whose management address is in CIDR. Repeatable. Without it, only the seeds and inventory hosts are contacted. |
+| `--max-depth N` | Hops beyond the seeds to crawl (default: 3). |
+| `--skip-role ROLE` | Don't crawl neighbours that look like ROLE. Repeatable. Default: `phone`, `wireless`, `server`; `none` crawls every role. |
+| `--platform NAME` | Platform of every device the inventory doesn't name one for: `cisco_ios`, `cisco_nxos`, `arista_eos` or `juniper_junos`. Default: autodetect (which sends netmiko's probe commands). |
+| `--site NAME` | Put every device in this site, unless the inventory says otherwise. |
+| `--username USER` | SSH username. Default: `$TOPOMAP_USERNAME`, else the current user. |
+| `--ask-pass` | Prompt for the SSH password. |
+| `--key-file FILE` | SSH private key; keys in the SSH agent are tried too. |
+| `--strict-host-keys` | Refuse devices whose host key isn't in `~/.ssh/known_hosts`. |
+| `--workers N` | Devices to talk to at once (default: 8). |
+| `--timeout SECONDS` | Login and per-command timeout (default: 30). |
+| `--save-raw DIR` | Also save each device's output to `DIR/<hostname>.txt` (mode 0600), so `topomap files` can re-read it later. |
+
+### `topomap scan`
+
+Discover hosts and open ports on a local network with nmap, and draw them. Details: [Home and lab networks](#home-and-lab-networks-topomap-scan).
+
+```
+topomap scan TARGET [TARGET ...] [--exclude ADDR] [--top-ports N | --ports SPEC | --no-ports] [--os] [-o FILE]
+topomap scan --from-xml FILE [TARGET ...] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `TARGET` | Networks or addresses to scan, e.g. `192.168.1.0/24`. With `--from-xml`, they only say which networks to draw. |
+| `--exclude ADDR` | Address or network not to scan. Repeatable. |
+| `--allow-public` | Allow targets outside private, link-local and CGNAT space. |
+| `--from-xml FILE` | Read saved `nmap -oX` output instead of scanning. Repeatable. |
+| `--top-ports N` | Scan nmap's N most common TCP ports (default: 1000). |
+| `--ports SPEC` | Ports to scan, in nmap syntax: `22,80,1-1024`. |
+| `--no-ports` | Only discover hosts. |
+| `--no-service-detection` | Don't probe open ports for service names and versions (`-sV`); faster. |
+| `--full-probes` | Service detection tries every probe, not nmap's light set: more exact versions, but minutes per host on slow devices such as routers. |
+| `--os` | Guess operating systems (`-O`; needs root). |
+| `--no-dns` | Don't look up host names. |
+| `--no-arp-cache` | Without root, don't add hosts from this machine's ARP cache that the TCP ping sweep missed. |
+| `--timing 0-5` | nmap timing template, slower to faster (default: 4). |
+| `--gateway ADDR` | The network's gateway. Default: this machine's default gateway. |
+| `--nmap PATH` | nmap program to run (default: `nmap`). |
+| `--save-xml DIR` | Also save nmap's XML output to DIR (mode 0600), for `--from-xml`. |
+
+### `topomap merge`
+
+Combine topologies into one, then link on-prem devices to their AWS VPN and Direct Connect edges by address. Details: [Combining](#combining-trimming-and-comparing).
+
+```
+topomap merge INPUT [INPUT ...] [--stitch NODE=NODE] [--no-stitch] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `INPUT` | Topology JSON files to merge; `-` reads stdin (once). |
+| `--stitch NODE=NODE` | Also link these two nodes (IDs or exact labels), e.g. a device and a customer gateway behind NAT. Repeatable. |
+| `--no-stitch` | Skip the automatic address matching; `--stitch` pairs still apply. |
+
+### `topomap filter`
+
+Cut a topology down to the part you want to draw. Every selecting flag must match for a node to stay; the containers above a kept node stay too. Details: [Combining](#combining-trimming-and-comparing).
+
+```
+topomap filter [INPUT] [--kind KIND] [--exclude-kind KIND] [--collapse KIND] [--around NODE --depth N]
+               [--match REGEX] [--aws-only | --network-only] [--hide-empty] [--max-per-type N] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `INPUT` | Topology JSON to filter (default: stdin). |
+| `--kind KIND` | Keep only nodes of this kind, plus their ancestors. Repeatable. |
+| `--exclude-kind KIND` | Remove nodes of this kind; a removed container's children move up to its parent. Repeatable. |
+| `--collapse KIND` | Fold everything inside each node of this kind into it, re-pointing links (e.g. `--collapse vpc`). Repeatable. |
+| `--max-per-type N` | Where a box holds more than N resources of one type (from `topomap aws --all-resources`), draw them as one node that counts them. |
+| `--around NODE` | Keep only what is within `--depth` link hops of this node (ID or exact label) or of its contents. |
+| `--depth N` | Link hops for `--around` (default: 1). |
+| `--match REGEX` | Keep only nodes whose label or ID matches; prefix `(?i)` to ignore case. |
+| `--hide-empty` | Remove regions and OUs flagged empty (nothing found in them). |
+| `--aws-only` | Keep only AWS nodes, and external nodes linked to them. |
+| `--network-only` | Keep only on-prem network nodes, and external nodes linked to them. |
+
+### `topomap render`
+
+Draw a topology saved earlier. Commands that make a topology can draw directly with `-o`, so this is for JSON you already have. Details: [Drawing](#drawing-render).
+
+```
+topomap render INPUT [-o FILE] [-f FORMAT] [--direction {TB,LR}] [--title TITLE] [--no-link-labels]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `INPUT` | Topology JSON file, or `-` for stdin. |
+| `-o, --output FILE` | Where to write the diagram (default: stdout). |
+| `-f, --format {drawio,svg,mermaid,dot}` | Output format. Default: from the `-o` extension, else draw.io. |
+| `--direction {TB,LR}` | Top-to-bottom (default) or left-to-right reading order. |
+| `--title TITLE` | Title drawn above the diagram. |
+| `--no-link-labels` | Leave ports, subnets and VPN/VIF IDs off the links. |
+
+### `topomap diff`
+
+Show what was added, removed and changed between two snapshots, down to the attribute. Exits 1 when anything changed, so it can watch for drift in CI.
+
+```
+topomap diff OLD NEW [--format {text,json}] [--ignore-attr NAME] [--summary]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `OLD`, `NEW` | The earlier and later snapshots; `-` for stdin. |
+| `--format {text,json}` | Output format (default: text). |
+| `--ignore-attr NAME` | Ignore this attribute: a key at any depth (`state`) or a dotted path (`tags.LastSeen`). Repeatable. `sources` and meta are always ignored. |
+| `--summary` | Print counts only. |
+
+### `topomap anonymize`
+
+Replace account IDs, resource IDs, names, tags and addresses with consistent fakes, so a snapshot (and the diagrams drawn from it) can be shared or committed. Details: [Sharing and committing output safely](#sharing-and-committing-output-safely).
+
+```
+topomap anonymize [INPUT] [--ips {ipredact,public,keep}] [--ip-key-file FILE] [--strict] [--keep-names] [-o FILE]
+```
+
+| Flag | What it does |
+| --- | --- |
+| `INPUT` | Topology JSON to anonymize (default: stdin). |
+| `--ips {ipredact,public,keep}` | Addresses: `ipredact` keeps subnets and containment true but needs the `ipredact` tool (default); `public` moves only public addresses into the documentation ranges; `keep` leaves them. |
+| `--ip-key-file FILE` | `ipredact` key file, to get the same fake addresses on every run. |
+| `--strict` | Also drop every attribute that isn't on the known, non-free-text list (tags, descriptions, serials, anything unfamiliar). |
+| `--keep-names` | Leave names and tag values alone; IDs and addresses are still replaced. |
 
 ## Limits
 
