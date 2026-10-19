@@ -1,0 +1,15 @@
+AWS IPAM resources export,,,,,,,,,,,
+,,,,,,,,,,,
+Resource ID,Resource name,Resource type,Resource CIDR,Region,Resource owner,VPC ID,IPAM pool ID,Management state,Compliance status,Overlap status,IP usage
+ipam-pool-0a1b2c3d4e5f60001,top-level,Pool,10.0.0.0/8,-,111122223333,-,-,managed,compliant,nonoverlapping,3%
+ipam-pool-0a1b2c3d4e5f60002,us-east-1,Pool,10.0.0.0/12,us-east-1,111122223333,-,ipam-pool-0a1b2c3d4e5f60001,managed,compliant,nonoverlapping,5%
+vpc-0a1b2c3d4e5f60001,prod,VPC,10.0.0.0/16,us-east-1,111122223333,vpc-0a1b2c3d4e5f60001,ipam-pool-0a1b2c3d4e5f60002,managed,compliant,nonoverlapping,9%
+subnet-0a1b2c3d4e5f60001,prod-app-a,Subnet,10.0.1.0/24,us-east-1,111122223333,vpc-0a1b2c3d4e5f60001,-,managed,compliant,nonoverlapping,40%
+subnet-0a1b2c3d4e5f60002,prod-app-b,Subnet,10.0.2.0/24,us-east-1,111122223333,vpc-0a1b2c3d4e5f60001,-,managed,compliant,nonoverlapping,12%
+vpc-0a1b2c3d4e5f60002,dev,VPC,"10.1.0.0/16, 10.2.0.0/16",us-west-2,123456789012,vpc-0a1b2c3d4e5f60002,-,managed,compliant,nonoverlapping,1%
+subnet-0a1b2c3d4e5f60003,dev-a,Subnet,10.1.1.7/24,us-west-2,123456789012,vpc-0a1b2c3d4e5f60002,-,managed,compliant,nonoverlapping,2%
+subnet-0a1b2c3d4e5f60004,dev-b,Subnet,10.3.5.0/24,us-west-2,123456789012,vpc-0a1b2c3d4e5f60002,-,unmanaged,noncompliant,nonoverlapping,2%
+eipalloc-0a1b2c3d4e5f60001,nat-eip,EIP,198.51.100.10/32,us-east-1,111122223333,-,-,unmanaged,ignored,nonoverlapping,-
+vpc-0a1b2c3d4e5f60003,v6,VPC,2001:db8:1000::/56,us-east-1,111122223333,vpc-0a1b2c3d4e5f60003,-,managed,compliant,nonoverlapping,0%
+subnet-0a1b2c3d4e5f60005,v6-a,Subnet,2001:db8:1000:1::/64,us-east-1,111122223333,vpc-0a1b2c3d4e5f60003,-,managed,compliant,nonoverlapping,0%
+subnet-0a1b2c3d4e5f60006,broken,Subnet,n/a,us-east-1,111122223333,vpc-0a1b2c3d4e5f60003,-,managed,compliant,nonoverlapping,0%

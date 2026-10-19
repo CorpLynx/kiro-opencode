@@ -25,7 +25,6 @@ These projects are still at the top level on their branch. They move into the la
 | Project | Kind | Notes |
 | --- | --- | --- |
 | `plugins/opencode-ipredact` | OpenCode plugin | Keeps real addresses away from the model: messages are redacted before they are sent, and addresses are restored when tools run and in replies. Built on `tools/ip-redactor`. |
-| `tools/ipam-infoblox` | CLI | Converts an AWS IPAM export into an Infoblox import, checking ranges against the Infoblox API first. |
 
 ## Layout
 

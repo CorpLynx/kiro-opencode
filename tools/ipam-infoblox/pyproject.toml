@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ipam-infoblox"
+version = "0.1.0"
+description = "Turn an AWS IPAM export into an Infoblox CSV import, checked read-only against the Infoblox API"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+xlsx = ["openpyxl>=3.1"]
+aws = ["boto3>=1.26"]
+all = ["openpyxl>=3.1", "boto3>=1.26"]
+test = ["openpyxl>=3.1", "boto3>=1.26"]
+
+[project.scripts]
+ipam-infoblox = "ipam_infoblox.cli:main"
+
+[tool.setuptools]
+packages = ["ipam_infoblox"]
