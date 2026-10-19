@@ -1,20 +1,17 @@
-# topomapper: network and AWS topology, gathered and drawn automatically
+# topomapper: AWS topology, gathered and drawn automatically
 
-`topomapper` builds topology diagrams from the network itself instead of from someone's memory. It collects from two kinds of source:
+`topomapper` builds AWS topology diagrams from the accounts themselves instead of from someone's memory. It makes read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account. With flags, it also collects the Bedrock models each account can use, its custom IAM roles and users, EKS clusters, or every resource in the account.
 
-- **AWS:** read-only API calls across accounts and regions, including the AWS Organization itself (OUs, accounts, SCPs and other policies), collected from the management account, and with flags the Bedrock models each account can use, its custom IAM roles and users, EKS clusters, or every resource in the account.
-- **Local networks:** an nmap scan for hosts, open ports and a guessed device type.
+It merges what it collected into one picture and draws it as **draw.io** (with the official AWS icons), **SVG**, **Mermaid** or **Graphviz DOT**.
 
-It merges the sources into one picture and draws it as **draw.io** (with the official AWS and Cisco icons), **SVG**, **Mermaid** or **Graphviz DOT**.
+![An AWS account inside its OU and organization: a transit gateway, two VPCs with subnets and instances, a site-to-site VPN, Direct Connect and the SCPs attached to the root and the OU](docs/estate.png)
 
-![An AWS account with a transit gateway, VPCs, subnets, a site-to-site VPN and Direct Connect, beside a scanned LAN of routers, switches, a server and a phone](docs/hybrid.png)
-
-<sub>Drawn by `topomapper render` from the test fixtures (a made-up AWS account and LAN).</sub>
+<sub>Drawn by `topomapper render` from the test fixtures (a made-up organization and account).</sub>
 
 ```
-collect ─┬─ aws      boto3, read-only                 ┐
-         ├─ aws-org  OUs, accounts, policies          ├─▶ topology JSON ─▶ merge ─▶ filter ─▶ render
-         └─ scan     nmap host and port discovery     ┘                     diff (drift between snapshots)
+aws      read-only API calls (boto3)  ─┐
+aws-org  OUs, accounts, policies      ─┴─▶ topology JSON ─▶ merge ─▶ filter ─▶ render
+                                                         └─▶ diff (drift between snapshots)
 ```
 
 Every stage reads and writes the same JSON, so stages chain through files or pipes. The JSON is sorted with stable IDs, so snapshots can be committed to git and compared.
@@ -23,7 +20,7 @@ Every stage reads and writes the same JSON, so stages chain through files or pip
 
 ```sh
 pip install './tools/topomapper[aws]'    # AWS collection
-pip install ./tools/topomapper           # scan, merge, diff, filter, render: no dependencies
+pip install ./tools/topomapper           # merge, diff, filter, render: no dependencies
 ```
 
 Install it from this repository as shown. **`pip install topomapper` from PyPI won't work** (it isn't published there), and **`pip install topomap` installs someone else's project**: this tool was called `topomap` until that clash was found, and was renamed. Old snapshots (schema `topomap/1`) still load, and `topomapper collect <source>` still works.
@@ -32,7 +29,6 @@ Install it from this repository as shown. **`pip install topomapper` from PyPI w
 | --- | --- | --- |
 | *(none)* | `topomapper merge`, `diff`, `filter`, `render` (all formats), `anonymize` | Python 3.9+ standard library |
 | `aws` | `topomapper aws`, `aws-org` | `boto3` |
-| — | `topomapper scan` | the `nmap` program |
 
 ## Quick start
 
@@ -41,17 +37,15 @@ One command collects and draws; the extension of `-o` says what to write:
 ```sh
 topomapper aws --profile prod -o aws.drawio                       # an AWS account, drawn
 topomapper aws-org --profile management -o org.svg                # the organization chart
-topomapper scan 192.168.1.0/24 -o lan.drawio                      # a local network
 ```
 
-To combine sources, keep each one's topology (`.json`) and merge them. Accounts land in their OUs:
+To combine runs, keep each one's topology (`.json`) and merge them. Accounts land in their OUs:
 
 ```sh
 topomapper aws-org --profile management -o org.json
 topomapper aws --profile prod --region us-east-1 --region eu-west-1 -o aws.json
-topomapper scan 192.168.1.0/24 -o lan.json
 
-topomapper merge org.json aws.json lan.json -o all.json -o all.drawio   # keep the result, and draw it
+topomapper merge org.json aws.json -o all.json -o all.drawio   # keep the result, and draw it
 topomapper filter all.json --aws-only --collapse vpc -o aws-overview.svg
 topomapper diff last-month.json all.json                                 # later: what changed? (exit 1 if anything did)
 ```
@@ -62,7 +56,6 @@ topomapper diff last-month.json all.json                                 # later
 | --- | --- |
 | [`aws`](#topomapper-aws) | Collect AWS networking (VPCs, subnets, gateways, TGWs, VPN, Direct Connect), and optionally Bedrock, IAM, EKS or every resource |
 | [`aws-org`](#topomapper-aws-org) | Collect an AWS Organization: OUs, accounts, policies, delegated admins |
-| [`scan`](#topomapper-scan) | Discover hosts and open ports on a local network with nmap |
 | [`merge`](#topomapper-merge) | Combine topologies into one |
 | [`filter`](#topomapper-filter) | Cut a topology down to what you want to draw |
 | [`render`](#topomapper-render) | Draw a topology saved earlier |
@@ -196,37 +189,22 @@ topomapper filter topomapper-out/everything.json --max-per-type 10 | topomapper 
   - `emails`: account email addresses. These are personal data, so they're off by default.
 - **Combining with network data:** `topomapper aws` gives each account the same ID, so `merge org.json aws.json` draws each account inside its OU, with its regions and VPCs inside the account. After a merge, an account that `topomapper aws` could not reach is labelled "not collected", an empty OU "empty" and a region with nothing in it "no resources", so a bare box is never mistaken for an unscanned one. An account with nothing collected inside it is drawn as an account icon; one holding VPCs is drawn as a container.
 
-### Home and lab networks (`topomapper scan`)
-
-Finds the hosts and open ports on a network with [nmap](https://nmap.org) and draws them: one segment per network, every host linked to it, the default gateway as the router, and each host's services and a guessed type (gateway, server, NAS, printer, camera, access point, media player…) on its label.
-
-```sh
-topomapper scan 192.168.1.0/24 --save-xml topomapper-out/scan -o topomapper-out/lan.json
-topomapper render topomapper-out/lan.json -o topomapper-out/lan.svg
-```
-
-- **Two nmap runs:** a host sweep (`-sn`), then `--top-ports 1000` with service detection (`-sV`) on the hosts that answered. `--ports 22,80,1-1024`, `--no-ports`, `--no-service-detection`, `--full-probes` (every service probe: exact but slow on routers), `--no-dns`, `--timing 0-5`, `--exclude ADDR` and `--os` (needs root) change that.
-- **Root or not:** with `sudo`, nmap finds hosts by ARP and reads MAC addresses itself. Without it, hosts are found with TCP pings plus this machine's ARP cache after the sweep (`--no-arp-cache` turns that off), and vendors come from nmap's own MAC prefix list.
-- **Safety:** only private, link-local and CGNAT (Tailscale) space is scanned unless you add `--allow-public`, and at most 65,536 addresses per run.
-- **Offline:** `--from-xml FILE` (repeatable) redraws saved `nmap -oX` output without scanning.
-- Needs the `nmap` program (`brew install nmap`, `apt install nmap`, `pacman -S nmap`), not a Python package.
-
 ## Combining, trimming and comparing
 
 - **`merge`** unions topologies: accounts land in their OUs, and anything collected twice becomes one node. Nodes that disagree about their kind or parent are listed in a warning.
-- **`filter`** shrinks big estates down to a readable picture. It takes `--aws-only` / `--network-only`, `--kind`, `--exclude-kind az` (children move up), `--collapse vpc` (subnets fold into their VPC, and links are re-pointed), `--max-per-type N` (more than N resources of one type in a box become one counted node), `--around tgw-01 --depth 2`, `--match REGEX` and `--hide-empty` (drops regions and OUs in which nothing was found).
+- **`filter`** shrinks big estates down to a readable picture. It takes `--aws-only`, `--kind`, `--exclude-kind az` (children move up), `--collapse vpc` (subnets fold into their VPC, and links are re-pointed), `--max-per-type N` (more than N resources of one type in a box become one counted node), `--around tgw-01 --depth 2`, `--match REGEX` and `--hide-empty` (drops regions and OUs in which nothing was found).
 - **`diff`** shows what was added, removed and changed, down to the attribute (`tags.Owner: net → platform`). It writes text or JSON, and exits 1 when anything changed, so it can watch for drift in CI.
 
 ## Drawing (`render`)
 
 | Format | Notes |
 | --- | --- |
-| `drawio` | Opens in draw.io / diagrams.net and can be exported to Visio. Uses draw.io's built-in AWS 2021 and Cisco 19 shapes, with nested containers (account › region › VPC › AZ › subnet). Written as uncompressed XML, so it diffs cleanly and can be redacted as text. |
+| `drawio` | Opens in draw.io / diagrams.net and can be exported to Visio. Uses draw.io's built-in AWS 2021 shapes, with nested containers (account › region › VPC › AZ › subnet). Written as uncompressed XML, so it diffs cleanly and can be redacted as text. |
 | `svg` | Standalone, uses the same layout and needs no Graphviz. |
 | `mermaid` | Paste into GitHub or GitLab Markdown, Notion, etc. |
 | `dot` | For Graphviz (`dot -Tpng`). |
 
-- **Layout:** read top to bottom: internet, then edge gateways and firewalls, then routers, core switches, access switches and endpoints.
+- **Layout:** read top to bottom: the internet and on-premises ends (customer gateways, Direct Connect), then transit and Direct Connect gateways, then the VPCs, with public subnets above private ones and AZs side by side.
 - **Output is deterministic:** the same input gives byte-identical output.
 - **Options:** `--direction LR` reads left to right, `--title` adds a title, and `--no-link-labels` drops port and subnet labels.
 
@@ -234,7 +212,7 @@ topomapper render topomapper-out/lan.json -o topomapper-out/lan.svg
 
 Snapshots and diagrams carry account IDs, names, tags and addresses from the real estate. Two things help:
 
-- **Keep real output out of git.** Write it under `topomapper-out/`, which the repo ignores (`-o topomapper-out/all.json`; the folder is created for you). Real output is written readable by you only (mode 0600). If it lands inside a git repository that doesn't ignore it, topomapper prints a note. That covers `-o`, a redirected stdout (`> out.json`) and a `scan --save-xml` folder.
+- **Keep real output out of git.** Write it under `topomapper-out/`, which the repo ignores (`-o topomapper-out/all.json`; the folder is created for you). Real output is written readable by you only (mode 0600). If it lands inside a git repository that doesn't ignore it, topomapper prints a note. That covers `-o` and a redirected stdout (`> out.json`).
 - **`anonymize` makes a shareable copy.** Render from the anonymized JSON and the diagram is safe too:
 
 ```sh
@@ -256,7 +234,7 @@ Every command prints this with `topomapper COMMAND --help`. Flags marked *repeat
 
 ### Options shared by every command that makes a topology
 
-`aws`, `aws-org`, `scan`, `merge`, `filter` and `anonymize` all take these:
+`aws`, `aws-org`, `merge`, `filter` and `anonymize` all take these:
 
 | Flag | What it does |
 | --- | --- |
@@ -310,34 +288,6 @@ topomapper aws-org [--profile NAME] [--role-arn ARN] [--policies {attrs,nodes,no
 | `--policies {attrs,nodes,none}` | How to show organization policies: `attrs` writes them on the root, OUs and accounts they're attached to (default); `nodes` also draws each policy as a box linked to its targets; `none` leaves them out. |
 | `--include LIST` | Comma-separated extras: `tags` (account tags, one call per account), `emails` (account email addresses, personal data, so off by default), `aws-managed-policies` (`FullAWSAccess` and the like, attached everywhere so hidden by default). |
 
-### `topomapper scan`
-
-Discover hosts and open ports on a local network with nmap, and draw them. Details: [Home and lab networks](#home-and-lab-networks-topomapper-scan).
-
-```
-topomapper scan TARGET [TARGET ...] [--exclude ADDR] [--top-ports N | --ports SPEC | --no-ports] [--os] [-o FILE]
-topomapper scan --from-xml FILE [TARGET ...] [-o FILE]
-```
-
-| Flag | What it does |
-| --- | --- |
-| `TARGET` | Networks or addresses to scan, e.g. `192.168.1.0/24`. With `--from-xml`, they only say which networks to draw. |
-| `--exclude ADDR` | Address or network not to scan. Repeatable. |
-| `--allow-public` | Allow targets outside private, link-local and CGNAT space. |
-| `--from-xml FILE` | Read saved `nmap -oX` output instead of scanning. Repeatable. |
-| `--top-ports N` | Scan nmap's N most common TCP ports (default: 1000). |
-| `--ports SPEC` | Ports to scan, in nmap syntax: `22,80,1-1024`. |
-| `--no-ports` | Only discover hosts. |
-| `--no-service-detection` | Don't probe open ports for service names and versions (`-sV`); faster. |
-| `--full-probes` | Service detection tries every probe, not nmap's light set: more exact versions, but minutes per host on slow devices such as routers. |
-| `--os` | Guess operating systems (`-O`; needs root). |
-| `--no-dns` | Don't look up host names. |
-| `--no-arp-cache` | Without root, don't add hosts from this machine's ARP cache that the TCP ping sweep missed. |
-| `--timing 0-5` | nmap timing template, slower to faster (default: 4). |
-| `--gateway ADDR` | The network's gateway. Default: this machine's default gateway. |
-| `--nmap PATH` | nmap program to run (default: `nmap`). |
-| `--save-xml DIR` | Also save nmap's XML output to DIR (mode 0600), for `--from-xml`. |
-
 ### `topomapper merge`
 
 Combine topologies into one: accounts land in their OUs, and anything collected twice becomes one node. Details: [Combining](#combining-trimming-and-comparing).
@@ -356,7 +306,7 @@ Cut a topology down to the part you want to draw. Every selecting flag must matc
 
 ```
 topomapper filter [INPUT] [--kind KIND] [--exclude-kind KIND] [--collapse KIND] [--around NODE --depth N]
-               [--match REGEX] [--aws-only | --network-only] [--hide-empty] [--max-per-type N] [-o FILE]
+               [--match REGEX] [--aws-only] [--hide-empty] [--max-per-type N] [-o FILE]
 ```
 
 | Flag | What it does |
@@ -371,7 +321,6 @@ topomapper filter [INPUT] [--kind KIND] [--exclude-kind KIND] [--collapse KIND] 
 | `--match REGEX` | Keep only nodes whose label or ID matches; prefix `(?i)` to ignore case. |
 | `--hide-empty` | Remove regions and OUs flagged empty (nothing found in them). |
 | `--aws-only` | Keep only AWS nodes, and external nodes linked to them. |
-| `--network-only` | Keep only network nodes (from `scan`), and external nodes linked to them. |
 
 ### `topomapper render`
 
@@ -437,4 +386,4 @@ pip install './tools/topomapper[test]'
 cd tools/topomapper && python3 -m unittest discover -s tests
 ```
 
-[DESIGN.md](DESIGN.md) is the contract between the stages: IDs, kinds, attributes and containment. `tests/test_e2e.py` runs every stage through the CLI, from mocked AWS plus saved nmap output in `tests/fixtures/scan/` to every output format.
+[DESIGN.md](DESIGN.md) is the contract between the stages: IDs, kinds, attributes and containment. `tests/test_e2e.py` runs every stage through the CLI, from a mocked AWS account and organization to every output format.

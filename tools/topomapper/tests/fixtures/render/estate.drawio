@@ -1,11 +1,11 @@
 <mxfile host="topomapper" agent="topomapper" compressed="false">
-  <diagram id="topomapper" name="HQ and AWS (example)">
-    <mxGraphModel dx="2841" dy="1289" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2841" pageHeight="1289" math="0" shadow="0">
+  <diagram id="topomapper" name="An account in its organization (example)">
+    <mxGraphModel dx="2075" dy="1591" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2075" pageHeight="1591" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="topomapper-title" value="HQ and AWS (example)" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="20" y="16" width="2801" height="30" as="geometry" />
+        <mxCell id="topomapper-title" value="An account in its organization (example)" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="16" width="2035" height="30" as="geometry" />
         </mxCell>
         <UserObject label="vpn-01&lt;br&gt;BGP · 1/2 tunnels up" tooltip="vpn: aws:customer-gateway:cgw-01 – aws:transit-gateway:tgw-01&#10;routing: bgp&#10;state: available&#10;tunnels: 2 entries&#10;vpn_id: vpn-01" topomapper_kind="vpn" id="vpn|aws:customer-gateway:cgw-01|aws:transit-gateway:tgw-01|vpn-01">
           <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#C98B00;strokeWidth=2;dashed=1;endArrow=none;" edge="1" parent="1" source="aws:customer-gateway:cgw-01" target="aws:transit-gateway:tgw-01">
@@ -19,6 +19,16 @@
         </UserObject>
         <UserObject label="dxgw-assoc-01" tooltip="dxgw-association: aws:dx-gateway:dxgw-01 – aws:transit-gateway:tgw-01&#10;association_id: dxgw-assoc-01&#10;state: associated" topomapper_kind="dxgw-association" id="dxgw-association|aws:dx-gateway:dxgw-01|aws:transit-gateway:tgw-01">
           <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#1A73E8;strokeWidth=2;endArrow=none;" edge="1" parent="1" source="aws:dx-gateway:dxgw-01" target="aws:transit-gateway:tgw-01">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" tooltip="policy-attachment: aws:org-policy:p-0000deny0001 – aws:ou:ou-0000-prod0001&#10;type: scp" topomapper_kind="policy-attachment" id="policy-attachment|aws:org-policy:p-0000deny0001|aws:ou:ou-0000-prod0001">
+          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#E7157B;strokeWidth=1;dashed=1;dashPattern=4 3;endArrow=classic;" edge="1" parent="1" source="aws:org-policy:p-0000deny0001" target="aws:ou:ou-0000-prod0001">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" tooltip="policy-attachment: aws:org-policy:p-FullAWSAccess – aws:org-root:r-0000&#10;type: scp" topomapper_kind="policy-attachment" id="policy-attachment|aws:org-policy:p-FullAWSAccess|aws:org-root:r-0000">
+          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#E7157B;strokeWidth=1;dashed=1;dashPattern=4 3;endArrow=classic;" edge="1" parent="1" source="aws:org-policy:p-FullAWSAccess" target="aws:org-root:r-0000">
             <mxGeometry relative="1" as="geometry" />
           </mxCell>
         </UserObject>
@@ -42,69 +52,39 @@
             <mxGeometry relative="1" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="10.10.0.21" tooltip="segment-member: net:device:acc1 – net:segment:10.10.0.0/24&#10;address: 10.10.0.21" topomapper_kind="segment-member" id="segment-member|net:device:acc1|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:acc1" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
+        <UserObject label="Organization (o-example0001)" tooltip="aws:organization:o-example0001&#10;kind: organization&#10;org_id: o-example0001" topomapper_kind="organization" id="aws:organization:o-example0001">
+          <mxCell style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud_alt;strokeColor=#232F3E;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;" vertex="1" parent="1">
+            <mxGeometry x="20" y="56" width="1832" height="1515" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="10.10.0.22" tooltip="segment-member: net:device:acc2 – net:segment:10.10.0.0/24&#10;address: 10.10.0.22" topomapper_kind="segment-member" id="segment-member|net:device:acc2|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:acc2" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
+        <UserObject label="&lt;b&gt;DenyRegions&lt;/b&gt;&lt;br&gt;SCP" tooltip="aws:org-policy:p-0000deny0001&#10;kind: org-policy&#10;policy_id: p-0000deny0001&#10;type: scp" topomapper_kind="org-policy" id="aws:org-policy:p-0000deny0001">
+          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF0F6;strokeColor=#E7157B;fontColor=#232F3E;" vertex="1" parent="aws:organization:o-example0001">
+            <mxGeometry x="760" y="40" width="140" height="42" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="10.10.0.30" tooltip="segment-member: net:device:ap1 – net:segment:10.10.0.0/24&#10;address: 10.10.0.30" topomapper_kind="segment-member" id="segment-member|net:device:ap1|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:ap1" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
+        <UserObject label="&lt;b&gt;FullAWSAccess&lt;/b&gt;&lt;br&gt;SCP" tooltip="aws:org-policy:p-FullAWSAccess&#10;kind: org-policy&#10;policy_id: p-FullAWSAccess&#10;type: scp" topomapper_kind="org-policy" id="aws:org-policy:p-FullAWSAccess">
+          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF0F6;strokeColor=#E7157B;fontColor=#232F3E;" vertex="1" parent="aws:organization:o-example0001">
+            <mxGeometry x="932" y="40" width="140" height="42" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="10.10.0.11" tooltip="segment-member: net:device:core1 – net:segment:10.10.0.0/24&#10;address: 10.10.0.11" topomapper_kind="segment-member" id="segment-member|net:device:core1|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:core1" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
+        <UserObject label="Root&lt;br&gt;SCP: FullAWSAccess" tooltip="aws:org-root:r-0000&#10;kind: org-root&#10;policies: scp=FullAWSAccess&#10;root_id: r-0000" topomapper_kind="org-root" id="aws:org-root:r-0000">
+          <mxCell style="fillColor=none;strokeColor=#E7157B;dashed=1;verticalAlign=top;fontStyle=1;fontColor=#E7157B;whiteSpace=wrap;html=1;align=left;spacingLeft=10;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;" vertex="1" parent="aws:organization:o-example0001">
+            <mxGeometry x="16" y="154" width="1800" height="1345" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="10.10.0.12" tooltip="segment-member: net:device:core2 – net:segment:10.10.0.0/24&#10;address: 10.10.0.12" topomapper_kind="segment-member" id="segment-member|net:device:core2|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:core2" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
+        <UserObject label="&lt;b&gt;example-management&lt;/b&gt;&lt;br&gt;111122223333&lt;br&gt;management account" tooltip="aws:account:111122223333&#10;kind: account&#10;account_id: 111122223333&#10;management: True" topomapper_kind="account" id="aws:account:111122223333">
+          <mxCell style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E7157B;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.organizations_management_account;labelBackgroundColor=#FFFFFF;" vertex="1" parent="aws:org-root:r-0000">
+            <mxGeometry x="60" y="50" width="48" height="48" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="10.10.0.1" tooltip="segment-member: net:device:fw1 – net:segment:10.10.0.0/24&#10;address: 10.10.0.1" topomapper_kind="segment-member" id="segment-member|net:device:fw1|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:fw1" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="10.20.0.1" tooltip="segment-member: net:device:fw1 – net:segment:10.20.0.0/24&#10;address: 10.20.0.1" topomapper_kind="segment-member" id="segment-member|net:device:fw1|net:segment:10.20.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:fw1" target="net:segment:10.20.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="10.20.0.99" tooltip="segment-member: net:device:lab1 – net:segment:10.20.0.0/24&#10;address: 10.20.0.99" topomapper_kind="segment-member" id="segment-member|net:device:lab1|net:segment:10.20.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:lab1" target="net:segment:10.20.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="10.20.0.50" tooltip="segment-member: net:device:phone1 – net:segment:10.20.0.0/24&#10;address: 10.20.0.50" topomapper_kind="segment-member" id="segment-member|net:device:phone1|net:segment:10.20.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:phone1" target="net:segment:10.20.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="10.10.0.2" tooltip="segment-member: net:device:rtr1 – net:segment:10.10.0.0/24&#10;address: 10.10.0.2" topomapper_kind="segment-member" id="segment-member|net:device:rtr1|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:rtr1" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="10.10.0.3" tooltip="segment-member: net:device:rtr2 – net:segment:10.10.0.0/24&#10;address: 10.10.0.3" topomapper_kind="segment-member" id="segment-member|net:device:rtr2|net:segment:10.10.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:rtr2" target="net:segment:10.10.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="10.20.0.10" tooltip="segment-member: net:device:srv1 – net:segment:10.20.0.0/24&#10;address: 10.20.0.10" topomapper_kind="segment-member" id="segment-member|net:device:srv1|net:segment:10.20.0.0/24">
-          <mxCell style="html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;strokeColor=#6C8EBF;strokeWidth=1.5;endArrow=none;" edge="1" parent="1" source="net:device:srv1" target="net:segment:10.20.0.0/24">
-            <mxGeometry relative="1" as="geometry" />
+        <UserObject label="Prod&lt;br&gt;SCP: FullAWSAccess, DenyRegions" tooltip="aws:ou:ou-0000-prod0001&#10;kind: ou&#10;ou_id: ou-0000-prod0001&#10;policies: scp=FullAWSAccess, DenyRegions" topomapper_kind="ou" id="aws:ou:ou-0000-prod0001">
+          <mxCell style="fillColor=none;strokeColor=#E7157B;dashed=0;verticalAlign=top;fontStyle=1;fontColor=#B0084D;whiteSpace=wrap;html=1;align=left;spacingLeft=10;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;" vertex="1" parent="aws:org-root:r-0000">
+            <mxGeometry x="184" y="50" width="1600" height="1279" as="geometry" />
           </mxCell>
         </UserObject>
         <UserObject label="example-prod&lt;br&gt;123456789012" tooltip="aws:account:123456789012&#10;kind: account&#10;account_id: 123456789012" topomapper_kind="account" id="aws:account:123456789012">
-          <mxCell style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_account;strokeColor=#CD2264;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#CD2264;dashed=0;" vertex="1" parent="1">
-            <mxGeometry x="1050" y="56" width="1568" height="1213" as="geometry" />
+          <mxCell style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_account;strokeColor=#CD2264;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#CD2264;dashed=0;" vertex="1" parent="aws:ou:ou-0000-prod0001">
+            <mxGeometry x="16" y="50" width="1568" height="1213" as="geometry" />
           </mxCell>
         </UserObject>
         <UserObject label="&lt;b&gt;dxgw-01&lt;/b&gt;&lt;br&gt;ASN 64600" tooltip="aws:dx-gateway:dxgw-01&#10;kind: dx-gateway&#10;asn: 64600&#10;dxgw_id: dxgw-01" topomapper_kind="dx-gateway" id="aws:dx-gateway:dxgw-01">
@@ -274,72 +254,7 @@
         </UserObject>
         <UserObject label="partner (vpc-0ext)&lt;br&gt;172.16.0.0/16" tooltip="aws:vpc:vpc-0ext&#10;kind: vpc&#10;account_id: 111122223333&#10;cidrs: 172.16.0.0/16&#10;external: True" topomapper_kind="vpc" id="aws:vpc:vpc-0ext">
           <mxCell style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#AAB7B8;dashed=0;dashed=1;opacity=70;" vertex="1" parent="1">
-            <mxGeometry x="2650" y="56" width="171" height="90" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;acc1&lt;/b&gt;&lt;br&gt;10.10.0.21" tooltip="net:device:acc1&#10;kind: device&#10;mgmt_ip: 10.10.0.21&#10;role: switch" topomapper_kind="device" id="net:device:acc1">
-          <mxCell style="sketch=0;points=[[0.015,0.015,0],[0.985,0.015,0],[0.985,0.985,0],[0.015,0.985,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],[0,0.75,0],[0,0.5,0],[0,0.25,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.rect;prIcon=l2_switch;fillColor=#FAFAFA;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="754" y="322" width="50" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;acc2&lt;/b&gt;&lt;br&gt;10.10.0.22" tooltip="net:device:acc2&#10;kind: device&#10;mgmt_ip: 10.10.0.22&#10;role: switch" topomapper_kind="device" id="net:device:acc2">
-          <mxCell style="sketch=0;points=[[0.015,0.015,0],[0.985,0.015,0],[0.985,0.985,0],[0.015,0.985,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],[0,0.75,0],[0,0.5,0],[0,0.25,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.rect;prIcon=l2_switch;fillColor=#FAFAFA;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="856" y="322" width="50" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;ap1&lt;/b&gt;&lt;br&gt;10.10.0.30" tooltip="net:device:ap1&#10;kind: device&#10;mgmt_ip: 10.10.0.30&#10;role: wireless" topomapper_kind="device" id="net:device:ap1">
-          <mxCell style="points=[[0.03,0.36,0],[0.18,0,0],[0.5,0.34,0],[0.82,0,0],[0.97,0.36,0],[1,0.67,0],[0.975,0.975,0],[0.5,1,0],[0.025,0.975,0],[0,0.67,0]];verticalLabelPosition=bottom;sketch=0;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.wireless_access_point2;fillColor=#fafafa;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="958" y="322" width="50" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;core1&lt;/b&gt;&lt;br&gt;10.10.0.11" tooltip="net:device:core1&#10;kind: device&#10;mgmt_ip: 10.10.0.11&#10;role: switch" topomapper_kind="device" id="net:device:core1">
-          <mxCell style="sketch=0;points=[[0.015,0.015,0],[0.985,0.015,0],[0.985,0.985,0],[0.015,0.985,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],[0,0.75,0],[0,0.5,0],[0,0.25,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.rect;prIcon=l3_switch;fillColor=#FAFAFA;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="550" y="322" width="50" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;core2&lt;/b&gt;&lt;br&gt;10.10.0.12" tooltip="net:device:core2&#10;kind: device&#10;mgmt_ip: 10.10.0.12&#10;role: switch" topomapper_kind="device" id="net:device:core2">
-          <mxCell style="sketch=0;points=[[0.015,0.015,0],[0.985,0.015,0],[0.985,0.985,0],[0.015,0.985,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],[0,0.75,0],[0,0.5,0],[0,0.25,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.rect;prIcon=l3_switch;fillColor=#FAFAFA;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="652" y="322" width="50" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;fw1&lt;/b&gt;&lt;br&gt;10.10.0.1" tooltip="net:device:fw1&#10;kind: device&#10;mgmt_ip: 10.10.0.1&#10;role: firewall&#10;vendor: Cisco" topomapper_kind="device" id="net:device:fw1">
-          <mxCell style="sketch=0;points=[[0.015,0.015,0],[0.985,0.015,0],[0.985,0.985,0],[0.015,0.985,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],[0,0.75,0],[0,0.5,0],[0,0.25,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.rect;prIcon=firewall;fillColor=#FAFAFA;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="486" y="56" width="64" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;R&amp;amp;D &amp;lt;lab&amp;gt; &amp;quot;core&amp;quot; &#39;x&#39;&lt;/b&gt;&lt;br&gt;10.20.0.99" tooltip="net:device:lab1&#10;kind: device&#10;device_type: R&amp;D &lt;lab&gt; &quot;core&quot; &#39;x&#39;&#10;mgmt_ip: 10.20.0.99&#10;role: unknown" topomapper_kind="device" id="net:device:lab1">
-          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
-            <mxGeometry x="20" y="322" width="166" height="42" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;phone1&lt;/b&gt;&lt;br&gt;10.20.0.50" tooltip="net:device:phone1&#10;kind: device&#10;mgmt_ip: 10.20.0.50&#10;role: phone" topomapper_kind="device" id="net:device:phone1">
-          <mxCell style="points=[[0.59,0,0],[0.87,0.015,0],[0.88,0.3,0],[0.99,0.99,0],[0.5,1,0],[0.01,0.99,0],[0.075,0.5,0],[0.17,0.115,0]];verticalLabelPosition=bottom;sketch=0;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.ip_phone2;fillColor=#fafafa;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="224" y="322" width="58" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;rtr1&lt;/b&gt;&lt;br&gt;10.10.0.2" tooltip="net:device:rtr1&#10;kind: device&#10;mgmt_ip: 10.10.0.2&#10;role: router" topomapper_kind="device" id="net:device:rtr1">
-          <mxCell style="sketch=0;points=[[0.5,0,0],[1,0.5,0],[0.5,1,0],[0,0.5,0],[0.145,0.145,0],[0.8555,0.145,0],[0.855,0.8555,0],[0.145,0.855,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.rect;prIcon=router;fillColor=#FAFAFA;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="706" y="56" width="50" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;rtr2&lt;/b&gt;&lt;br&gt;10.10.0.3" tooltip="net:device:rtr2&#10;kind: device&#10;mgmt_ip: 10.10.0.3&#10;role: router" topomapper_kind="device" id="net:device:rtr2">
-          <mxCell style="sketch=0;points=[[0.5,0,0],[1,0.5,0],[0.5,1,0],[0,0.5,0],[0.145,0.145,0],[0.8555,0.145,0],[0.855,0.8555,0],[0.145,0.855,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.rect;prIcon=router;fillColor=#FAFAFA;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="802" y="56" width="50" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;srv1&lt;/b&gt;&lt;br&gt;10.20.0.10&lt;br&gt;22/ssh · 80/http&lt;br&gt;443/https · 5432/postgresql" tooltip="net:device:srv1&#10;kind: device&#10;mgmt_ip: 10.20.0.10&#10;open_ports: 22/ssh; 80/http; 443/https; 5432/postgresql&#10;os: Linux 5.X&#10;role: server" topomapper_kind="device" id="net:device:srv1">
-          <mxCell style="sketch=0;points=[[0.015,0.015,0],[0.985,0.015,0],[0.985,0.985,0],[0.015,0.985,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],[0,0.75,0],[0,0.5,0],[0,0.25,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.server2;fillColor=#fafafa;strokeColor=#005073;labelBackgroundColor=#FFFFFF;" vertex="1" parent="1">
-            <mxGeometry x="400" y="322" width="28" height="50" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;10.10.0.0/24&lt;/b&gt;" tooltip="net:segment:10.10.0.0/24&#10;kind: segment&#10;subnet: 10.10.0.0/24" topomapper_kind="segment" id="net:segment:10.10.0.0/24">
-          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=40;" vertex="1" parent="1">
-            <mxGeometry x="719" y="214" width="120" height="36" as="geometry" />
-          </mxCell>
-        </UserObject>
-        <UserObject label="&lt;b&gt;10.20.0.0/24&lt;/b&gt;" tooltip="net:segment:10.20.0.0/24&#10;kind: segment&#10;subnet: 10.20.0.0/24" topomapper_kind="segment" id="net:segment:10.20.0.0/24">
-          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=40;" vertex="1" parent="1">
-            <mxGeometry x="197" y="214" width="120" height="36" as="geometry" />
+            <mxGeometry x="1884" y="56" width="171" height="90" as="geometry" />
           </mxCell>
         </UserObject>
       </root>

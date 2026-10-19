@@ -23,15 +23,16 @@ INSTANCE = "aws:instance:i-0a1b2c3d4e5f60001"
 TGW = "aws:transit-gateway:tgw-0a1b2c3d4e5f60001"
 CGW_HQ = "aws:customer-gateway:cgw-0a1b2c3d4e5f60001"
 DXCON = "aws:dx-connection:dxcon-ffa1b2c3"
-SEGMENT = "net:segment:192.0.2.0/24"
-GW, SERVER = "net:device:gw", "net:device:lab-server"
-LAN_HOSTS = [GW, SERVER, "net:device:192.0.2.20", "net:device:192.0.2.30"]
+CGW_BRANCH = "aws:customer-gateway:cgw-0a1b2c3d4e5f60002"
+DXGW = "aws:dx-gateway:5f3e1c2a-0000-4000-8000-000000000001"
+OU, ROOT, ORG = "aws:ou:ou-0000-prod0001", "aws:org-root:r-0000", "aws:organization:o-exampleorg1"
+ORG_CHART = [ACCOUNT, OU, ROOT, ORG]
 
 
 def merged():
-    """The merge fixtures: an AWS estate, and a LAN topomapper scan found."""
-    return merge([Topology.load(os.path.join(FIXTURES, "aws.json")),
-                  Topology.load(os.path.join(FIXTURES, "lan.json"))])
+    """The merge fixtures: an AWS account's networks, inside its organization."""
+    return merge([Topology.load(os.path.join(FIXTURES, "org.json")),
+                  Topology.load(os.path.join(FIXTURES, "aws.json"))])
 
 
 def two_vpcs():
@@ -70,7 +71,7 @@ class FilterTest(unittest.TestCase):
     def test_kind_keeps_ancestors_and_links_between_kept(self):
         out = filter_topology(merged(), kinds=["vpc", "transit-gateway"])
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), sorted([ACCOUNT, REGION, VPC, TGW]))
+        self.assertEqual(sorted(out.nodes), sorted([REGION, VPC, TGW] + ORG_CHART))
         self.assertEqual([l.kind for l in out.links.values()], ["tgw-attachment"])
         self.assertEqual(out.meta["filters"], [{"kind": ["transit-gateway", "vpc"]}])
 
@@ -113,62 +114,59 @@ class FilterTest(unittest.TestCase):
             self.assertNotEqual(link.source, link.target)
 
     def test_around_with_depth_and_ancestors(self):
-        out = filter_topology(merged(), around="gw", depth=1)
+        out = filter_topology(merged(), around="core-tgw (tgw-0a1b2c3d4e5f60001)", depth=1)
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), sorted([GW, SEGMENT]))
-        self.assertEqual(out.meta["filters"], [{"around": GW, "depth": 1}])
-        out = filter_topology(merged(), around=GW, depth=2)
-        self.assertEqual(sorted(out.nodes), sorted(LAN_HOSTS + [SEGMENT]))
-        self.assertEqual(sorted(filter_topology(merged(), around=GW, depth=0).nodes), [GW])
+        self.assertEqual(sorted(out.nodes),
+                         sorted([TGW, VPC, CGW_HQ, CGW_BRANCH, DXGW, REGION] + ORG_CHART))
+        self.assertEqual(out.meta["filters"], [{"around": TGW, "depth": 1}])
+        out = filter_topology(merged(), around=TGW, depth=2)
+        self.assertIn(DXCON, out.nodes)
+        self.assertEqual(sorted(filter_topology(merged(), around=TGW, depth=0).nodes),
+                         sorted([TGW, REGION] + ORG_CHART))
         out = filter_topology(merged(), around=INSTANCE, depth=0)
-        self.assertEqual(sorted(out.nodes), sorted([INSTANCE, SUBNET, AZ, VPC, REGION, ACCOUNT]))
+        self.assertEqual(sorted(out.nodes), sorted([INSTANCE, SUBNET, AZ, VPC, REGION] + ORG_CHART))
 
     def test_around_container_includes_contents(self):
         out = filter_topology(merged(), around=VPC, depth=1)
         for expected in (AZ, SUBNET, INSTANCE, TGW):
             self.assertIn(expected, out.nodes)
-        self.assertNotIn(GW, out.nodes)
+        self.assertNotIn(CGW_HQ, out.nodes)
 
     def test_around_unknown_node(self):
         with self.assertRaisesRegex(ValueError, "no node"):
             filter_topology(merged(), around="nowhere")
 
     def test_match(self):
-        out = filter_topology(merged(), match=r"^lab-")
+        out = filter_topology(merged(), match=r"^hq-")
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), [SERVER])
+        self.assertEqual(sorted(out.nodes), sorted([CGW_HQ, REGION] + ORG_CHART))
         out = filter_topology(merged(), match="(?i)PROD")
         self.assertIn(VPC, out.nodes)
         with self.assertRaisesRegex(ValueError, "--match"):
             filter_topology(merged(), match="(")
 
-    def test_aws_and_network_only(self):
-        aws = filter_topology(merged(), aws_only=True)
-        net = filter_topology(merged(), network_only=True)
-        for out in (aws, net):
-            self.assertValid(out)
-        self.assertTrue(all(i.startswith("aws:") for i in aws.nodes))
-        self.assertEqual(sorted(net.nodes), sorted(LAN_HOSTS + [SEGMENT]))
-        with self.assertRaises(ValueError):
-            filter_topology(merged(), aws_only=True, network_only=True)
-
-    def test_namespace_keeps_linked_externals(self):
+    def test_aws_only_keeps_linked_externals(self):
         topo = merged()
         topo.add_node("ext:external:internet", "external", "Internet")
-        topo.add_link("segment-member", GW, "ext:external:internet")
-        self.assertIn("ext:external:internet", filter_topology(topo, network_only=True).nodes)
-        self.assertNotIn("ext:external:internet", filter_topology(topo, aws_only=True).nodes)
+        topo.add_link("vpc-peering", VPC, "ext:external:internet")
+        topo.add_node("ext:external:elsewhere", "external", "Elsewhere")
+        out = filter_topology(topo, aws_only=True)
+        self.assertValid(out)
+        self.assertIn("ext:external:internet", out.nodes)
+        self.assertNotIn("ext:external:elsewhere", out.nodes)
+        self.assertEqual(sorted(i for i in out.nodes if not i.startswith("ext:")),
+                         sorted(merged().nodes))
 
     def test_combined(self):
-        out = filter_topology(merged(), network_only=True, kinds=["device"],
-                              exclude_kinds=["segment"], around=GW, depth=2)
+        out = filter_topology(merged(), aws_only=True, kinds=["vpc", "customer-gateway"],
+                              exclude_kinds=["region"], around=TGW, depth=1)
         self.assertValid(out)
-        self.assertEqual(sorted(out.nodes), sorted(LAN_HOSTS))
-        self.assertTrue(all(n.parent is None for n in out.nodes.values()))
-        self.assertEqual(out.meta["filters"], [{"only": "network", "kind": ["device"],
-                                                "around": GW, "depth": 2,
-                                                "exclude_kind": ["segment"]}])
-        again = filter_topology(out, collapse=["device"])
+        self.assertEqual(sorted(out.nodes), sorted([VPC, CGW_HQ, CGW_BRANCH] + ORG_CHART))
+        self.assertEqual(out.nodes[VPC].parent, ACCOUNT)
+        self.assertEqual(out.meta["filters"], [{"only": "aws", "kind": ["customer-gateway", "vpc"],
+                                                "around": TGW, "depth": 1,
+                                                "exclude_kind": ["region"]}])
+        again = filter_topology(out, collapse=["account"])
         self.assertEqual(len(again.meta["filters"]), 2)
 
     def test_unknown_kind_and_empty_result(self):
@@ -197,15 +195,15 @@ class FilterCliTest(unittest.TestCase):
         self.assertEqual(topo.meta["filters"][0]["collapse"], ["vpc"])
 
     def test_cli_around_and_errors(self):
-        status, out, _ = self.run_cli(["filter", "-", "--around", "gw", "--depth", "1"],
+        status, out, _ = self.run_cli(["filter", "-", "--around", TGW, "--depth", "1"],
                                       stdin=merged().dumps())
         self.assertEqual(status, 0)
-        self.assertIn(SEGMENT, Topology.loads(out).nodes)
+        self.assertIn(CGW_HQ, Topology.loads(out).nodes)
         status, _, err = self.run_cli(["filter", "--depth", "2"], stdin=merged().dumps())
         self.assertEqual(status, 2)
         self.assertIn("--depth needs --around", err)
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
-            cli.main(["filter", "--aws-only", "--network-only"])
+            cli.main(["filter", "--network-only"])  # gone with the LAN scanner
 
 
 class HideEmptyTest(unittest.TestCase):

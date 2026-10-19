@@ -9,8 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any, List, Tuple
 
-from ..model import (LINK_DX_VIF, LINK_DXGW_ASSOCIATION, LINK_SEGMENT, LINK_TGW_ATTACHMENT,
-                     LINK_TGW_PEERING, LINK_VPC_PEERING, LINK_VPN, Link, Node)
+from ..model import (LINK_DX_VIF, LINK_DXGW_ASSOCIATION, LINK_TGW_ATTACHMENT, LINK_TGW_PEERING,
+                     LINK_VPC_PEERING, LINK_VPN, Link, Node)
 
 MAX_CHARS = 44
 OK_STATES = {"", "available", "up", "active", "attached", "associated", "accepted", "running",
@@ -113,12 +113,6 @@ def _details(node: Node) -> List[str]:
     if k == "instance":
         ips = a.get("private_ips") or []
         return [_join(ips[:1] if isinstance(ips, list) else ips), _join(a.get("instance_type"))]
-    if k == "device":
-        return [_join(a.get("mgmt_ip")),
-                _join(a.get("model") or a.get("platform") or a.get("device_type")),
-                *_port_lines(a.get("open_ports"))]
-    if k == "segment":
-        return [_join(a.get("subnet"))]
     if k == "aws-resource":
         return [short_type(a.get("resource_type"))]
     if k == "aws-service":
@@ -134,32 +128,6 @@ def short_type(resource_type: Any) -> str:
     return words.replace("-", " ").replace("_", " ").lower()
 
 
-PORT_LINES = 5      # lines of ports on a label; the tooltip lists them all
-PORTS_PER_LINE = 2
-
-
-def _port_text(p: Any) -> str:
-    return f"{p.get('port')}/{p['service']}" if p.get("service") else str(p.get("port"))
-
-
-def _port_lines(ports: Any) -> List[str]:
-    """Open ports found by `topomapper scan`, two to a line: `22/ssh · 80/http`.
-    A port nmap couldn't name is just its number."""
-    if not isinstance(ports, list):
-        return []
-    items = [_port_text(p) for p in ports if isinstance(p, dict)]
-    shown = items[:PORT_LINES * PORTS_PER_LINE]
-    lines = [" · ".join(shown[i:i + PORTS_PER_LINE]) for i in range(0, len(shown), PORTS_PER_LINE)]
-    if len(items) > len(shown):
-        lines.append(f"+{len(items) - len(shown)} more")
-    return lines
-
-
-def _port_tooltip(ports: List[Any]) -> str:
-    return "; ".join(_port_text(p) + (f" ({p['protocol']})" if p.get("protocol", "tcp") != "tcp" else "")
-                     + (f" {p['product']}" if p.get("product") else "") for p in ports)
-
-
 def _policy_line(attrs: Any) -> str:
     """The SCPs on an organization node, the policies people ask about first."""
     scps = (attrs.get("policies") or {}).get("scp") if isinstance(attrs.get("policies"), dict) else None
@@ -172,7 +140,7 @@ def node_title(node: Node) -> str:
 
 def node_lines(node: Node) -> List[str]:
     """Title first, then the attributes a person looks for (CIDR, ID,
-    management address, model), skipping anything the title already says."""
+    account ID), skipping anything the title already says."""
     title = node_title(node)
     lines = [title]
     for line in _details(node):
@@ -200,8 +168,6 @@ def tooltip(node: Node) -> str:
         elif isinstance(value, list):
             if all(not isinstance(v, (dict, list)) for v in value):
                 value = ", ".join(str(v) for v in value)
-            elif key == "open_ports" and all(isinstance(v, dict) for v in value):
-                value = _port_tooltip(value)
             else:
                 value = f"{len(value)} entries"
         out.append(f"{key}: {value}")
@@ -242,8 +208,6 @@ def _tunnels(tunnels: Any) -> str:
 def _middle(link: Link) -> List[str]:
     a = link.attrs
     k = link.kind
-    if k == LINK_SEGMENT:
-        return [_join(a.get("address"))]
     if k in (LINK_TGW_ATTACHMENT, LINK_TGW_PEERING):
         return [_join(a.get("attachment_id"))]
     if k == LINK_VPC_PEERING:

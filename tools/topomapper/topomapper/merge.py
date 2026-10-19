@@ -1,7 +1,7 @@
 """Merge topologies into one.
 
 Each collection sees part of the estate: an organization chart, one
-account's networks, a LAN scan. Merging unions them by ID (IDs are
+account's networks, another account collected separately. Merging unions them by ID (IDs are
 deterministic, so the same thing seen twice is one node), which is how
 accounts land inside their OUs.
 

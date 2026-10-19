@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2075" height="1591" viewBox="0 0 2075 1591" font-family="Helvetica, Arial, sans-serif">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#333333"/></marker></defs>
+<rect x="0" y="0" width="2075" height="1591" fill="#FFFFFF"/>
+<text x="20" y="38" font-size="18" font-weight="bold" fill="#232F3E">An account in its organization (example)</text>
+<g class="container organization" data-id="aws:organization:o-example0001"><title>aws:organization:o-example0001
+kind: organization
+org_id: o-example0001</title><rect x="20" y="56" width="1832" height="1515" fill="none" stroke="#232F3E" stroke-width="1.5"/><rect x="20" y="56" width="8" height="8" fill="#232F3E"/><text x="34" y="75" text-anchor="start" font-size="12" font-weight="bold" fill="#232F3E">Organization (o-example0001)</text></g>
+<g class="container org-root" data-id="aws:org-root:r-0000"><title>aws:org-root:r-0000
+kind: org-root
+policies: scp=FullAWSAccess
+root_id: r-0000</title><rect x="36" y="210" width="1800" height="1345" fill="none" stroke="#E7157B" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="36" y="210" width="8" height="8" fill="#E7157B"/><text x="50" y="229" text-anchor="start" font-size="12" font-weight="bold" fill="#E7157B">Root</text><text x="50" y="244" text-anchor="start" font-size="12" fill="#E7157B">SCP: FullAWSAccess</text></g>
+<g class="container ou" data-id="aws:ou:ou-0000-prod0001"><title>aws:ou:ou-0000-prod0001
+kind: ou
+ou_id: ou-0000-prod0001
+policies: scp=FullAWSAccess, DenyRegions</title><rect x="220" y="260" width="1600" height="1279" fill="none" stroke="#E7157B" stroke-width="1.5"/><rect x="220" y="260" width="8" height="8" fill="#E7157B"/><text x="234" y="279" text-anchor="start" font-size="12" font-weight="bold" fill="#B0084D">Prod</text><text x="234" y="294" text-anchor="start" font-size="12" fill="#B0084D">SCP: FullAWSAccess, DenyRegions</text></g>
+<g class="container account" data-id="aws:account:123456789012"><title>aws:account:123456789012
+kind: account
+account_id: 123456789012</title><rect x="236" y="310" width="1568" height="1213" fill="none" stroke="#CD2264" stroke-width="1.5"/><rect x="236" y="310" width="8" height="8" fill="#CD2264"/><text x="250" y="329" text-anchor="start" font-size="12" font-weight="bold" fill="#CD2264">example-prod</text><text x="250" y="344" text-anchor="start" font-size="12" fill="#CD2264">123456789012</text></g>
+<g class="container region" data-id="aws:region:123456789012:us-east-1"><title>aws:region:123456789012:us-east-1
+kind: region
+region: us-east-1</title><rect x="252" y="516" width="1536" height="991" fill="none" stroke="#00A4A6" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="252" y="516" width="8" height="8" fill="#00A4A6"/><text x="266" y="535" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">us-east-1</text></g>
+<g class="container vpc" data-id="aws:vpc:vpc-00"><title>aws:vpc:vpc-00
+kind: vpc
+cidrs: 10.0.0.0/16</title><rect x="268" y="883" width="736" height="578" fill="none" stroke="#8C4FFF" stroke-width="1.5"/><rect x="268" y="883" width="8" height="8" fill="#8C4FFF"/><text x="282" y="902" text-anchor="start" font-size="12" font-weight="bold" fill="#6B3FD4">prod (vpc-00)</text><text x="282" y="917" text-anchor="start" font-size="12" fill="#6B3FD4">10.0.0.0/16</text></g>
+<g class="container az" data-id="aws:az:vpc-00:us-east-1a"><title>aws:az:vpc-00:us-east-1a
+kind: az</title><rect x="284" y="1042" width="336" height="403" fill="none" stroke="#147EBA" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="284" y="1042" width="8" height="8" fill="#147EBA"/><text x="298" y="1061" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">us-east-1a</text></g>
+<g class="container subnet-public" data-id="aws:subnet:subnet-000"><title>aws:subnet:subnet-000
+kind: subnet
+az: us-east-1a
+cidr: 10.0.0.0/24
+public: True</title><rect x="300" y="1082" width="304" height="150" fill="#F2F6E8" stroke="#7AA116" stroke-width="1.5"/><rect x="300" y="1082" width="8" height="8" fill="#7AA116"/><text x="314" y="1101" text-anchor="start" font-size="12" font-weight="bold" fill="#248814">prod-public-a (subnet-000)</text><text x="314" y="1116" text-anchor="start" font-size="12" fill="#248814">10.0.0.0/24</text></g>
+<g class="container subnet-private" data-id="aws:subnet:subnet-001"><title>aws:subnet:subnet-001
+kind: subnet
+az: us-east-1a
+cidr: 10.0.1.0/24
+public: False</title><rect x="300" y="1264" width="304" height="165" fill="#E6F6F7" stroke="#00A4A6" stroke-width="1.5"/><rect x="300" y="1264" width="8" height="8" fill="#00A4A6"/><text x="314" y="1283" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">prod-private-a (subnet-001)</text><text x="314" y="1298" text-anchor="start" font-size="12" fill="#147EBA">10.0.1.0/24</text></g>
+<g class="container az" data-id="aws:az:vpc-00:us-east-1b"><title>aws:az:vpc-00:us-east-1b
+kind: az</title><rect x="652" y="1042" width="336" height="403" fill="none" stroke="#147EBA" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="652" y="1042" width="8" height="8" fill="#147EBA"/><text x="666" y="1061" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">us-east-1b</text></g>
+<g class="container subnet-public" data-id="aws:subnet:subnet-010"><title>aws:subnet:subnet-010
+kind: subnet
+az: us-east-1b
+cidr: 10.0.2.0/24
+public: True</title><rect x="668" y="1082" width="304" height="150" fill="#F2F6E8" stroke="#7AA116" stroke-width="1.5"/><rect x="668" y="1082" width="8" height="8" fill="#7AA116"/><text x="682" y="1101" text-anchor="start" font-size="12" font-weight="bold" fill="#248814">prod-public-b (subnet-010)</text><text x="682" y="1116" text-anchor="start" font-size="12" fill="#248814">10.0.2.0/24</text></g>
+<g class="container subnet-private" data-id="aws:subnet:subnet-011"><title>aws:subnet:subnet-011
+kind: subnet
+az: us-east-1b
+cidr: 10.0.3.0/24
+public: False</title><rect x="668" y="1264" width="304" height="165" fill="#E6F6F7" stroke="#00A4A6" stroke-width="1.5"/><rect x="668" y="1264" width="8" height="8" fill="#00A4A6"/><text x="682" y="1283" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">prod-private-b (subnet-011)</text><text x="682" y="1298" text-anchor="start" font-size="12" fill="#147EBA">10.0.3.0/24</text></g>
+<g class="container vpc" data-id="aws:vpc:vpc-01"><title>aws:vpc:vpc-01
+kind: vpc
+cidrs: 10.1.0.0/16</title><rect x="1036" y="883" width="736" height="608" fill="none" stroke="#8C4FFF" stroke-width="1.5"/><rect x="1036" y="883" width="8" height="8" fill="#8C4FFF"/><text x="1050" y="902" text-anchor="start" font-size="12" font-weight="bold" fill="#6B3FD4">shared (vpc-01)</text><text x="1050" y="917" text-anchor="start" font-size="12" fill="#6B3FD4">10.1.0.0/16</text></g>
+<g class="container az" data-id="aws:az:vpc-01:us-east-1a"><title>aws:az:vpc-01:us-east-1a
+kind: az</title><rect x="1052" y="1072" width="336" height="403" fill="none" stroke="#147EBA" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="1052" y="1072" width="8" height="8" fill="#147EBA"/><text x="1066" y="1091" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">us-east-1a</text></g>
+<g class="container subnet-public" data-id="aws:subnet:subnet-100"><title>aws:subnet:subnet-100
+kind: subnet
+az: us-east-1a
+cidr: 10.1.0.0/24
+public: True</title><rect x="1068" y="1112" width="304" height="150" fill="#F2F6E8" stroke="#7AA116" stroke-width="1.5"/><rect x="1068" y="1112" width="8" height="8" fill="#7AA116"/><text x="1082" y="1131" text-anchor="start" font-size="12" font-weight="bold" fill="#248814">shared-public-a (subnet-100)</text><text x="1082" y="1146" text-anchor="start" font-size="12" fill="#248814">10.1.0.0/24</text></g>
+<g class="container subnet-private" data-id="aws:subnet:subnet-101"><title>aws:subnet:subnet-101
+kind: subnet
+az: us-east-1a
+cidr: 10.1.1.0/24
+public: False</title><rect x="1068" y="1294" width="304" height="165" fill="#E6F6F7" stroke="#00A4A6" stroke-width="1.5"/><rect x="1068" y="1294" width="8" height="8" fill="#00A4A6"/><text x="1082" y="1313" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">shared-private-a (subnet-101)</text><text x="1082" y="1328" text-anchor="start" font-size="12" fill="#147EBA">10.1.1.0/24</text></g>
+<g class="container az" data-id="aws:az:vpc-01:us-east-1b"><title>aws:az:vpc-01:us-east-1b
+kind: az</title><rect x="1420" y="1072" width="336" height="403" fill="none" stroke="#147EBA" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="1420" y="1072" width="8" height="8" fill="#147EBA"/><text x="1434" y="1091" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">us-east-1b</text></g>
+<g class="container subnet-public" data-id="aws:subnet:subnet-110"><title>aws:subnet:subnet-110
+kind: subnet
+az: us-east-1b
+cidr: 10.1.2.0/24
+public: True</title><rect x="1436" y="1112" width="304" height="150" fill="#F2F6E8" stroke="#7AA116" stroke-width="1.5"/><rect x="1436" y="1112" width="8" height="8" fill="#7AA116"/><text x="1450" y="1131" text-anchor="start" font-size="12" font-weight="bold" fill="#248814">shared-public-b (subnet-110)</text><text x="1450" y="1146" text-anchor="start" font-size="12" fill="#248814">10.1.2.0/24</text></g>
+<g class="container subnet-private" data-id="aws:subnet:subnet-111"><title>aws:subnet:subnet-111
+kind: subnet
+az: us-east-1b
+cidr: 10.1.3.0/24
+public: False</title><rect x="1436" y="1294" width="304" height="165" fill="#E6F6F7" stroke="#00A4A6" stroke-width="1.5"/><rect x="1436" y="1294" width="8" height="8" fill="#00A4A6"/><text x="1450" y="1313" text-anchor="start" font-size="12" font-weight="bold" fill="#147EBA">shared-private-b (subnet-111)</text><text x="1450" y="1328" text-anchor="start" font-size="12" fill="#147EBA">10.1.3.0/24</text></g>
+<g class="container vpc" data-id="aws:vpc:vpc-0ext"><title>aws:vpc:vpc-0ext
+kind: vpc
+account_id: 111122223333
+cidrs: 172.16.0.0/16
+external: True</title><rect x="1884" y="56" width="171" height="90" fill="none" stroke="#8C4FFF" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="1884" y="56" width="8" height="8" fill="#8C4FFF"/><text x="1898" y="75" text-anchor="start" font-size="12" font-weight="bold" fill="#6B3FD4">partner (vpc-0ext)</text><text x="1898" y="90" text-anchor="start" font-size="12" fill="#6B3FD4">172.16.0.0/16</text></g>
+<g class="link vpn" data-id="vpn|aws:customer-gateway:cgw-01|aws:transit-gateway:tgw-01|vpn-01"><title>vpn: aws:customer-gateway:cgw-01 – aws:transit-gateway:tgw-01
+routing: bgp
+state: available
+tunnels: 2 entries
+vpn_id: vpn-01</title><path d="M1020 604 L1020 727" fill="none" stroke="#C98B00" stroke-width="2" stroke-dasharray="6 4"/></g>
+<g class="link dx-vif" data-id="dx-vif|aws:dx-connection:dxcon-01|aws:dx-gateway:dxgw-01|dxvif-01"><title>dx-vif: aws:dx-connection:dxcon-01 – aws:dx-gateway:dxgw-01
+customer_address: 192.168.100.1/30
+state: available
+vif_id: dxvif-01
+vif_type: transit
+vlan: 101</title><path d="M1150 556 L1038 408" fill="none" stroke="#1A73E8" stroke-width="4" marker-end="url(#arrow)"/></g>
+<g class="link dxgw-association" data-id="dxgw-association|aws:dx-gateway:dxgw-01|aws:transit-gateway:tgw-01"><title>dxgw-association: aws:dx-gateway:dxgw-01 – aws:transit-gateway:tgw-01
+association_id: dxgw-assoc-01
+state: associated</title><path d="M1020 408 L1020 727" fill="none" stroke="#1A73E8" stroke-width="2"/></g>
+<g class="link policy-attachment" data-id="policy-attachment|aws:org-policy:p-0000deny0001|aws:ou:ou-0000-prod0001"><title>policy-attachment: aws:org-policy:p-0000deny0001 – aws:ou:ou-0000-prod0001
+type: scp</title><path d="M855 138 L881 260" fill="none" stroke="#E7157B" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/></g>
+<g class="link policy-attachment" data-id="policy-attachment|aws:org-policy:p-FullAWSAccess|aws:org-root:r-0000"><title>policy-attachment: aws:org-policy:p-FullAWSAccess – aws:org-root:r-0000
+type: scp</title><path d="M1020 138 L1012 210" fill="none" stroke="#E7157B" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/></g>
+<g class="link tgw-attachment" data-id="tgw-attachment|aws:transit-gateway:tgw-01|aws:vpc:vpc-00|tgw-attach-00"><title>tgw-attachment: aws:transit-gateway:tgw-01 – aws:vpc:vpc-00
+attachment_id: tgw-attach-00
+resource_type: vpc
+state: available</title><path d="M998 775 L900 883" fill="none" stroke="#8C4FFF" stroke-width="2"/></g>
+<g class="link tgw-attachment" data-id="tgw-attachment|aws:transit-gateway:tgw-01|aws:vpc:vpc-01|tgw-attach-01"><title>tgw-attachment: aws:transit-gateway:tgw-01 – aws:vpc:vpc-01
+attachment_id: tgw-attach-01
+resource_type: vpc
+state: available</title><path d="M1041 775 L1136 883" fill="none" stroke="#8C4FFF" stroke-width="2"/></g>
+<g class="link vpc-peering" data-id="vpc-peering|aws:vpc:vpc-00|aws:vpc:vpc-01|pcx-01"><title>vpc-peering: aws:vpc:vpc-00 – aws:vpc:vpc-01
+peering_id: pcx-01
+state: active</title><path d="M1004 1179 L1036 1180" fill="none" stroke="#8C4FFF" stroke-width="1.5" stroke-dasharray="8 4"/></g>
+<g class="link vpc-peering" data-id="vpc-peering|aws:vpc:vpc-00|aws:vpc:vpc-0ext|pcx-02"><title>vpc-peering: aws:vpc:vpc-00 – aws:vpc:vpc-0ext
+peering_id: pcx-02
+state: pending-acceptance</title><path d="M996 883 L1913 146" fill="none" stroke="#8C4FFF" stroke-width="1.5" stroke-dasharray="8 4"/></g>
+<g class="node org-policy" data-id="aws:org-policy:p-0000deny0001"><title>aws:org-policy:p-0000deny0001
+kind: org-policy
+policy_id: p-0000deny0001
+type: scp</title><rect x="780" y="96" width="140" height="42" rx="6" fill="#FDF0F6" stroke="#E7157B" stroke-width="1.5"/><text x="850" y="113.5" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E">DenyRegions</text><text x="850" y="128.5" text-anchor="middle" font-size="12" fill="#232F3E">SCP</text></g>
+<g class="node org-policy" data-id="aws:org-policy:p-FullAWSAccess"><title>aws:org-policy:p-FullAWSAccess
+kind: org-policy
+policy_id: p-FullAWSAccess
+type: scp</title><rect x="952" y="96" width="140" height="42" rx="6" fill="#FDF0F6" stroke="#E7157B" stroke-width="1.5"/><text x="1022" y="113.5" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E">FullAWSAccess</text><text x="1022" y="128.5" text-anchor="middle" font-size="12" fill="#232F3E">SCP</text></g>
+<g class="node account-management" data-id="aws:account:111122223333"><title>aws:account:111122223333
+kind: account
+account_id: 111122223333
+management: True</title><g transform="translate(96 260) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#E7157B"/><text x="24" y="28.3" text-anchor="middle" font-size="12" font-weight="bold" fill="#FFFFFF">MGMT</text></g><text x="120" y="323" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">example-management</text><text x="120" y="338" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">111122223333</text><text x="120" y="353" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">management account</text></g>
+<g class="node dx-gateway" data-id="aws:dx-gateway:dxgw-01"><title>aws:dx-gateway:dxgw-01
+kind: dx-gateway
+asn: 64600
+dxgw_id: dxgw-01</title><g transform="translate(996 360) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="28.3" text-anchor="middle" font-size="12" font-weight="bold" fill="#FFFFFF">DXGW</text></g><text x="1020" y="423" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">dxgw-01</text><text x="1020" y="438" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">ASN 64600</text></g>
+<g class="node customer-gateway" data-id="aws:customer-gateway:cgw-01"><title>aws:customer-gateway:cgw-01
+kind: customer-gateway
+asn: 65010
+cgw_id: cgw-01
+ip: 203.0.113.10</title><g transform="translate(996 556) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">CGW</text></g><text x="1020" y="619" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">hq-cgw (cgw-01)</text><text x="1020" y="634" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">203.0.113.10</text><text x="1020" y="649" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">ASN 65010</text></g>
+<g class="node dx-connection" data-id="aws:dx-connection:dxcon-01"><title>aws:dx-connection:dxcon-01
+kind: dx-connection
+bandwidth: 1Gbps
+connection_id: dxcon-01
+location: example-dx-site-1</title><g transform="translate(1144 556) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">DX</text></g><text x="1168" y="619" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">dxcon-01</text><text x="1168" y="634" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">example-dx-site-1</text><text x="1168" y="649" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">1Gbps</text></g>
+<g class="node transit-gateway" data-id="aws:transit-gateway:tgw-01"><title>aws:transit-gateway:tgw-01
+kind: transit-gateway
+asn: 64512
+tgw_id: tgw-01</title><g transform="translate(996 727) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">TGW</text></g><text x="1020" y="790" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">core-tgw (tgw-01)</text><text x="1020" y="805" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">ASN 64512</text></g>
+<g class="node nat-gateway" data-id="aws:nat-gateway:nat-00"><title>aws:nat-gateway:nat-00
+kind: nat-gateway
+nat_gateway_id: nat-00
+public_ips: 203.0.113.20</title><g transform="translate(389 1132) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">NAT</text></g><text x="413" y="1195" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">nat-00</text><text x="413" y="1210" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">203.0.113.20</text></g>
+<g class="node instance" data-id="aws:instance:i-0000"><title>aws:instance:i-0000
+kind: instance
+instance_id: i-0000
+instance_type: t3.micro
+private_ips: 10.0.1.10</title><g transform="translate(352 1314) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="376" y="1377" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-000 (i-0000)</text><text x="376" y="1392" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.0.1.10</text><text x="376" y="1407" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node instance" data-id="aws:instance:i-0001"><title>aws:instance:i-0001
+kind: instance
+instance_id: i-0001
+instance_type: t3.micro
+private_ips: 10.0.1.11</title><g transform="translate(504 1314) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="528" y="1377" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-001 (i-0001)</text><text x="528" y="1392" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.0.1.11</text><text x="528" y="1407" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node instance" data-id="aws:instance:i-0010"><title>aws:instance:i-0010
+kind: instance
+instance_id: i-0010
+instance_type: t3.micro
+private_ips: 10.0.3.10</title><g transform="translate(720 1314) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="744" y="1377" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-010 (i-0010)</text><text x="744" y="1392" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.0.3.10</text><text x="744" y="1407" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node instance" data-id="aws:instance:i-0011"><title>aws:instance:i-0011
+kind: instance
+instance_id: i-0011
+instance_type: t3.micro
+private_ips: 10.0.3.11</title><g transform="translate(872 1314) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="896" y="1377" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-011 (i-0011)</text><text x="896" y="1392" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.0.3.11</text><text x="896" y="1407" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node internet-gateway" data-id="aws:internet-gateway:igw-00"><title>aws:internet-gateway:igw-00
+kind: internet-gateway
+gateway_id: igw-00</title><g transform="translate(612 933) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">IGW</text></g><text x="636" y="996" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">igw-00</text></g>
+<g class="node nat-gateway" data-id="aws:nat-gateway:nat-01"><title>aws:nat-gateway:nat-01
+kind: nat-gateway
+nat_gateway_id: nat-01
+public_ips: 203.0.113.21</title><g transform="translate(1164 1162) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">NAT</text></g><text x="1188" y="1225" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">nat-01</text><text x="1188" y="1240" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">203.0.113.21</text></g>
+<g class="node instance" data-id="aws:instance:i-0100"><title>aws:instance:i-0100
+kind: instance
+instance_id: i-0100
+instance_type: t3.micro
+private_ips: 10.1.1.10</title><g transform="translate(1120 1344) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="1144" y="1407" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-100 (i-0100)</text><text x="1144" y="1422" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.1.1.10</text><text x="1144" y="1437" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node instance" data-id="aws:instance:i-0101"><title>aws:instance:i-0101
+kind: instance
+instance_id: i-0101
+instance_type: t3.micro
+private_ips: 10.1.1.11</title><g transform="translate(1272 1344) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="1296" y="1407" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-101 (i-0101)</text><text x="1296" y="1422" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.1.1.11</text><text x="1296" y="1437" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node instance" data-id="aws:instance:i-0110"><title>aws:instance:i-0110
+kind: instance
+instance_id: i-0110
+instance_type: t3.micro
+private_ips: 10.1.3.10</title><g transform="translate(1488 1344) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="1512" y="1407" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-110 (i-0110)</text><text x="1512" y="1422" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.1.3.10</text><text x="1512" y="1437" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node instance" data-id="aws:instance:i-0111"><title>aws:instance:i-0111
+kind: instance
+instance_id: i-0111
+instance_type: t3.micro
+private_ips: 10.1.3.11</title><g transform="translate(1640 1344) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#ED7100"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">EC2</text></g><text x="1664" y="1407" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">app-111 (i-0111)</text><text x="1664" y="1422" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">10.1.3.11</text><text x="1664" y="1437" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">t3.micro</text></g>
+<g class="node internet-gateway" data-id="aws:internet-gateway:igw-01"><title>aws:internet-gateway:igw-01
+kind: internet-gateway
+gateway_id: igw-01</title><g transform="translate(1226 933) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">IGW</text></g><text x="1250" y="996" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">igw-01</text></g>
+<g class="node vpc-endpoint" data-id="aws:vpc-endpoint:vpce-01"><title>aws:vpc-endpoint:vpce-01
+kind: vpc-endpoint
+endpoint_id: vpce-01
+endpoint_type: Gateway
+service: com.amazonaws.us-east-1.s3</title><g transform="translate(1468 933) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="28.3" text-anchor="middle" font-size="12" font-weight="bold" fill="#FFFFFF">VPCE</text></g><text x="1492" y="996" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">vpce-01</text><text x="1492" y="1011" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">com.amazonaws.us-east-1.s3</text><text x="1492" y="1026" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">Gateway</text></g>
+<g class="node vpn-gateway" data-id="aws:vpn-gateway:vgw-01"><title>aws:vpn-gateway:vgw-01
+kind: vpn-gateway
+asn: 64513
+vgw_id: vgw-01</title><g transform="translate(1314 933) scale(1 1)"><rect x="1" y="1" width="46" height="46" rx="6" fill="#8C4FFF"/><text x="24" y="29.4" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">VGW</text></g><text x="1338" y="996" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">vgw-01</text><text x="1338" y="1011" text-anchor="middle" font-size="12" fill="#232F3E" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke">ASN 64513</text></g>
+<g class="link-label" data-id="vpn|aws:customer-gateway:cgw-01|aws:transit-gateway:tgw-01|vpn-01"><rect x="957.0" y="651.5" width="126" height="28" rx="2" fill="#FFFFFF" fill-opacity="0.9"/><text x="1020.0" y="662.5" text-anchor="middle" font-size="10" fill="#333333">vpn-01</text><text x="1020.0" y="675.5" text-anchor="middle" font-size="10" fill="#333333">BGP · 1/2 tunnels up</text></g>
+<g class="link-label" data-id="dx-vif|aws:dx-connection:dxcon-01|aws:dx-gateway:dxgw-01|dxvif-01"><rect x="1037.0" y="468.0" width="114" height="28" rx="2" fill="#FFFFFF" fill-opacity="0.9"/><text x="1094.0" y="479.0" text-anchor="middle" font-size="10" fill="#333333">dxvif-01</text><text x="1094.0" y="492.0" text-anchor="middle" font-size="10" fill="#333333">VLAN 101 · transit</text></g>
+<g class="link-label" data-id="dxgw-association|aws:dx-gateway:dxgw-01|aws:transit-gateway:tgw-01"><rect x="978.0" y="560.0" width="84" height="15" rx="2" fill="#FFFFFF" fill-opacity="0.9"/><text x="1020.0" y="571.0" text-anchor="middle" font-size="10" fill="#333333">dxgw-assoc-01</text></g>
+<g class="link-label" data-id="tgw-attachment|aws:transit-gateway:tgw-01|aws:vpc:vpc-00|tgw-attach-00"><rect x="907.0" y="821.5" width="84" height="15" rx="2" fill="#FFFFFF" fill-opacity="0.9"/><text x="949.0" y="832.5" text-anchor="middle" font-size="10" fill="#333333">tgw-attach-00</text></g>
+<g class="link-label" data-id="tgw-attachment|aws:transit-gateway:tgw-01|aws:vpc:vpc-01|tgw-attach-01"><rect x="1046.5" y="821.5" width="84" height="15" rx="2" fill="#FFFFFF" fill-opacity="0.9"/><text x="1088.5" y="832.5" text-anchor="middle" font-size="10" fill="#333333">tgw-attach-01</text></g>
+<g class="link-label" data-id="vpc-peering|aws:vpc:vpc-00|aws:vpc:vpc-01|pcx-01"><rect x="999.0" y="1172.0" width="42" height="15" rx="2" fill="#FFFFFF" fill-opacity="0.9"/><text x="1020.0" y="1183.0" text-anchor="middle" font-size="10" fill="#333333">pcx-01</text></g>
+<g class="link-label" data-id="vpc-peering|aws:vpc:vpc-00|aws:vpc:vpc-0ext|pcx-02"><rect x="1433.5" y="507.0" width="42" height="15" rx="2" fill="#FFFFFF" fill-opacity="0.9"/><text x="1454.5" y="518.0" text-anchor="middle" font-size="10" fill="#333333">pcx-02</text></g>
+</svg>

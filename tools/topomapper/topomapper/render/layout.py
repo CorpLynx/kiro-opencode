@@ -12,8 +12,8 @@ How a container arranges its children:
   between descendants are lifted to the children that contain them, so a
   TGW attachment to an instance's VPC pulls the TGW towards that VPC.
   Each connected group is drawn in layers by breadth-first distance from
-  its most "outside" members (internet, then edge gateways, firewalls and
-  routers, then core switches, access switches, endpoints), with a few
+  its most "outside" members (internet, then customer gateways and Direct
+  Connect, then AWS gateways, then what sits in the VPCs), with a few
   barycenter sweeps to reduce crossings and an isotonic-regression pass to
   centre blocks over their neighbours. Unlinked children go in a grid.
 * **Account:** the `iam` box (roles and users) is pinned to the top-right
@@ -108,7 +108,7 @@ class Layout:
 
 
 def natural(text: str) -> tuple:
-    """Sort key that puts site2 before site10."""
+    """Sort key that puts app-2 before app-10."""
     return tuple((0, int(p), "") if p.isdigit() else (1, 0, p)
                  for p in re.split(r"(\d+)", text.lower()) if p)
 
@@ -196,8 +196,8 @@ class _Engine:
 
     def anchor_tier(self, nid: str) -> int:
         """Tier used to choose a group's top layer. A link leaving the
-        container counts too: a firewall whose uplink goes to the internet
-        outside its site is drawn above the routers behind it."""
+        container counts too: a gateway whose link goes to the internet
+        outside its container is drawn above what sits behind it."""
         return min(self.tier(nid), self.uplink.get(nid, 99) + 1)
 
     def sort_key(self, nid: str) -> tuple:
@@ -384,8 +384,8 @@ class _Engine:
         return (pos, extent, thick_total) if self.direction == "TB" else (pos, thick_total, extent)
 
     def _wrap_layers(self, layers: List[List[str]]) -> List[List[str]]:
-        """Split a layer that would be far wider than it is tall (40 access
-        switches under one core, a dozen peered sites) into several rows,
+        """Split a layer that would be far wider than it is tall (40 VPCs
+        on one transit gateway, a dozen peered VPCs) into several rows,
         keeping the order crossing reduction chose."""
         out: List[List[str]] = []
         for row in layers:

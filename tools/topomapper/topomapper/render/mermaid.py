@@ -16,14 +16,8 @@ from ..model import Topology
 from . import labels, styles
 
 SHAPES = {
-    "router": '(("{}"))',
-    "firewall": '{{{{"{}"}}}}',
     "external": '(["{}"])',
-    "segment": '[/"{}"/]',
     "instance": '("{}")',
-    "server": '("{}")',
-    "phone": '("{}")',
-    "wireless-ap": '("{}")',
     "vpc-endpoint": '>"{}"]',
 }
 GATEWAYS = {"internet-gateway", "egress-only-internet-gateway", "nat-gateway", "vpn-gateway",
@@ -38,7 +32,6 @@ CLASSES = {
     "org": "fill:#FDF0F6,stroke:#E7157B,color:#232F3E",
     "ec2": "fill:#FFF1E5,stroke:#ED7100,color:#232F3E",
     "net": "fill:#EAF2F7,stroke:#005073,color:#232F3E",
-    "fw": "fill:#F6DEDA,stroke:#B03A2E,color:#232F3E",
     "ext": "fill:#EEEEEE,stroke:#8A929C,color:#232F3E,stroke-dasharray:4 3",
     "ai": "fill:#E6F6F3,stroke:#01A88D,color:#232F3E",
     "iam": "fill:#FCE9EC,stroke:#DD344C,color:#232F3E",
@@ -79,8 +72,6 @@ def _class_of(vclass: str) -> Optional[str]:
         return "org"
     if vclass in GATEWAYS or vclass == "vpc-endpoint":
         return "aws"
-    if vclass == "firewall":
-        return "fw"
     if vclass == "external":
         return "ext"
     if vclass in styles.SHAPES:

@@ -26,111 +26,23 @@
     },
     {
       "attrs": {
-        "address": "10.10.0.21"
+        "type": "scp"
       },
-      "id": "segment-member|net:device:acc1|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:acc1",
-      "target": "net:segment:10.10.0.0/24"
+      "directed": true,
+      "id": "policy-attachment|aws:org-policy:p-0000deny0001|aws:ou:ou-0000-prod0001",
+      "kind": "policy-attachment",
+      "source": "aws:org-policy:p-0000deny0001",
+      "target": "aws:ou:ou-0000-prod0001"
     },
     {
       "attrs": {
-        "address": "10.10.0.22"
+        "type": "scp"
       },
-      "id": "segment-member|net:device:acc2|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:acc2",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.30"
-      },
-      "id": "segment-member|net:device:ap1|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:ap1",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.11"
-      },
-      "id": "segment-member|net:device:core1|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:core1",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.12"
-      },
-      "id": "segment-member|net:device:core2|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:core2",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.1"
-      },
-      "id": "segment-member|net:device:fw1|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:fw1",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.20.0.1"
-      },
-      "id": "segment-member|net:device:fw1|net:segment:10.20.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:fw1",
-      "target": "net:segment:10.20.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.20.0.99"
-      },
-      "id": "segment-member|net:device:lab1|net:segment:10.20.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:lab1",
-      "target": "net:segment:10.20.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.20.0.50"
-      },
-      "id": "segment-member|net:device:phone1|net:segment:10.20.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:phone1",
-      "target": "net:segment:10.20.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.2"
-      },
-      "id": "segment-member|net:device:rtr1|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:rtr1",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.10.0.3"
-      },
-      "id": "segment-member|net:device:rtr2|net:segment:10.10.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:rtr2",
-      "target": "net:segment:10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "address": "10.20.0.10"
-      },
-      "id": "segment-member|net:device:srv1|net:segment:10.20.0.0/24",
-      "kind": "segment-member",
-      "source": "net:device:srv1",
-      "target": "net:segment:10.20.0.0/24"
+      "directed": true,
+      "id": "policy-attachment|aws:org-policy:p-FullAWSAccess|aws:org-root:r-0000",
+      "kind": "policy-attachment",
+      "source": "aws:org-policy:p-FullAWSAccess",
+      "target": "aws:org-root:r-0000"
     },
     {
       "attrs": {
@@ -213,11 +125,22 @@
   "nodes": [
     {
       "attrs": {
+        "account_id": "111122223333",
+        "management": true
+      },
+      "id": "aws:account:111122223333",
+      "kind": "account",
+      "label": "example-management",
+      "parent": "aws:org-root:r-0000"
+    },
+    {
+      "attrs": {
         "account_id": "123456789012"
       },
       "id": "aws:account:123456789012",
       "kind": "account",
-      "label": "example-prod"
+      "label": "example-prod",
+      "parent": "aws:ou:ou-0000-prod0001"
     },
     {
       "id": "aws:az:vpc-00:us-east-1a",
@@ -423,6 +346,63 @@
     },
     {
       "attrs": {
+        "policy_id": "p-0000deny0001",
+        "type": "scp"
+      },
+      "id": "aws:org-policy:p-0000deny0001",
+      "kind": "org-policy",
+      "label": "DenyRegions",
+      "parent": "aws:organization:o-example0001"
+    },
+    {
+      "attrs": {
+        "policy_id": "p-FullAWSAccess",
+        "type": "scp"
+      },
+      "id": "aws:org-policy:p-FullAWSAccess",
+      "kind": "org-policy",
+      "label": "FullAWSAccess",
+      "parent": "aws:organization:o-example0001"
+    },
+    {
+      "attrs": {
+        "policies": {
+          "scp": [
+            "FullAWSAccess"
+          ]
+        },
+        "root_id": "r-0000"
+      },
+      "id": "aws:org-root:r-0000",
+      "kind": "org-root",
+      "label": "Root",
+      "parent": "aws:organization:o-example0001"
+    },
+    {
+      "attrs": {
+        "org_id": "o-example0001"
+      },
+      "id": "aws:organization:o-example0001",
+      "kind": "organization",
+      "label": "Organization (o-example0001)"
+    },
+    {
+      "attrs": {
+        "ou_id": "ou-0000-prod0001",
+        "policies": {
+          "scp": [
+            "FullAWSAccess",
+            "DenyRegions"
+          ]
+        }
+      },
+      "id": "aws:ou:ou-0000-prod0001",
+      "kind": "ou",
+      "label": "Prod",
+      "parent": "aws:org-root:r-0000"
+    },
+    {
+      "attrs": {
         "region": "us-east-1"
       },
       "id": "aws:region:123456789012:us-east-1",
@@ -582,146 +562,6 @@
       "kind": "vpn-gateway",
       "label": "vgw-01",
       "parent": "aws:vpc:vpc-01"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.21",
-        "role": "switch"
-      },
-      "id": "net:device:acc1",
-      "kind": "device",
-      "label": "acc1"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.22",
-        "role": "switch"
-      },
-      "id": "net:device:acc2",
-      "kind": "device",
-      "label": "acc2"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.30",
-        "role": "wireless"
-      },
-      "id": "net:device:ap1",
-      "kind": "device",
-      "label": "ap1"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.11",
-        "role": "switch"
-      },
-      "id": "net:device:core1",
-      "kind": "device",
-      "label": "core1"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.12",
-        "role": "switch"
-      },
-      "id": "net:device:core2",
-      "kind": "device",
-      "label": "core2"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.1",
-        "role": "firewall",
-        "vendor": "Cisco"
-      },
-      "id": "net:device:fw1",
-      "kind": "device",
-      "label": "fw1"
-    },
-    {
-      "attrs": {
-        "device_type": "R&D <lab> \"core\" 'x'",
-        "mgmt_ip": "10.20.0.99",
-        "role": "unknown"
-      },
-      "id": "net:device:lab1",
-      "kind": "device",
-      "label": "R&D <lab> \"core\" 'x'"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.20.0.50",
-        "role": "phone"
-      },
-      "id": "net:device:phone1",
-      "kind": "device",
-      "label": "phone1"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.2",
-        "role": "router"
-      },
-      "id": "net:device:rtr1",
-      "kind": "device",
-      "label": "rtr1"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.10.0.3",
-        "role": "router"
-      },
-      "id": "net:device:rtr2",
-      "kind": "device",
-      "label": "rtr2"
-    },
-    {
-      "attrs": {
-        "mgmt_ip": "10.20.0.10",
-        "open_ports": [
-          {
-            "port": 22,
-            "protocol": "tcp",
-            "service": "ssh"
-          },
-          {
-            "port": 80,
-            "protocol": "tcp",
-            "service": "http"
-          },
-          {
-            "port": 443,
-            "protocol": "tcp",
-            "service": "https"
-          },
-          {
-            "port": 5432,
-            "protocol": "tcp",
-            "service": "postgresql"
-          }
-        ],
-        "os": "Linux 5.X",
-        "role": "server"
-      },
-      "id": "net:device:srv1",
-      "kind": "device",
-      "label": "srv1"
-    },
-    {
-      "attrs": {
-        "subnet": "10.10.0.0/24"
-      },
-      "id": "net:segment:10.10.0.0/24",
-      "kind": "segment",
-      "label": "10.10.0.0/24"
-    },
-    {
-      "attrs": {
-        "subnet": "10.20.0.0/24"
-      },
-      "id": "net:segment:10.20.0.0/24",
-      "kind": "segment",
-      "label": "10.20.0.0/24"
     }
   ],
   "schema": "topomap/1"

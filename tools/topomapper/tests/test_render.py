@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from topomapper.model import Topology, union  # noqa: E402
-from topomapper.render import infer_format, render  # noqa: E402
+from topomapper.render import infer_format, render, styles  # noqa: E402
 from topomapper.render.layout import layout  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -80,54 +80,50 @@ def aws_topology() -> Topology:
     return t
 
 
-def network_topology() -> Topology:
-    """A LAN the way `topomapper scan` sees it: devices on the subnets they
-    answered on, with the roles and ports nmap suggested."""
+def org_topology() -> Topology:
+    """The organization `aws_topology`'s account belongs to, the way
+    `topomapper aws-org` sees it: OUs, a second account and policies."""
     t = Topology({"collector": "test"})
-    mgmt = t.add_node("net:segment:10.10.0.0/24", "segment", "10.10.0.0/24", subnet="10.10.0.0/24").id
-    hosts = t.add_node("net:segment:10.20.0.0/24", "segment", "10.20.0.0/24", subnet="10.20.0.0/24").id
-
-    def dev(name, role, segment, address, **attrs):
-        nid = t.add_node(f"net:device:{name}", "device", name, role=role, mgmt_ip=address, **attrs).id
-        t.add_link("segment-member", nid, segment, address=address)
-        return nid
-
-    dev("fw1", "firewall", mgmt, "10.10.0.1", vendor="Cisco")
-    dev("rtr1", "router", mgmt, "10.10.0.2")
-    dev("rtr2", "router", mgmt, "10.10.0.3")
-    dev("core1", "switch", mgmt, "10.10.0.11")
-    dev("core2", "switch", mgmt, "10.10.0.12")
-    dev("acc1", "switch", mgmt, "10.10.0.21")
-    dev("acc2", "switch", mgmt, "10.10.0.22")
-    dev("ap1", "wireless", mgmt, "10.10.0.30")
-    t.add_link("segment-member", "net:device:fw1", hosts, address="10.20.0.1")
-    dev("phone1", "phone", hosts, "10.20.0.50")
-    dev("srv1", "server", hosts, "10.20.0.10", os="Linux 5.X",
-        open_ports=[{"port": p, "protocol": "tcp", "service": svc}
-                    for p, svc in ((22, "ssh"), (80, "http"), (443, "https"), (5432, "postgresql"))])
-    odd = dev("lab1", "unknown", hosts, "10.20.0.99", device_type=SPECIAL)
-    t.nodes[odd].label = SPECIAL
+    org = t.add_node("aws:organization:o-example0001", "organization", "Organization (o-example0001)",
+                     org_id="o-example0001").id
+    root = t.add_node("aws:org-root:r-0000", "org-root", "Root", org, root_id="r-0000",
+                      policies={"scp": ["FullAWSAccess"]}).id
+    ou = t.add_node("aws:ou:ou-0000-prod0001", "ou", "Prod", root, ou_id="ou-0000-prod0001",
+                    policies={"scp": ["FullAWSAccess", "DenyRegions"]}).id
+    t.add_node(f"aws:account:{ACCT}", "account", "example-prod", ou, account_id=ACCT)
+    t.add_node("aws:account:111122223333", "account", "example-management", root,
+               account_id="111122223333", management=True)
+    for pid, name, target in (("p-FullAWSAccess", "FullAWSAccess", root),
+                              ("p-0000deny0001", "DenyRegions", ou)):
+        t.add_node(f"aws:org-policy:{pid}", "org-policy", name, org, policy_id=pid, type="scp")
+        t.add_link("policy-attachment", f"aws:org-policy:{pid}", target, directed=True, type="scp")
     return t
 
 
-def hybrid_topology() -> Topology:
-    t = union([aws_topology(), network_topology()])
+def estate_topology() -> Topology:
+    """An account's networks inside its organization: what `topomapper merge`
+    makes of `aws-org` and `aws` snapshots."""
+    t = union([org_topology(), aws_topology()])
     t.meta = {"collector": "test"}
     return t
 
 
-def big_topology(n_segments: int = 12, per_segment: int = 24) -> Topology:
+def big_topology(n_vpcs: int = 12, per_subnet: int = 5) -> Topology:
     t = Topology()
-    for s in range(n_segments):
-        seg = t.add_node(f"net:segment:10.{s}.0.0/24", "segment", f"10.{s}.0.0/24").id
-        rtr = t.add_node(f"net:device:s{s}-rtr", "device", f"s{s}-rtr", role="router").id
-        t.add_link("segment-member", rtr, seg, address=f"10.{s}.0.1")
-        if s:
-            t.add_link("segment-member", rtr, f"net:segment:10.{s - 1}.0.0/24", address=f"10.{s - 1}.0.254")
-        for i in range(per_segment - 1):
-            host = t.add_node(f"net:device:s{s}-h{i}", "device", f"s{s}-h{i}",
-                              role=("switch", "phone", "server")[i % 3]).id
-            t.add_link("segment-member", host, seg, address=f"10.{s}.0.{i + 10}")
+    acct = t.add_node(f"aws:account:{ACCT}", "account", "big").id
+    region = t.add_node(REGION, "region", "us-east-1", acct).id
+    tgw = t.add_node("aws:transit-gateway:tgw-big", "transit-gateway", "tgw-big", region).id
+    for v in range(n_vpcs):
+        vpc = t.add_node(f"aws:vpc:vpc-{v:02d}", "vpc", f"vpc-{v:02d}", region).id
+        t.add_link("tgw-attachment", vpc, tgw, key=f"tgw-attach-{v:02d}")
+        for az in ("a", "b"):
+            azid = t.add_node(f"aws:az:vpc-{v:02d}:us-east-1{az}", "az", f"us-east-1{az}", vpc).id
+            for public in (True, False):
+                sub = t.add_node(f"aws:subnet:subnet-{v:02d}{az}{int(public)}", "subnet",
+                                 f"subnet-{v:02d}{az}{int(public)}", azid, public=public).id
+                for i in range(per_subnet):
+                    t.add_node(f"aws:instance:i-{v:02d}{az}{int(public)}{i}", "instance",
+                               f"i-{v:02d}{az}{int(public)}{i}", sub)
     return t
 
 
@@ -148,7 +144,7 @@ def drawio_cells(root: ET.Element):
 
 
 class RenderTest(unittest.TestCase):
-    samples = {"aws": aws_topology, "network": network_topology, "hybrid": hybrid_topology}
+    samples = {"aws": aws_topology, "org": org_topology, "estate": estate_topology}
 
     def test_samples_are_valid(self):
         for name, build in self.samples.items():
@@ -179,7 +175,7 @@ class RenderTest(unittest.TestCase):
                         self.assertIn(el.get("target"), cells)
 
     def test_drawio_uses_builtin_shapes(self):
-        cells = drawio_cells(parse(render(hybrid_topology(), "drawio")))
+        cells = drawio_cells(parse(render(estate_topology(), "drawio")))
         expect = {
             f"aws:account:{ACCT}": "grIcon=mxgraph.aws4.group_account",
             REGION: "grIcon=mxgraph.aws4.group_region",
@@ -194,21 +190,15 @@ class RenderTest(unittest.TestCase):
             "aws:dx-connection:dxcon-01": "resIcon=mxgraph.aws4.direct_connect",
             "aws:vpc-endpoint:vpce-01": "shape=mxgraph.aws4.endpoints",
             "aws:instance:i-0000": "shape=mxgraph.aws4.instance2",
-            "net:device:rtr1": "prIcon=router",
-            "net:device:core1": "prIcon=l3_switch",
-            "net:device:acc1": "prIcon=l2_switch",
-            "net:device:fw1": "prIcon=firewall",
-            "net:device:ap1": "mxgraph.cisco19.wireless_access_point2",
-            "net:device:phone1": "mxgraph.cisco19.ip_phone2",
-            "net:device:srv1": "mxgraph.cisco19.server2",
-            "net:device:lab1": "rounded=1",
+            "aws:account:111122223333": "mxgraph.aws4.organizations_management_account",
+            "aws:org-policy:p-0000deny0001": "rounded=1",
         }
         for nid, fragment in expect.items():
             self.assertIn(fragment, cells[nid][0], nid)
         self.assertIn("dashed=1", cells["aws:vpc:vpc-0ext"][0])
 
     def test_drawio_coordinates_relative_to_parent(self):
-        topo = hybrid_topology()
+        topo = estate_topology()
         lay = layout(topo)
         cells = drawio_cells(parse(render(topo, "drawio")))
         for nid, box in lay.boxes.items():
@@ -220,15 +210,14 @@ class RenderTest(unittest.TestCase):
             self.assertEqual((x, y), (ax, ay), nid)
 
     def test_drawio_link_labels(self):
-        text = render(hybrid_topology(), "drawio")
+        text = render(estate_topology(), "drawio")
         cells = drawio_cells(parse(text))
         vpn = [c for c in cells.values() if c[3].get("edge") and "vpn-01" in c[2]]
         self.assertEqual(len(vpn), 1)
         self.assertIn("1/2 tunnels up", vpn[0][2])
         self.assertIn("dxvif-01", text)
-        member = [c for c in cells.values() if c[3].get("edge") and "10.20.0.1" == c[2]]
-        self.assertEqual(len(member), 1)
-        plain = drawio_cells(parse(render(hybrid_topology(), "drawio", link_labels=False)))
+        self.assertIn("tgw-attach-00", text)
+        plain = drawio_cells(parse(render(estate_topology(), "drawio", link_labels=False)))
         for _, _, value, el in plain.values():
             if el.get("edge") == "1":
                 self.assertEqual(value, "")
@@ -284,15 +273,6 @@ class RenderTest(unittest.TestCase):
         self.assertLess(tgw.y + tgw.h, b["aws:vpc:vpc-00"].y)    # TGW outside, above the VPCs
         self.assertLess(b["aws:customer-gateway:cgw-01"].y, tgw.y)
 
-    def test_network_reads_top_down(self):
-        b = layout(network_topology()).boxes
-        order = ["net:device:fw1", "net:device:rtr1", "net:device:core1", "net:device:acc1",
-                 "net:device:ap1"]
-        ys = [b[n].y for n in order]
-        self.assertEqual(ys, sorted(ys))
-        self.assertLess(b["net:device:rtr1"].y, b["net:device:acc1"].y)
-        self.assertEqual(b["net:device:core1"].y, b["net:device:core2"].y)
-
     def test_ancestor_links_are_not_drawn(self):
         lay = layout(aws_topology())
         self.assertTrue(any(l.startswith("vgw-attachment") for l in lay.skipped))
@@ -311,7 +291,7 @@ class RenderTest(unittest.TestCase):
         t = Topology()
         t.add_node("a", "vpc", "a", "b")
         t.add_node("b", "vpc", "b", "a")
-        t.add_node("c", "device", "c", "missing", role="router")
+        t.add_node("c", "instance", "c", "missing")
         lay = self.assert_geometry(t)
         self.assertEqual(set(lay.boxes), {"a", "b", "c"})
         for fmt in FORMATS:
@@ -342,12 +322,13 @@ class RenderTest(unittest.TestCase):
     # -- Mermaid and DOT --------------------------------------------------------------
 
     def test_mermaid(self):
-        topo = hybrid_topology()
+        topo = estate_topology()
         text = render(topo, "mermaid", direction="LR")
         self.assertTrue(text.startswith("flowchart LR\n"))
         self.assertIn("subgraph n_aws_vpc_vpc_00[", text)
         subgraphs = len(re.findall(r"^\s*subgraph ", text, re.M))
-        containers = [n for n in topo if n.kind in ("account", "region", "vpc", "az", "subnet")]
+        classes = styles.classify(topo, styles.effective_parents(topo))
+        containers = [n for n, c in classes.items() if styles.is_container_class(c)]
         self.assertEqual(subgraphs, len(containers))
         self.assertEqual(subgraphs, len(re.findall(r"^\s*end$", text, re.M)))
         edges = [l for l in text.splitlines() if re.search(r" (---|-\.-|===|-->|-\.->|==>)", l)]
@@ -362,7 +343,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn("vpn-01", text)
 
     def test_dot(self):
-        topo = hybrid_topology()
+        topo = estate_topology()
         text = render(topo, "dot")
         self.assertTrue(text.startswith("graph topomapper {"))
         self.assertIn("compound=true;", text)
@@ -379,10 +360,12 @@ class RenderTest(unittest.TestCase):
     # -- escaping, determinism, scale, CLI --------------------------------------------
 
     def test_special_characters_escaped(self):
-        topo = network_topology()
+        topo = org_topology()
+        topo.add_node("aws:org-policy:p-0000lab00001", "org-policy", SPECIAL,
+                      "aws:organization:o-example0001")
         drawio = render(topo, "drawio")
         cells = drawio_cells(parse(drawio))
-        self.assertIn("R&amp;D &lt;lab&gt; &quot;core&quot;", cells["net:device:lab1"][2])
+        self.assertIn("R&amp;D &lt;lab&gt; &quot;core&quot;", cells["aws:org-policy:p-0000lab00001"][2])
         self.assertNotIn("<lab>", drawio)
         svg = render(topo, "svg")
         texts = [el.text for el in parse(svg).iter() if el.tag.endswith("text")]
@@ -396,13 +379,13 @@ class RenderTest(unittest.TestCase):
     def test_deterministic(self):
         for fmt in FORMATS:
             for direction in ("TB", "LR"):
-                self.assertEqual(render(hybrid_topology(), fmt, direction=direction),
-                                 render(hybrid_topology(), fmt, direction=direction))
+                self.assertEqual(render(estate_topology(), fmt, direction=direction),
+                                 render(estate_topology(), fmt, direction=direction))
 
     def test_deterministic_across_hash_seeds(self):
         code = ("import sys; sys.path.insert(0, %r); sys.path.insert(0, %r);"
-                "from test_render import hybrid_topology; from topomapper.render import render;"
-                "sys.stdout.write(''.join(render(hybrid_topology(), f) for f in "
+                "from test_render import estate_topology; from topomapper.render import render;"
+                "sys.stdout.write(''.join(render(estate_topology(), f) for f in "
                 "('drawio', 'svg', 'mermaid', 'dot')))" % (os.path.dirname(HERE), HERE))
         outs = set()
         for seed in ("1", "2"):
@@ -441,13 +424,13 @@ class RenderTest(unittest.TestCase):
         from topomapper.cli import main
         with tempfile.TemporaryDirectory() as tmp:
             src = os.path.join(tmp, "in.json")
-            hybrid_topology().save(src)
+            estate_topology().save(src)
             for fmt in FORMATS:
                 out = os.path.join(tmp, f"out.{EXT[fmt]}")
-                self.assertEqual(main(["render", src, "-o", out, "--title", "HQ & AWS"]), 0)
+                self.assertEqual(main(["render", src, "-o", out, "--title", "Prod & AWS"]), 0)
                 with open(out, encoding="utf-8") as f:
                     text = f.read()
-                self.assertEqual(text, render(Topology.load(src), fmt, title="HQ & AWS"))
+                self.assertEqual(text, render(Topology.load(src), fmt, title="Prod & AWS"))
             out = os.path.join(tmp, "forced.svg")
             self.assertEqual(main(["render", src, "-f", "dot", "-o", out, "--direction", "LR",
                                    "--no-link-labels"]), 0)
@@ -457,11 +440,11 @@ class RenderTest(unittest.TestCase):
     def test_fixtures(self):
         """Example outputs kept for people to open and eyeball. Regenerate
         with TOPOMAPPER_REGEN_FIXTURES=1 after a deliberate change."""
-        topo = hybrid_topology()
+        topo = estate_topology()
         os.makedirs(FIXTURES, exist_ok=True)
-        expected = {"hybrid.json": topo.dumps()}
+        expected = {"estate.json": topo.dumps()}
         for fmt in FORMATS:
-            expected[f"hybrid.{EXT[fmt]}"] = render(topo, fmt, title="HQ and AWS (example)")
+            expected[f"estate.{EXT[fmt]}"] = render(topo, fmt, title="An account in its organization (example)")
         for name, text in expected.items():
             path = os.path.join(FIXTURES, name)
             if REGEN or not os.path.exists(path):

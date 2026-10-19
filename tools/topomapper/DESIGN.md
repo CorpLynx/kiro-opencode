@@ -1,11 +1,11 @@
 # topomapper design
 
-`topomapper` gathers topology automatically from AWS and from nmap scans of local networks, merges the pieces, and draws them.
+`topomapper` gathers AWS topology automatically, merges the pieces, and draws them.
 
 ```
-collect ─┬─ aws      boto3, read-only API calls            ┐
-         ├─ aws-org  the AWS Organization: OUs, accounts   ├─▶ topomap/1 JSON ─▶ merge ─▶ filter ─▶ render
-         └─ scan     nmap host and port discovery          ┘                   diff (drift between snapshots)
+aws      boto3, read-only API calls         ─┐
+aws-org  the AWS Organization: OUs, accounts ─┴─▶ topomap/1 JSON ─▶ merge ─▶ filter ─▶ render
+                                                                └─▶ diff (drift between snapshots)
 ```
 
 Every stage reads and writes the same JSON graph (`topomapper/model.py`), so stages compose with files or pipes, and snapshots can be committed and diffed.
@@ -13,13 +13,12 @@ Every stage reads and writes the same JSON graph (`topomapper/model.py`), so sta
 ## Ground rules
 
 - **Python 3.9+.** Use `from __future__ import annotations` and `typing.Optional`/`List`/`Dict`. Don't use `X | None` outside annotations.
-- **Optional dependencies:** the core (model, scan collector, merge/diff/filter, every renderer) is **standard library only**.
-  - `boto3` is needed only by the AWS collectors; `scan` runs the `nmap` program and needs no Python package.
+- **Optional dependencies:** the core (model, merge/diff/filter/anonymize, every renderer) is **standard library only**.
+  - `boto3` is needed only by the AWS collectors.
   - Import them inside functions, never at module top level, and raise a `RuntimeError` naming the extra to install (`pip install 'topomapper[aws]'`) if one is missing.
 - **Read-only, always.**
   - The AWS collector wraps every client so only `Describe*`, `List*`, `Get*` and `Search*` calls can run. The one exception is STS `AssumeRole`, allowed only on the client that fetches credentials for other accounts.
-  - `scan` only discovers: it refuses public address space unless `--allow-public` is given, and caps the number of addresses per run.
-- **Partial failure is normal.** An `AccessDenied` region, a failed nmap run or an unreadable XML file is recorded with `Topology.warn()`, and collection carries on. In the AWS collector each service in each region is guarded, so even an unexpected exception skips only that service. Only bad arguments are fatal.
+- **Partial failure is normal.** An `AccessDenied` region or an unreachable account is recorded with `Topology.warn()`, and collection carries on. In the AWS collector each service in each region is guarded, so even an unexpected exception skips only that service. Only bad arguments are fatal.
 - **No real data in the repo,** including in tests and fixtures.
   - Use documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32`) or RFC 1918 space.
   - Hostnames go under `example.net`, AWS account IDs are `123456789012` or `111122223333`, and serial numbers are made up.
@@ -57,8 +56,6 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | organization, org-root, ou, org-policy | `aws:organization:<o-id>`, `aws:org-root:<r-id>`, `aws:ou:<ou-id>`, `aws:org-policy:<p-id>` |
 | aws-resource | `aws:resource:<arn>` (from `--all-resources`). A resource the fallback found without an ARN is `aws:resource:<account-id>:<region>:<CloudFormation type>:<identifier>`. EC2 network resources keep the IDs above instead. A summary from `filter --max-per-type` is `aws:resource:<parent>/<type>`. |
 | aws-service | `aws:service:<account-id>:<region or "global">:<ARN service name>` (the box holding one service's resources) |
-| device | `net:device:<host name without its domain, lower-case>`, or `net:device:<address>` when the host has no name; use `collectors.scan.device_id()` |
-| segment | `net:segment:<cidr>` |
 | external | `ext:external:<what>`, e.g. `ext:external:internet` |
 
 `topomapper aws` and `topomapper aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
@@ -75,7 +72,6 @@ Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you.
   - A DX gateway is global, so it sits in its account.
   - With `--all-resources`, a resource sits in its subnet when AWS Config relates it to exactly one, in its VPC when it spans several subnets or names only a VPC, and otherwise in an `aws-service` box in its region (or in the account, for global services).
   - IAM roles and users are global, so they sit in one `iam` box per account, which the renderers draw in the account's top-right corner. A Bedrock group sits in its region, with its models inside it. An EKS cluster sits in its VPC, or in the region when that VPC wasn't collected.
-- **Network:** devices and segments sit at the top level; `segment-member` links say which network a device was found on.
 
 ## Node attributes (by kind)
 
@@ -100,8 +96,6 @@ Every attribute is optional, but renderers and merge rely on these names:
 | dx-connection | `connection_id`, `location`, `bandwidth`, `state` |
 | dx-gateway | `dxgw_id`, `asn` |
 | instance | `instance_id`, `private_ips`, `public_ip`, `instance_type`, `state` |
-| device | `mgmt_ip` (the scanned address), `role` (see `collectors.scan.ROLES`), `hostname`, `vendor`, `mac`, `os`, `device_type` (`gateway`, `server`, `nas`, `printer`, `camera`, `access point`, `media`, `mobile`, `workstation`, `voip`, `hypervisor`), `open_ports` (list of `{"port", "protocol", "service", "product"}`), `interfaces` (one, with no name, holding the scanned address), `sources` |
-| segment | `subnet` |
 | bedrock | `region`, `models_shown` (models drawn), `models_offered` (what Bedrock lists in the region), `models_in_use`, `granted_all_to` (principals with an Allow on every model), `provisioned_throughput` (list of `{"name", "model_units", "status"}`) |
 | bedrock-model | `model_id`, `model_name`, `provider`, `input_modalities`, `output_modalities`, `inference_types` (`ON_DEMAND`, `PROVISIONED`, `INFERENCE_PROFILE`), `streaming`, `lifecycle`, `source` (`foundation`, `custom`, `imported`), `evidence` (`in use`, `granted`), `granted_to` (role, user or group names), `invocable` (false when the account isn't authorized, entitled or under an agreement), `base_model`, `arn` (custom and imported) |
 | iam | `account_id`, `summary` ("12 roles, 3 users") |
@@ -117,7 +111,6 @@ Labels should be what a person calls the thing: the Name tag if present (`prod-v
 
 | Kind | From → to | Attributes |
 | --- | --- | --- |
-| `segment-member` | device → segment | `address` |
 | `tgw-attachment` | vpc / vpn / dx-gateway ↔ transit-gateway | `attachment_id`, `state`, `resource_type` |
 | `tgw-peering` | transit-gateway ↔ transit-gateway | `attachment_id`, `state` |
 | `vpc-peering` | vpc ↔ vpc | `peering_id`, `state` |
@@ -153,7 +146,6 @@ A peer that wasn't collected (a VPC in another account, a TGW peer in another re
 | Core | `model.py`, `cli.py` |
 | AWS collector | `collectors/aws.py`; `collectors/aws_inventory.py` for `--all-resources`, and `aws_services.py` (service names and icons, shared with the renderers) |
 | AWS Organizations collector | `collectors/aws_org.py` (shares the read-only client and sessions with `aws.py`) |
-| nmap scanner | `collectors/scan.py` (runs the `nmap` program; no Python dependency) |
 | Merge, diff, filter | `merge.py`, `diff.py`, `filter.py` |
 | Layout and renderers | `render/*` |
 

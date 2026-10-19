@@ -8,9 +8,9 @@ are moved. Cell IDs are the topology IDs, so a diff between two renders
 of the same estate shows what changed rather than renumbered cells.
 
 The shape styles are copied from draw.io's own sidebars
-(`Sidebar-AWS4.js` for `mxgraph.aws4.*`, `Sidebar-Cisco19.js` for
-`mxgraph.cisco19.*`), so cells look and behave exactly like ones dragged
-from the AWS 2021 and Cisco 19 palettes.
+(`Sidebar-AWS4.js` for `mxgraph.aws4.*`, `Sidebar-Cisco19.js` for the
+internet cloud), so cells look and behave exactly like ones dragged from
+the AWS 2021 and Cisco 19 palettes.
 """
 
 from __future__ import annotations
@@ -53,18 +53,8 @@ _AWS_GROUP = (
     "recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.")
 _PLAIN_GROUP_TAIL = "container=1;pointerEvents=0;collapsible=0;recursiveResize=0;"
 
-_CISCO_SQUARE = (
-    "sketch=0;points=[[0.015,0.015,0],[0.985,0.015,0],[0.985,0.985,0],[0.015,0.985,0],[0.25,0,0],"
-    "[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],"
-    "[0,0.75,0],[0,0.5,0],[0,0.25,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;"
-    "aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.")
-_CISCO_ROUND = (
-    "sketch=0;points=[[0.5,0,0],[1,0.5,0],[0.5,1,0],[0,0.5,0],[0.145,0.145,0],[0.8555,0.145,0],"
-    "[0.855,0.8555,0],[0.145,0.855,0]];verticalLabelPosition=bottom;html=1;verticalAlign=top;"
-    "aspect=fixed;align=center;pointerEvents=1;shape=mxgraph.cisco19.")
 _CISCO_FREE = ("verticalLabelPosition=bottom;sketch=0;html=1;verticalAlign=top;aspect=fixed;"
                "align=center;pointerEvents=1;shape=mxgraph.cisco19.")
-_CISCO_COLORS = "fillColor=#FAFAFA;strokeColor=#005073;"
 
 VERTEX_STYLES: Dict[str, str] = {
     # AWS / Network & Content Delivery, AWS / Compute
@@ -87,26 +77,11 @@ VERTEX_STYLES: Dict[str, str] = {
     "account-leaf": _AWS_MGMT + "organizations_account;",
     "account-management": _AWS_MGMT + "organizations_management_account;",
     "org-policy": "rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF0F6;strokeColor=#E7157B;fontColor=#232F3E;",
-    # Cisco 19
-    "router": _CISCO_ROUND + "rect;prIcon=router;" + _CISCO_COLORS,
-    "switch-core": _CISCO_SQUARE + "rect;prIcon=l3_switch;" + _CISCO_COLORS,
-    "switch-access": _CISCO_SQUARE + "rect;prIcon=l2_switch;" + _CISCO_COLORS,
-    "firewall": _CISCO_SQUARE + "rect;prIcon=firewall;" + _CISCO_COLORS,
-    "load-balancer": _CISCO_SQUARE + "rect;prIcon=load_balancer;" + _CISCO_COLORS,
-    "wireless-controller": _CISCO_SQUARE + "rect;prIcon=wireless_lan_controller;" + _CISCO_COLORS,
-    "wireless-ap": ("points=[[0.03,0.36,0],[0.18,0,0],[0.5,0.34,0],[0.82,0,0],[0.97,0.36,0],"
-                    "[1,0.67,0],[0.975,0.975,0],[0.5,1,0],[0.025,0.975,0],[0,0.67,0]];"
-                    + _CISCO_FREE + "wireless_access_point2;fillColor=#fafafa;strokeColor=#005073;"),
-    "server": _CISCO_SQUARE + "server2;fillColor=#fafafa;strokeColor=#005073;",
-    "phone": ("points=[[0.59,0,0],[0.87,0.015,0],[0.88,0.3,0],[0.99,0.99,0],[0.5,1,0],[0.01,0.99,0],"
-              "[0.075,0.5,0],[0.17,0.115,0]];" + _CISCO_FREE
-              + "ip_phone2;fillColor=#fafafa;strokeColor=#005073;"),
+    # Cisco 19: the internet
     "external": ("points=[[0,0.64,0],[0.2,0.15,0],[0.4,0.01,0],[0.79,0.25,0],[1,0.65,0],"
                  "[0.8,0.86,0],[0.41,1,0],[0.16,0.86,0]];" + _CISCO_FREE
                  + "cloud;fillColor=#A6A6A6;strokeColor=none;"),
     # neutral shapes, label inside
-    "segment": "rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=40;",
-    "device": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;",
     "generic": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;",
 }
 
@@ -150,7 +125,6 @@ CONTAINER_STYLES: Dict[str, str] = {
 
 _EDGE_BASE = "html=1;rounded=0;labelBackgroundColor=#FFFFFF;fontSize=10;"
 EDGE_STYLES: Dict[str, str] = {
-    "segment-member": "strokeColor=#6C8EBF;strokeWidth=1.5;",
     "tgw-attachment": "strokeColor=#8C4FFF;strokeWidth=2;",
     "tgw-peering": "strokeColor=#8C4FFF;strokeWidth=2;dashed=1;dashPattern=8 4;",
     "vpc-peering": "strokeColor=#8C4FFF;strokeWidth=1.5;dashed=1;dashPattern=8 4;",

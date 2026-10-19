@@ -14,16 +14,6 @@ from ..model import Topology
 from . import labels, styles
 
 NODE_ATTRS = {
-    "router": 'shape=circle, style=filled, fillcolor="#EAF2F7", color="#005073"',
-    "switch-core": 'shape=box, style="filled,bold", fillcolor="#EAF2F7", color="#005073"',
-    "switch-access": 'shape=box, style=filled, fillcolor="#EAF2F7", color="#005073"',
-    "firewall": 'shape=box3d, style=filled, fillcolor="#F6DEDA", color="#B03A2E"',
-    "load-balancer": 'shape=trapezium, style=filled, fillcolor="#EAF2F7", color="#005073"',
-    "wireless-controller": 'shape=box, style=filled, fillcolor="#EAF2F7", color="#005073"',
-    "wireless-ap": 'shape=ellipse, style=filled, fillcolor="#EAF2F7", color="#005073"',
-    "server": 'shape=box, style="filled,rounded", fillcolor="#EAF2F7", color="#005073"',
-    "phone": 'shape=box, style="filled,rounded", fillcolor="#EAF2F7", color="#005073"',
-    "segment": 'shape=parallelogram, style=filled, fillcolor="#DAE8FC", color="#6C8EBF"',
     "external": 'shape=ellipse, style="filled,dashed", fillcolor="#EEEEEE", color="#8A929C"',
     "instance": 'shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"',
     "eks-cluster": 'shape=box, style="filled,rounded", fillcolor="#FFF1E5", color="#ED7100"',

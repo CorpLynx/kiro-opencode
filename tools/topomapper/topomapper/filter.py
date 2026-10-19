@@ -3,8 +3,8 @@
 A full merge of a real estate is too much for one diagram. Filtering has
 three parts, applied in this order:
 
-1. **Select.** `--kind`, `--match`, `--around` and `--aws-only` /
-   `--network-only` each pick nodes from the whole input, and a node stays
+1. **Select.** `--kind`, `--match`, `--around` and `--aws-only` each pick
+   nodes from the whole input, and a node stays
    only if every option given picks it. Measuring each against the whole
    input keeps the result independent of option order.
 2. **Keep context.** Ancestors of selected nodes stay, so a subnet is still
@@ -32,15 +32,14 @@ from .model import AWS_RESOURCE, NODE_KINDS, Link, Node, Topology, link_id
 HELP = "Cut a topology down to the parts you want to draw."
 PRODUCES_TOPOLOGY = True
 
-NAMESPACES = {"aws": "aws:", "network": "net:"}
+AWS_PREFIX = "aws:"
 EXTERNAL_PREFIX = "ext:"
 PORT_ATTRS = ("source_port", "target_port")
 
 
 def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Sequence[str] = (),
                     collapse: Sequence[str] = (), around: Optional[str] = None, depth: int = 1,
-                    match: Optional[str] = None, aws_only: bool = False,
-                    network_only: bool = False, hide_empty: bool = False,
+                    match: Optional[str] = None, aws_only: bool = False, hide_empty: bool = False,
                     max_per_type: Optional[int] = None) -> Topology:
     """Return a filtered copy of `topo` (the input is not changed).
 
@@ -54,8 +53,6 @@ def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Se
     for option, values in (("kind", kinds), ("exclude-kind", exclude_kinds),
                            ("collapse", collapse)):
         _check_kinds(option, values)
-    if aws_only and network_only:
-        raise ValueError("--aws-only and --network-only exclude each other")
     if depth < 0:
         raise ValueError(f"--depth must be 0 or more, not {depth}")
     if max_per_type is not None and max_per_type < 1:
@@ -63,9 +60,9 @@ def filter_topology(topo: Topology, kinds: Sequence[str] = (), exclude_kinds: Se
 
     applied: Dict[str, Any] = {}
     picks: List[Set[str]] = []
-    if aws_only or network_only:
-        applied["only"] = "aws" if aws_only else "network"
-        picks.append(_in_namespace(topo, NAMESPACES[applied["only"]]))
+    if aws_only:
+        applied["only"] = "aws"
+        picks.append(_in_namespace(topo, AWS_PREFIX))
     if kinds:
         applied["kind"] = sorted(set(kinds))
         picks.append({n.id for n in topo.nodes.values() if n.kind in kinds})
@@ -242,7 +239,7 @@ def _repoint_links(topo: Topology, folded: Dict[str, str]) -> None:
     one (`collapsed_links` counts them when there were several), and one
     that already joined them unchanged absorbs them. Self-loops go. Only
     attributes all merged links agree on are kept, and a port only on an
-    end that didn't move, since the inner device it named is gone.
+    end that didn't move, since the inner node it named is gone.
     """
     unchanged: Dict[str, Link] = {}
     groups: Dict[Tuple[str, str, str, bool], List[Tuple[Link, List[Tuple[str, Any]]]]] = {}
@@ -309,11 +306,8 @@ def add_arguments(parser) -> None:
                         help="keep only nodes whose label or ID matches; prefix (?i) to ignore case")
     parser.add_argument("--hide-empty", action="store_true",
                         help="remove regions and OUs flagged empty (nothing found in them)")
-    only = parser.add_mutually_exclusive_group()
-    only.add_argument("--aws-only", action="store_true",
-                      help="keep only AWS nodes (IDs under aws:) and external nodes linked to them")
-    only.add_argument("--network-only", action="store_true",
-                      help="keep only network nodes (IDs under net:) and external nodes linked to them")
+    parser.add_argument("--aws-only", action="store_true",
+                        help="keep only AWS nodes (IDs under aws:) and external nodes linked to them")
 
 
 def run(args) -> Topology:
@@ -322,6 +316,5 @@ def run(args) -> Topology:
     return filter_topology(read_topology(args.input), kinds=args.kind,
                            exclude_kinds=args.exclude_kind, collapse=args.collapse,
                            around=args.around, depth=1 if args.depth is None else args.depth,
-                           match=args.match, aws_only=args.aws_only,
-                           network_only=args.network_only, hide_empty=args.hide_empty,
+                           match=args.match, aws_only=args.aws_only, hide_empty=args.hide_empty,
                            max_per_type=args.max_per_type)

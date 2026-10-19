@@ -12,8 +12,9 @@ from topomapper.model import Topology  # noqa: E402
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "merge")
 AWS = os.path.join(FIXTURES, "aws.json")
-LAN = os.path.join(FIXTURES, "lan.json")   # topomapper scan of the tests/fixtures/scan captures
-GW = "net:device:gw"
+ORG = os.path.join(FIXTURES, "org.json")   # the organization aws.json's account belongs to
+PROD = "aws:account:123456789012"
+OU = "aws:ou:ou-0000-prod0001"
 
 
 def run_cli(argv, stdin=""):
@@ -46,29 +47,33 @@ class UncollectedAccountsTest(unittest.TestCase):
 
 class MergeTest(unittest.TestCase):
     def setUp(self):
-        self.aws, self.lan = Topology.load(AWS), Topology.load(LAN)
+        self.aws, self.org = Topology.load(AWS), Topology.load(ORG)
 
-    def test_union(self):
-        m = merge([self.aws, self.lan])
+    def test_union_puts_the_account_in_its_ou(self):
+        m = merge([self.org, self.aws])
         self.assertEqual(m.validate(), [])
-        self.assertIn("aws:vpc:vpc-0a1b2c3d4e5f60001", m.nodes)
-        self.assertIn(GW, m.nodes)
+        self.assertEqual(m.nodes[PROD].parent, OU)
+        self.assertEqual(m.nodes["aws:region:123456789012:us-east-1"].parent, PROD)
         self.assertEqual(len(m.meta["sources"]), 2)
-        self.assertEqual(len(m.nodes), len(self.aws.nodes) + len(self.lan.nodes))
-        self.assertEqual(sorted(m.links), sorted(list(self.aws.links) + list(self.lan.links)))
+        shared = set(self.aws.nodes) & set(self.org.nodes)
+        self.assertEqual(shared, {PROD})
+        self.assertEqual(len(m.nodes), len(self.aws.nodes) + len(self.org.nodes) - 1)
+        self.assertEqual(sorted(m.links), sorted(list(self.aws.links) + list(self.org.links)))
+        self.assertEqual(m.nodes[PROD].attrs["path"], "Root/Prod")  # attributes from both
+        self.assertEqual(m.meta.get("warnings", []), [])
 
     def test_merge_is_idempotent(self):
-        once = merge([self.aws, self.lan])
-        twice = merge([once, self.lan])
+        once = merge([self.aws, self.org])
+        twice = merge([once, self.org])
         self.assertEqual(sorted(twice.links), sorted(once.links))
         self.assertEqual(sorted(twice.nodes), sorted(once.nodes))
         self.assertEqual(twice.validate(), [])
 
     def test_kind_conflict_warns(self):
         other = Topology()
-        other.add_node(GW, "segment")
-        m = merge([self.lan, other])
-        self.assertIn("is a device in one input and a segment", "\n".join(m.meta["warnings"]))
+        other.add_node(OU, "account")
+        m = merge([self.org, other])
+        self.assertIn("is a ou in one input and a account", "\n".join(m.meta["warnings"]))
 
     def test_parent_conflict_warns(self):
         other = Topology()
@@ -80,12 +85,12 @@ class MergeTest(unittest.TestCase):
                       "\n".join(m.meta["warnings"]))
 
     def test_find_node(self):
-        m = merge([self.aws, self.lan])
-        self.assertEqual(find_node(m, "gw"), GW)
-        self.assertEqual(find_node(m, GW), GW)
-        m.add_node("net:device:gw-copy", "device", "gw")
+        m = merge([self.aws, self.org])
+        self.assertEqual(find_node(m, "Prod"), OU)
+        self.assertEqual(find_node(m, OU), OU)
+        m.add_node("aws:ou:ou-0000-prod0002", "ou", "Prod")
         with self.assertRaisesRegex(ValueError, "several nodes"):
-            find_node(m, "gw")
+            find_node(m, "Prod")
         with self.assertRaisesRegex(ValueError, "no node with ID or label 'nope'"):
             find_node(m, "nope")
 
@@ -99,18 +104,18 @@ class MergeTest(unittest.TestCase):
 
 class MergeCliTest(unittest.TestCase):
     def test_cli_merges(self):
-        status, out, err = run_cli(["merge", AWS, LAN])
+        status, out, err = run_cli(["merge", ORG, AWS])
         self.assertEqual(status, 0, err)
         m = Topology.loads(out)
         self.assertEqual(m.validate(), [])
-        self.assertIn(GW, m.nodes)
+        self.assertEqual(m.nodes[PROD].parent, OU)
 
     def test_cli_reads_stdin(self):
-        with open(LAN, encoding="utf-8") as f:
-            lan = f.read()
-        status, out, _ = run_cli(["merge", AWS, "-"], stdin=lan)
+        with open(ORG, encoding="utf-8") as f:
+            org = f.read()
+        status, out, _ = run_cli(["merge", "-", AWS], stdin=org)
         self.assertEqual(status, 0)
-        self.assertIn(GW, Topology.loads(out).nodes)
+        self.assertEqual(Topology.loads(out).nodes[PROD].parent, OU)
 
     def test_cli_errors(self):
         status, _, err = run_cli(["merge", os.path.join(FIXTURES, "does-not-exist.json")])

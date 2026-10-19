@@ -34,14 +34,14 @@ class ModelTest(unittest.TestCase):
 
     def test_links_are_canonical(self):
         t = Topology()
-        for n in ("net:device:a", "net:device:b"):
-            t.add_node(n, "device")
-        one = t.add_link(LINK_VPC_PEERING, "net:device:b", "net:device:a",
+        for n in ("aws:vpc:vpc-a", "aws:vpc:vpc-b"):
+            t.add_node(n, "vpc")
+        one = t.add_link(LINK_VPC_PEERING, "aws:vpc:vpc-b", "aws:vpc:vpc-a",
                          source_port="eth2", target_port="eth1", sources=["scan-1.xml"])
-        two = t.add_link(LINK_VPC_PEERING, "net:device:a", "net:device:b",
+        two = t.add_link(LINK_VPC_PEERING, "aws:vpc:vpc-a", "aws:vpc:vpc-b",
                          source_port="eth1", target_port="eth2", sources=["scan-2.xml"])
         self.assertIs(one, two)
-        self.assertEqual((one.source, one.attrs["source_port"]), ("net:device:a", "eth1"))
+        self.assertEqual((one.source, one.attrs["source_port"]), ("aws:vpc:vpc-a", "eth1"))
         self.assertEqual(one.attrs["sources"], ["scan-1.xml", "scan-2.xml"])
 
     def test_round_trip_and_sorted(self):

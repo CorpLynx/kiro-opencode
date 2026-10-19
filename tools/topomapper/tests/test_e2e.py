@@ -1,5 +1,6 @@
-"""End to end through the CLI: AWS (mocked) + a saved nmap scan -> merge ->
-filter -> every renderer -> diff, the way a user would chain the commands.
+"""End to end through the CLI: an AWS account and its organization (both
+mocked) -> merge -> filter -> every renderer -> diff, the way a user would
+chain the commands.
 """
 
 import io
@@ -17,7 +18,6 @@ sys.path.insert(0, ROOT)
 from topomapper.cli import main  # noqa: E402
 from topomapper.model import Topology  # noqa: E402
 
-SCANS = os.path.join(ROOT, "tests", "fixtures", "scan")
 
 FAKE_AWS = {
     "AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing",
@@ -30,6 +30,9 @@ try:
     from moto import mock_aws
 except ImportError:  # pragma: no cover
     boto3 = None
+
+
+ACCOUNT = "123456789012"  # moto's default account
 
 
 def run(*argv):
@@ -53,7 +56,12 @@ def build_aws():
     cgw = ec2.create_customer_gateway(Type="ipsec.1", PublicIp="203.0.113.2",
                                       BgpAsn=65010)["CustomerGateway"]["CustomerGatewayId"]
     ec2.create_vpn_connection(Type="ipsec.1", CustomerGatewayId=cgw, TransitGatewayId=tgw)
-    return cgw
+    org = boto3.client("organizations", region_name="us-east-1")
+    org.create_organization(FeatureSet="ALL")
+    root = org.list_roots()["Roots"][0]["Id"]
+    ou = org.create_organizational_unit(ParentId=root, Name="Prod")["OrganizationalUnit"]["Id"]
+    org.move_account(AccountId=ACCOUNT, SourceParentId=root, DestinationParentId=ou)
+    return cgw, vpc, ou
 
 
 @unittest.skipIf(boto3 is None, "needs boto3 and moto")
@@ -67,22 +75,20 @@ class EndToEndTest(unittest.TestCase):
 
     def test_collect_merge_filter_render(self):
         with mock.patch.dict(os.environ, FAKE_AWS), mock_aws():
-            cgw = build_aws()
+            cgw, vpc, ou = build_aws()
             status, _, err = run("collect", "aws", "--region", "us-east-1", "-o", self.path("aws.json"))
-        self.assertEqual(status, 0, err)
+            self.assertEqual(status, 0, err)
+            status, _, err = run("aws-org", "-o", self.path("org.json"))
+            self.assertEqual(status, 0, err)
 
-        status, _, err = run("scan", "192.0.2.0/24",
-                             "--from-xml", os.path.join(SCANS, "discovery.xml"),
-                             "--from-xml", os.path.join(SCANS, "ports.xml"), "-o", self.path("lan.json"))
-        self.assertEqual(status, 0, err)
-
-        status, _, err = run("merge", self.path("aws.json"), self.path("lan.json"),
+        status, _, err = run("merge", self.path("org.json"), self.path("aws.json"),
                              "-o", self.path("all.json"))
         self.assertEqual(status, 0, err)
         merged = Topology.load(self.path("all.json"))
         self.assertEqual(merged.validate(), [])
         self.assertIn(f"aws:cgw:{cgw}", merged.nodes)
-        self.assertIn("net:device:gw", merged.nodes)
+        self.assertEqual(merged.nodes[f"aws:account:{ACCOUNT}"].parent, f"aws:ou:{ou}")
+        self.assertEqual(merged.nodes[f"aws:region:{ACCOUNT}:us-east-1"].parent, f"aws:account:{ACCOUNT}")
         self.assertTrue(any(l.kind == "vpn" for l in merged.links.values()))
 
         # Simplify for a diagram: drop AZ containers, keep everything else.
@@ -103,7 +109,7 @@ class EndToEndTest(unittest.TestCase):
 
         drawio = ET.fromstring(outputs["drawio"])
         cells = {el.get("id") for el in drawio.iter() if el.get("id")}
-        for node in (f"aws:cgw:{cgw}", "net:device:gw", "net:segment:192.0.2.0/24"):
+        for node in (f"aws:cgw:{cgw}", f"aws:vpc:{vpc}", f"aws:ou:{ou}"):
             self.assertIn(node, cells)
         self.assertTrue(any((el.get("id") or "").startswith("vpn|") for el in drawio.iter()))
         ET.fromstring(outputs["svg"])
@@ -113,13 +119,13 @@ class EndToEndTest(unittest.TestCase):
         # A second snapshot with one change: diff reports it with exit status 1.
         changed = json.loads(view.dumps())
         for node in changed["nodes"]:
-            if node["id"] == "net:device:lab-server":
-                node["attrs"]["os"] = "Linux 6.1"
+            if node["id"] == f"aws:vpc:{vpc}":
+                node["attrs"]["cidrs"].append("10.51.0.0/16")
         with open(self.path("next.json"), "w", encoding="utf-8") as f:
             json.dump(changed, f)
         status, out, _ = run("diff", self.path("view.json"), self.path("next.json"))
         self.assertEqual(status, 1)
-        self.assertIn("Linux 6.1", out)
+        self.assertIn("+10.51.0.0/16", out)
         status, _, _ = run("diff", self.path("view.json"), self.path("view.json"))
         self.assertEqual(status, 0)
 
