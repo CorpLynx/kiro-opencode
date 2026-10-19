@@ -89,17 +89,32 @@ def normalize_type(value: str) -> str:
 
 def parse_cidrs(text: str) -> Tuple[List[Network], List[str]]:
     """The CIDRs in a cell, and what was wrong with the parts that weren't."""
-    found: List[Network] = []
+    parsed, problems = _parse(text)
+    return [cidr for cidr, _ in parsed], problems
+
+
+def _parse(text: str) -> Tuple[List[Tuple[Network, bool]], List[str]]:
+    """(CIDR, had host bits set) for each part of a cell, and the problems."""
+    found: List[Tuple[Network, bool]] = []
     problems: List[str] = []
     for part in [p for p in _SPLIT.split(text) if p]:
         if "/" not in part:
             problems.append(f"{part!r} has no prefix length")
             continue
         try:
-            found.append(ipaddress.ip_network(part, strict=False))
+            cidr = ipaddress.ip_network(part, strict=False)
         except ValueError:
             problems.append(f"{part!r} is not a CIDR")
+            continue
+        found.append((cidr, cidr != _strict(part)))
     return found, problems
+
+
+def _strict(text: str) -> Optional[Network]:
+    try:
+        return ipaddress.ip_network(text, strict=True)
+    except ValueError:
+        return None
 
 
 def load_records(table: Table, keep_types: Iterable[str] = (),
@@ -127,15 +142,15 @@ def load_records(table: Table, keep_types: Iterable[str] = (),
                                 f"(keep with --keep-type {rtype})" if rtype in ADDRESS_TYPES
                                 else f"type {rtype} dropped by --drop-type"))
             continue
-        cidrs, problems = parse_cidrs(cell)
-        for problem in problems:
-            issues.append(Issue(number, "dropped", problem))
-        if len(cidrs) > 1:
-            issues.append(Issue(number, "changed", f"{len(cidrs)} CIDRs in one cell, split into "
+        parsed, problems = _parse(cell)
+        for problem in problems:  # beside a good CIDR, a stray word is only ignored
+            issues.append(Issue(number, "changed", f"ignored {problem}") if parsed
+                          else Issue(number, "dropped", problem))
+        if len(parsed) > 1:
+            issues.append(Issue(number, "changed", f"{len(parsed)} CIDRs in one cell, split into "
                                                    "one network each"))
-        for cidr in cidrs:
-            written = [p for p in _SPLIT.split(cell) if p and "/" in p]
-            if not any(_same_text(w, cidr) for w in written):
+        for cidr, had_host_bits in parsed:
+            if had_host_bits:
                 issues.append(Issue(number, "changed", f"host bits cleared: now {cidr}"))
             record = Record(
                 row=number, cidr=cidr, resource_type=rtype,
@@ -151,13 +166,6 @@ def load_records(table: Table, keep_types: Iterable[str] = (),
             seen.add(key)
             records.append(record)
     return records, issues
-
-
-def _same_text(text: str, cidr: Network) -> bool:
-    try:
-        return ipaddress.ip_network(text, strict=True) == cidr
-    except ValueError:
-        return False
 
 
 def counts_by_type(records: Sequence[Record]) -> Dict[str, int]:

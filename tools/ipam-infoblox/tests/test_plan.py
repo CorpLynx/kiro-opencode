@@ -67,6 +67,31 @@ class OfflineTest(unittest.TestCase):
         self.assertEqual(sorted(e.view for e in split.entries), [f"aws-{A}", f"aws-{B}"])
         self.assertFalse(split.blocked)
 
+    def test_a_subnet_covering_its_vpc_is_a_network(self):
+        plan = build_plan([rec("10.5.0.0/24", "vpc", "vpc-5"), rec("10.5.0.0/24", "subnet", "s5")],
+                          Options())
+        (entry,) = plan.entries
+        self.assertEqual((entry.kind, entry.primary.resource_id), ("network", "s5"))
+        self.assertIn("a subnet covers the whole range", entry.notes[0])
+        # ...unless other ranges sit inside it.
+        plan = build_plan([rec("10.6.0.0/24", "vpc", "vpc-6"), rec("10.6.0.0/24", "subnet", "s6"),
+                           rec("10.6.0.0/28", "allocation", "a")], Options())
+        self.assertEqual(entries(plan)[("default", "10.6.0.0/24")].kind, "container")
+
+    def test_view_template_with_a_blank_field_leaves_the_row_out(self):
+        plan = build_plan([rec("10.0.0.0/8", "pool", "ipam-pool-1", account=""),
+                           rec("10.1.0.0/16", "vpc", "vpc-1")], Options(view="aws-{account}"))
+        self.assertEqual([e.view for e in plan.entries], [f"aws-{A}"])
+        self.assertIn("needs {account}, which this row doesn't have", plan.issues[0].message)
+
+    def test_parent_left_out_is_said_so(self):
+        plan = build_plan([rec("10.0.0.0/16", "vpc", "vpc-1", account=A),
+                           rec("10.0.0.0/16", "vpc", "vpc-2", account=B),
+                           rec("10.0.1.0/24", "subnet", "s1", account=A)], Options())
+        child = entries(plan)[("default", "10.0.1.0/24")]
+        self.assertEqual(child.status, "new")
+        self.assertIn("but left out", child.parent)
+
     def test_comment_templates(self):
         record = rec("10.0.0.0/16", "vpc", "vpc-1")
         self.assertEqual(render_template("{name} ({resource_id})", record), "vpc-1")
@@ -159,10 +184,14 @@ class GridTest(unittest.TestCase):
         plan = build_plan(records, Options(view="aws-{account}", eas=[
             ("AWS Account", "account"), ("Environment", "region"), ("Owner", "text:net")]), existing)
         problems = " / ".join(plan.problems)
-        self.assertIn(f"network view 'aws-{A}' doesn't exist", problems)
-        self.assertIn("'Environment' only allows prod, dev; the export has us-east-1", problems)
+        self.assertIn(f"network view 'aws-{A}' doesn't exist in the Grid, so its 1 range(s) are "
+                      "left out", problems)
         self.assertIn("extensible attribute 'Owner' isn't defined", problems)
+        self.assertEqual(plan.entries[0].status, "conflict")  # not written to the import file
         self.assertTrue(plan.blocked)
+        plan = build_plan(records, Options(eas=[("Environment", "region")]), existing)
+        self.assertEqual(plan.problems, ["extensible attribute 'Environment' only allows prod, dev; "
+                                         "the export has us-east-1"])
 
 
 if __name__ == "__main__":

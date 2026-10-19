@@ -85,6 +85,17 @@ class CliTest(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("must fix: network view 'aws-123456789012' doesn't exist", err)
 
+    def test_rows_the_plan_leaves_out_are_counted(self):
+        path = self.path("pools.csv")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("Resource ID,Resource type,Resource CIDR,Resource owner\n"
+                         "ipam-pool-1,Pool,10.0.0.0/8,-\nvpc-1,VPC,10.1.0.0/16,111122223333\n")
+        status, _, err = run("plan", path, "-o", self.path("x.csv"), "--report", self.path("r.md"),
+                             "--network-view", "aws-{account}")
+        self.assertEqual(status, 0, err)
+        self.assertIn("1 row(s) left out", err)
+        self.assertIn("| 1 | 1 | 0 | 0 | 0 | 0 | 1 |", self.read("r.md"))
+
     def test_split_and_netmask_style(self):
         status, _, err = run("plan", FIXTURE, "-o", self.path("import.csv"), "--split",
                              "--netmask-style", "dotted")

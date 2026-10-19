@@ -17,11 +17,10 @@ from typing import List, Optional, Tuple
 
 from . import __version__
 from .infoblox_csv import NETMASK_STYLES, counts, write_import, write_private
-from .plan import (DEFAULT_COMMENT, Options, build_plan, check_template, render_template,
-                   source_names)
+from .plan import DEFAULT_COMMENT, Options, build_plan, check_template, source_names, view_for
 from .reader import FIELDS, map_columns, read_table
 from .records import counts_by_type, load_records
-from .report import render_report
+from .report import render_report, rows_left_out
 from .wapi import DEFAULT_VERSION, Wapi, load_existing
 
 USER_ENV = "INFOBLOX_USERNAME"
@@ -109,8 +108,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _load(args: argparse.Namespace):
-    table = read_table(args.export, args.sheet)
-    map_columns(table, dict(args.column))
+    columns = dict(args.column)
+    table = read_table(args.export, args.sheet, columns.get("cidr"))
+    map_columns(table, columns)
     records, issues = load_records(table, args.keep_type, args.drop_type)
     return table, records, issues
 
@@ -118,7 +118,8 @@ def _load(args: argparse.Namespace):
 def _inspect(args: argparse.Namespace) -> int:
     table, records, issues = _load(args)
     print(f"{table.path}" + (f", sheet {table.sheet!r}" if table.sheet else "")
-          + f": header on row {table.header_row}, {len(table.rows)} data rows")
+          + f": header on row {table.header_row}, {len(table.rows)} data rows"
+          + (f", read as {table.encoding}" if table.encoding not in ("", "utf-8") else ""))
     print("columns:")
     for name in FIELDS:
         print(f"  {name:18} {table.columns.get(name, '(not found)')}")
@@ -165,7 +166,7 @@ def _plan(args: argparse.Namespace) -> int:
     existing = None
     if args.wapi:
         wapi = _wapi(args)
-        views = {render_template(options.view, r) for r in records} - {""}
+        views = {view_for(options, r) for r in records} - {""}
         existing = load_existing(wapi, views)
     plan = build_plan(records, options, existing)
     written = write_import(plan, options, args.output, args.netmask_style, args.split)
@@ -176,7 +177,7 @@ def _plan(args: argparse.Namespace) -> int:
     print(f"ipam-infoblox: {c['containers']} container(s) and {c['networks']} network(s) to import"
           + (f", {c['exists']} already in Infoblox" if plan.checked else "")
           + (f", {c['conflicts']} conflict(s) left out" if c["conflicts"] else "")
-          + f"; {len({i.row for i in issues if i.action == 'dropped'})} row(s) left out",
+          + f"; {len(rows_left_out(plan, issues))} row(s) left out",
           file=sys.stderr)
     for path, n in written:
         print(f"ipam-infoblox: wrote {path} ({n} object(s))", file=sys.stderr)

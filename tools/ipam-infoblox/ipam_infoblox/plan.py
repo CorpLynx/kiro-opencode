@@ -100,6 +100,19 @@ def render_template(template: str, record: Record) -> str:
     return text
 
 
+def blank_fields(template: str, record: Record) -> List[str]:
+    """The fields a template uses that are blank in this record."""
+    return [m.group(1) for m in _FIELD.finditer(template)
+            if not record.value(m.group(1)).strip()]
+
+
+def view_for(options: Options, record: Record) -> str:
+    """The record's network view, or "" when the template needs a field
+    the record doesn't have ("aws-{account}" on a pool with no owner must not
+    become a view called "aws-")."""
+    return "" if blank_fields(options.view, record) else render_template(options.view, record)
+
+
 def check_template(template: str, what: str) -> None:
     for m in _FIELD.finditer(template):
         key = m.group(1)
@@ -128,10 +141,12 @@ def build_plan(records: Sequence[Record], options: Options,
     plan = Plan([], checked=existing is not None)
     groups: Dict[Tuple[str, Network], List[Record]] = {}
     for record in records:
-        view = render_template(options.view, record)
+        view = view_for(options, record)
         if not view:
-            plan.issues.append(Issue(record.row, "dropped", f"--network-view {options.view!r} is "
-                                     "empty for this row"))
+            missing = blank_fields(options.view, record) or ["a value"]
+            plan.issues.append(Issue(record.row, "dropped", f"--network-view {options.view!r} needs "
+                                     f"{', '.join('{' + m + '}' for m in missing)}, which this "
+                                     "row doesn't have"))
             continue
         groups.setdefault((view, record.cidr), []).append(record)
     for (view, cidr), members in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][1].version,
@@ -142,6 +157,7 @@ def build_plan(records: Sequence[Record], options: Options,
     if existing is not None:
         _compare(plan, existing)
         _check_grid(plan, options, existing)
+    _describe_parents(plan)
     return plan
 
 
@@ -149,6 +165,11 @@ def _entry(view: str, cidr: Network, members: List[Record]) -> Entry:
     entry = Entry(view, cidr, sorted(members, key=lambda r: r.row))
     types = {r.resource_type for r in members}
     entry.kind = "container" if types & CONTAINER_TYPES else "network"
+    if "subnet" in types and entry.kind == "container":
+        # A VPC with one subnet the size of the VPC: as a container it could
+        # hold no addresses. Nesting still promotes it if ranges sit inside.
+        entry.kind = "network"
+        entry.notes.append("a subnet covers the whole range, so it is imported as a network")
     clashing = {}
     for r in members:
         if r.resource_type in ("vpc", "subnet") and r.resource_id:
@@ -212,12 +233,11 @@ class _Index:
 
 def _compare(plan: Plan, existing: Existing) -> None:
     indexes = {view: _Index(existing.in_view(view)) for view in {e.view for e in plan.entries}}
-    exported = {(e.view, e.cidr) for e in plan.entries}
     for entry in plan.entries:
         index = indexes[entry.view]
         have = index.objects.get(entry.cidr)
         if have is not None:
-            _against_same(entry, have, exported, plan.entries)
+            _against_same(entry, have, plan.entries)
             continue
         if entry.status == "conflict":
             continue
@@ -235,13 +255,23 @@ def _compare(plan: Plan, existing: Existing) -> None:
             entry.kind = "container"
             entry.notes.append(f"imported as a container: Infoblox already has {len(inside)} "
                                f"range(s) inside it, such as {inside[0]}")
+
+
+def _describe_parents(plan: Plan) -> None:
+    """Say plainly when the export's range a new one goes inside isn't
+    itself being imported."""
     status = {(e.view, e.cidr): e.status for e in plan.entries}
     for entry in plan.entries:
-        if entry.parent_cidr is not None and status[(entry.view, entry.parent_cidr)] == "exists":
+        if entry.parent_cidr is None:
+            continue
+        parent = status[(entry.view, entry.parent_cidr)]
+        if parent == "exists":
             entry.parent = f"{entry.parent_cidr} (already in Infoblox)"
+        elif parent == "conflict":
+            entry.parent = f"{entry.parent_cidr} (from this export, but left out: see Fix before importing)"
 
 
-def _against_same(entry: Entry, have: Dict[str, Any], exported: Any, entries: List[Entry]) -> None:
+def _against_same(entry: Entry, have: Dict[str, Any], entries: List[Entry]) -> None:
     """The Grid already has this exact CIDR in the view."""
     if entry.status == "conflict":
         return
@@ -266,11 +296,17 @@ def _check_grid(plan: Plan, options: Options, existing: Existing) -> None:
     """Things that would make the whole import fail: a network view or an
     extensible attribute the Grid doesn't have, or a value a list-type
     attribute doesn't allow."""
+    for view in sorted({e.view for e in plan.by_status("new")}):
+        if view in existing.views:
+            continue
+        missing = [e for e in plan.by_status("new") if e.view == view]
+        for entry in missing:
+            entry.status = "conflict"
+            entry.reasons.append(f"network view {view!r} doesn't exist in the Grid")
+        plan.problems.append(f"network view {view!r} doesn't exist in the Grid, so its "
+                             f"{len(missing)} range(s) are left out; create the view, or choose "
+                             "another with --network-view")
     importing = plan.by_status("new")
-    for view in sorted({e.view for e in importing}):
-        if view not in existing.views:
-            plan.problems.append(f"network view {view!r} doesn't exist in the Grid; create it, or "
-                                 "choose another with --network-view")
     for name, _ in options.eas:
         definition = existing.ea_defs.get(name)
         if definition is None:

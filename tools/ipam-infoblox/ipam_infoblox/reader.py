@@ -53,6 +53,7 @@ class Table:
     headers: List[str]
     rows: List[Tuple[int, Dict[str, str]]] = field(default_factory=list)   # (row number, values)
     columns: Dict[str, str] = field(default_factory=dict)                   # field -> header
+    encoding: str = ""                                                      # CSV only
 
 
 def _cell(value: object) -> str:
@@ -63,16 +64,18 @@ def _cell(value: object) -> str:
     return str(value).strip()
 
 
-def _is_header(cells: Sequence[str]) -> bool:
+def _is_header(cells: Sequence[str], cidr_names: Iterable[str] = ()) -> bool:
     names = {normalize_header(c) for c in cells}
-    return bool(names & set(ALIASES["cidr"]))
+    return bool(names & (set(ALIASES["cidr"]) | {normalize_header(n) for n in cidr_names}))
 
 
-def _from_grid(path: str, sheet: str, grid: Iterable[Sequence[object]]) -> Optional[Table]:
+def _from_grid(path: str, sheet: str, grid: Iterable[Sequence[object]],
+               cidr_names: Iterable[str] = ()) -> Optional[Table]:
     """The table in a sheet's cells, or None if no header row is found."""
     lines = [[_cell(c) for c in row] for row in grid]
+    cidr_names = list(cidr_names)
     for index, line in enumerate(lines[:HEADER_SEARCH_ROWS]):
-        if _is_header(line):
+        if _is_header(line, cidr_names):
             break
     else:
         return None
@@ -99,32 +102,39 @@ def _unique_headers(cells: Sequence[str]) -> List[str]:
     return out
 
 
-def read_table(path: str, sheet: Optional[str] = None) -> Table:
-    """The IPAM rows in `path` (.csv, .tsv, .txt, .xlsx or .xlsm)."""
+def read_table(path: str, sheet: Optional[str] = None, cidr_column: Optional[str] = None) -> Table:
+    """The IPAM rows in `path` (.csv, .tsv, .txt, .xlsx or .xlsm).
+    `cidr_column` (from --column cidr=HEADER) also marks the header row."""
+    names = [cidr_column] if cidr_column else []
     if not os.path.isfile(path):
         raise FileNotFoundError(f"{path}: no such file")
     ext = os.path.splitext(path)[1].lower()
     if ext in (".xlsx", ".xlsm"):
-        return _read_excel(path, sheet)
+        return _read_excel(path, sheet, names)
     if ext == ".xls":
         raise ValueError(f"{path}: old .xls files aren't supported; save it as .xlsx or CSV")
     if sheet:
         raise ValueError("--sheet only applies to Excel files")
-    with open(path, encoding="utf-8-sig", newline="") as handle:
-        text = handle.read()
+    with open(path, "rb") as handle:
+        data = handle.read()
+    try:
+        text, encoding = data.decode("utf-8-sig"), "utf-8"
+    except UnicodeDecodeError:  # Excel on Windows saves "CSV" in the ANSI code page
+        text, encoding = data.decode("cp1252", errors="replace"), "windows-1252"
     try:
         dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
     except csv.Error:
         dialect = csv.excel
-    table = _from_grid(path, "", csv.reader(io.StringIO(text), dialect))
+    table = _from_grid(path, "", csv.reader(io.StringIO(text, newline=""), dialect), names)
     if table is None:
         raise ValueError(f"{path}: no header row with a CIDR column in the first "
                          f"{HEADER_SEARCH_ROWS} rows (expected a column such as 'Resource CIDR'; "
                          "name it with --column cidr=HEADER)")
+    table.encoding = encoding
     return table
 
 
-def _read_excel(path: str, sheet: Optional[str]) -> Table:
+def _read_excel(path: str, sheet: Optional[str], names: Sequence[str] = ()) -> Table:
     try:
         import openpyxl
     except ImportError:
@@ -138,7 +148,7 @@ def _read_excel(path: str, sheet: Optional[str]) -> Table:
                 raise ValueError(f"{path}: no sheet named {sheet!r} (sheets: {', '.join(names)})")
             names = [sheet]
         for name in names:
-            table = _from_grid(path, name, book[name].iter_rows(values_only=True))
+            table = _from_grid(path, name, book[name].iter_rows(values_only=True), names)
             if table is not None:
                 return table
     finally:

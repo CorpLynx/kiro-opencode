@@ -44,8 +44,8 @@ The sample export in [`tests/fixtures/ipam-export.csv`](tests/fixtures/ipam-expo
 
 ### Reading the export
 
-- **Formats:** `.csv` (comma, semicolon, tab or pipe separated, with or without a byte-order mark), `.xlsx` and `.xlsm`. Save old `.xls` files as `.xlsx` first. In a workbook, the first sheet with a CIDR column is used, or the one named with `--sheet`.
-- **Columns** are recognized by name, in the forms the AWS console, the API (`ResourceCidr`, `ResourceOwnerId`) and hand-kept sheets use. `inspect` shows the mapping. Override any of them with `--column FIELD=HEADER`:
+- **Formats:** `.csv` (comma, semicolon, tab or pipe separated; UTF-8, or the Windows-1252 that Excel on Windows saves, which `inspect` and the report then mention), `.xlsx` and `.xlsm`. Save old `.xls` files as `.xlsx` first. In a workbook, the first sheet with a CIDR column is used, or the one named with `--sheet`.
+- **Columns** are recognized by name, in the forms the AWS console, the API (`ResourceCidr`, `ResourceOwnerId`) and hand-kept sheets use. `inspect` shows the mapping. Override any of them with `--column FIELD=HEADER`; `--column cidr=...` also tells it which row is the header when the CIDR column has an unusual name:
 
   | Field | Recognized headers (case and spacing don't matter) |
   | --- | --- |
@@ -61,10 +61,10 @@ The sample export in [`tests/fixtures/ipam-export.csv`](tests/fixtures/ipam-expo
 
 ### What goes in Infoblox
 
-- **Network view:** `--network-view` (default `default`) can use fields, so `--network-view 'aws-{account}'` gives each AWS account its own view. Do that when accounts reuse the same ranges (two VPCs on `10.0.0.0/16` in one view is a conflict).
+- **Network view:** `--network-view` (default `default`) can use fields, so `--network-view 'aws-{account}'` gives each AWS account its own view. Do that when accounts reuse the same ranges (two VPCs on `10.0.0.0/16` in one view is a conflict). A row missing a field the view needs (a pool with no owner, say) is left out and listed, rather than landing in a view called `aws-`.
 - **Comment:** `--comment` (default `{name} ({resource_id})`) takes the same fields, plus `{column:HEADER}` for any other column. Blank fields are tidied away and comments are cut to Infoblox's 256 characters.
 - **Extensible attributes:** `--ea NAME=SOURCE` (repeatable) sets attribute `NAME` from a field (`account`, `region`, `resource_id`, `resource_type`, `name`, `vpc_id`, `pool_id`, `cidr`, ...), from `column:HEADER`, or to fixed text with `text:VALUE`. The attributes must already be defined in the Grid; with `--wapi` that's checked, along with the allowed values of list-type attributes.
-- **Merged ranges:** the same CIDR twice in one view (an IPAM pool and the VPC allocated from it) is imported once, described by the most specific of its rows.
+- **Merged ranges:** the same CIDR twice in one view (an IPAM pool and the VPC allocated from it) is imported once, described by the most specific of its rows. When a subnet covers its whole VPC, the range is imported as a network, so it can hold addresses.
 
 ### The import file
 
@@ -84,12 +84,12 @@ ipv6network,2001:db8:1000:1::,64,default,v6-a (subnet-0a1b2c3d4e5f60005),1111222
 ### Checking against Infoblox
 
 - **What is read:** network views, IPv4 and IPv6 networks and network containers in the views the import uses, and extensible attribute definitions. That's all, through WAPI `GET` requests; the client has no other method. A read-only Grid user with permission to see those networks is enough.
-- **Connection:** `--wapi https://gm.example.net` (WAPI version `2.12` unless `--wapi-version` says otherwise). The certificate is verified; pass your CA with `--ca-bundle`, or `--insecure` in a lab. `http://` URLs are refused unless `--allow-http`, because they would send the password in clear.
+- **Connection:** `--wapi https://gm.example.net` (WAPI version `2.12` unless `--wapi-version` says otherwise). The certificate is verified; pass your CA with `--ca-bundle`, or `--insecure` in a lab. `http://` URLs are refused unless `--allow-http`, because they would send the password in clear, and redirects are refused, because following one would send the password wherever it points. The standard `HTTPS_PROXY` and `NO_PROXY` variables apply.
 - **Credentials:** the user from `--username` or `$INFOBLOX_USERNAME`, the password from `$INFOBLOX_PASSWORD` or a prompt, never from the command line. One login is reused for the whole run.
 - **Results for each range:**
   - *new:* goes in the import file;
   - *already in Infoblox:* the same CIDR in the same view, left out, with any difference noted (it's a container there but a network here, say);
-  - *conflict:* left out and explained. It sits inside an existing network, or it's a network in Infoblox that the export puts other ranges in, or two VPCs or subnets claim it in one view.
+  - *conflict:* left out and explained. It sits inside an existing network, or it's a network in Infoblox that the export puts other ranges in, or two VPCs or subnets claim it in one view, or its network view doesn't exist in the Grid.
 - A range that holds networks already in Infoblox is imported as a container, so they end up inside it.
 
 ## Handling the output

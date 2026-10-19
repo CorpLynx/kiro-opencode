@@ -27,6 +27,13 @@ def _what(entry: Entry) -> str:
     return " ".join(p for p in parts if p)
 
 
+def rows_left_out(plan: Plan, issues: Sequence[Issue]) -> List[int]:
+    """Rows that put nothing in the plan: dropped while reading or while
+    planning, and not kept for another CIDR in the same cell."""
+    used = {r.row for e in plan.entries for r in e.records}
+    return sorted({i.row for i in list(issues) + plan.issues if i.action == "dropped"} - used)
+
+
 def _table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> List[str]:
     out = ["| " + " | ".join(headers) + " |", "|" + " --- |" * len(headers)]
     out += ["| " + " | ".join(_cell(c) for c in row) + " |" for row in rows]
@@ -38,7 +45,8 @@ def render_report(plan: Plan, table: Table, records: Sequence[Record], issues: S
     c = counts(plan)
     source = table.path + (f", sheet {table.sheet!r}" if table.sheet else "")
     lines = ["# AWS IPAM to Infoblox import plan", "",
-             f"- **Export:** {source}, header on row {table.header_row}, {len(table.rows)} data rows",
+             f"- **Export:** {source}, header on row {table.header_row}, {len(table.rows)} data rows"
+             + (f" (not UTF-8: read as {table.encoding})" if table.encoding not in ("", "utf-8") else ""),
              "- **Columns used:** " + ", ".join(f"{k} = {v!r}" for k, v in table.columns.items()),
              "- **Ranges by type:** " + (", ".join(f"{k} {v}" for k, v in counts_by_type(records).items())
                                           or "none"),
@@ -52,7 +60,7 @@ def render_report(plan: Plan, table: Table, records: Sequence[Record], issues: S
               "Rows changed | Rows left out |", "| --- | --- | --- | --- | --- | --- | --- |",
               f"| {c['containers'] + c['networks']} | {c['containers']} | {c['networks']} | "
               f"{c['exists']} | {c['conflicts']} | {len({i.row for i in issues if i.action == 'changed'})} | "
-              f"{len({i.row for i in issues if i.action == 'dropped'})} |", ""]
+              f"{len(rows_left_out(plan, issues))} |", ""]
 
     conflicts = plan.by_status("conflict")
     if plan.problems or conflicts:

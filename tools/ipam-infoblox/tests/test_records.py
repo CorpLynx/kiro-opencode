@@ -44,6 +44,12 @@ class RecordsTest(unittest.TestCase):
         self.assertIn((8, "dropped", "no CIDR"), messages)
         self.assertIn((9, "dropped", "repeats an earlier row for 10.0.0.0/16"), messages)
 
+    def test_words_beside_a_cidr_are_ignored_not_fatal(self):
+        records, issues = load_records(table(["vpc-1", "prod", "VPC", "10.0.0.0/16 (primary)", ""]))
+        self.assertEqual([str(r.cidr) for r in records], ["10.0.0.0/16"])
+        self.assertEqual([(i.action, i.message) for i in issues],
+                         [("changed", "ignored '(primary)' has no prefix length")])
+
     def test_keep_and_drop_types(self):
         rows = (["eipalloc-1", "nat", "EIP", "198.51.100.10/32", ""],
                 ["ipam-pool-1", "top", "Pool", "10.0.0.0/8", ""])

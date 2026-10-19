@@ -1,7 +1,9 @@
 import ipaddress
 import os
 import sys
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,10 +39,40 @@ class WapiTest(unittest.TestCase):
         with FakeGrid() as grid:
             with self.assertRaisesRegex(WapiError, "refused the username or password"):
                 client(grid, password="wrong").get("network")
-            with self.assertRaisesRegex(WapiError, "HTTP 400: Unknown WAPI version"):
+            with self.assertRaisesRegex(WapiError, "doesn't support this WAPI version.*--wapi-version"):
                 client(grid, version="1.0").get("network")
             with self.assertRaisesRegex(WapiError, r"HTTP 400: Unknown object type \(gadget\)"):
                 client(grid).get("gadget")
+
+    def test_redirects_are_refused_so_credentials_stay_put(self):
+        seen = []
+
+        class Elsewhere(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                seen.append(self.headers.get("Authorization"))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"result": []}')
+
+        class Redirect(Elsewhere):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{other.server_address[1]}/wapi")
+                self.end_headers()
+
+        other = ThreadingHTTPServer(("127.0.0.1", 0), Elsewhere)
+        first = ThreadingHTTPServer(("127.0.0.1", 0), Redirect)
+        for server in (other, first):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+        wapi = Wapi(f"http://127.0.0.1:{first.server_address[1]}", USER, PASSWORD, allow_http=True)
+        with self.assertRaisesRegex(WapiError, "redirected to .*pass the final Grid Manager URL"):
+            wapi.get("network")
+        self.assertEqual(seen, [])
 
     def test_unreachable(self):
         with FakeGrid() as grid:

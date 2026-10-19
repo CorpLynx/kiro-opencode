@@ -57,6 +57,23 @@ class CsvTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown field"):
             map_columns(table, {"colour": "Who"})
 
+    def test_cidr_override_finds_the_header_row(self):
+        path = write("Inventory\nBlock,Who\n10.9.0.0/16,lab\n")
+        self.addCleanup(os.remove, path)
+        table = read_table(path, cidr_column="Block")
+        self.assertEqual(table.header_row, 2)
+        self.assertEqual(map_columns(table, {"cidr": "Block"})["cidr"], "Block")
+
+    def test_windows_1252_csv(self):
+        handle = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        handle.write("Resource name,Resource CIDR\nCaf\u00e9 prod,10.0.0.0/16\n".encode("cp1252"))
+        handle.close()
+        self.addCleanup(os.remove, handle.name)
+        table = read_table(handle.name)
+        self.assertEqual(table.encoding, "windows-1252")
+        self.assertEqual(table.rows[0][1]["Resource name"], "Caf\u00e9 prod")
+        self.assertEqual(read_table(FIXTURE).encoding, "utf-8")
+
     def test_repeated_and_blank_headers_are_kept_apart(self):
         path = write("CIDR,,Name,Name\n10.9.0.0/16,x,a,b\n")
         self.addCleanup(os.remove, path)

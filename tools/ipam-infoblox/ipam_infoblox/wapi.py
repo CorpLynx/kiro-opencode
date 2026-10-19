@@ -6,7 +6,9 @@ through Grid Manager's CSV import, where it is reviewed and logged.
 
 Credentials go in a Basic auth header over HTTPS; the session cookie NIOS
 returns is reused so the Grid sees one login, not one per page. Plain HTTP
-is refused unless asked for, because it would send the password in clear.
+is refused unless asked for, because it would send the password in clear,
+and so are redirects: urllib would carry the Authorization header to
+wherever one points, another host or plain HTTP included.
 """
 
 from __future__ import annotations
@@ -36,6 +38,12 @@ class WapiError(RuntimeError):
     """A WAPI call that failed, with the reason in words."""
 
 
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise WapiError(f"the Grid Manager redirected to {newurl}; credentials are only sent to the "
+                        "URL given, so pass the final Grid Manager URL with --wapi")
+
+
 class Wapi:
     """GET-only WAPI client with paging."""
 
@@ -52,7 +60,8 @@ class Wapi:
         token = base64.b64encode(f"{username}:{password}".encode()).decode()
         self._auth = f"Basic {token}"
         self._timeout = timeout
-        handlers: List[Any] = [urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())]
+        handlers: List[Any] = [urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+                               _NoRedirects()]
         if parts.scheme == "https":
             context = ssl.create_default_context(cafile=ca_bundle)
             if insecure:
@@ -104,6 +113,9 @@ def _http_reason(error: urllib.error.HTTPError, obj: str) -> str:
         text = ""
     if error.code == 403:
         return f"{obj}: this account may not read it (403){': ' + text if text else ''}"
+    if "unknown wapi version" in text.lower():
+        return (f"the Grid doesn't support this WAPI version ({text}); pass one it does with "
+                "--wapi-version (the Grid's /wapidoc/ page names its version)")
     return f"{obj}: HTTP {error.code}{': ' + text if text else ''}"
 
 
