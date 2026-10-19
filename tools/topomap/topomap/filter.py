@@ -298,7 +298,7 @@ def add_arguments(parser) -> None:
                         help="fold everything inside each node of this kind into it, re-pointing"
                              " links (e.g. --collapse vpc); repeatable")
     parser.add_argument("--max-per-type", type=int, metavar="N",
-                        help="where a box holds more than N resources of one type (from collect "
+                        help="where a box holds more than N resources of one type (from topomap "
                              "aws --all-resources), draw them as one node that counts them")
     parser.add_argument("--around", metavar="NODE",
                         help="keep only what is within --depth link hops of this node (ID or"

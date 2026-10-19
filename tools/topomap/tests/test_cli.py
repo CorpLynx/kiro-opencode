@@ -4,7 +4,9 @@
 import contextlib
 import io
 import json
+import argparse
 import os
+import re
 import stat
 import sys
 import tempfile
@@ -90,6 +92,42 @@ class CommandsTest(unittest.TestCase):
             self.assertIn(f"    {name} ", out)
         self.assertNotIn("collect", out)
         self.assertNotIn("SUPPRESS", out)
+
+
+class ReadmeReferenceTest(unittest.TestCase):
+    """The README's command reference lists every flag the parser has, so
+    adding a flag without documenting it fails here."""
+
+    SHARED = ("--output", "--direction", "--title", "--no-link-labels")
+
+    def sections(self):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "README.md")
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        reference = text.split("## Command reference", 1)[1].split("\n## ", 1)[0]
+        parts = re.split(r"^### ", reference, flags=re.M)[1:]
+        out = {}
+        for part in parts:
+            title, _, body = part.partition("\n")
+            m = re.fullmatch(r"`topomap ([a-z-]+)`", title.strip())
+            out[m.group(1) if m else "shared"] = body
+        return out
+
+    def test_every_flag_is_documented(self):
+        sections = self.sections()
+        parser = cli.build_parser()
+        commands = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+        for name, sub in commands.choices.items():
+            if name == "collect":
+                continue
+            self.assertIn(name, sections, f"no README section for topomap {name}")
+            for action in sub._actions:
+                longs = [o for o in action.option_strings if o.startswith("--") and o != "--help"]
+                for flag in longs:
+                    where = sections["shared"] if (flag in self.SHARED and name != "render") \
+                        else sections[name]
+                    self.assertRegex(where, rf"`[^`\n]*(?<![\w-]){re.escape(flag)}[ `]",
+                                     f"topomap {name} {flag} isn't in the README's reference")
 
 
 if __name__ == "__main__":
