@@ -1,6 +1,6 @@
 # ipam-infoblox: AWS IPAM export to Infoblox import
 
-`ipam-infoblox` turns an AWS IPAM export (CSV or Excel) into a file Infoblox's CSV import accepts, and checks it against the Grid first, read-only:
+`ipam-infoblox` turns an AWS IPAM export (CSV or Excel), or the IPAM itself read through the AWS API (`--from-aws`), into a file Infoblox's CSV import accepts, and checks it against the Grid first, read-only:
 
 - **Cleans the export:** finds the header row under a title, reads the columns whatever they are called, splits cells holding several CIDRs, clears host bits (`10.1.1.7/24` → `10.1.1.0/24`), and leaves out Elastic IPs and rows without a CIDR. Every change and every row left out is listed with its row number.
 - **Chooses container or network:** IPAM pools and VPCs become network containers, subnets become networks, and anything that holds other ranges is promoted to a container. Containers come first in the file, widest first.
@@ -10,7 +10,9 @@
 It never writes to Infoblox. The import itself stays in Grid Manager, where it's tested, reviewed and logged.
 
 ```
-export.xlsx ─▶ read + clean ─▶ plan (container/network, merge, nest) ─▶ compare with Grid (GET only) ─▶ import.csv + report.md
+export.xlsx ─┐
+             ├─▶ read + clean ─▶ plan (container/network, merge, nest) ─▶ compare with Grid (GET only) ─▶ import.csv + report.md
+--from-aws ──┘   (AWS API, read-only)
 ```
 
 ## Install
@@ -24,6 +26,7 @@ pip install ./tools/ipam-infoblox           # CSV only: no dependencies
 | --- | --- | --- |
 | *(none)* | everything, for CSV exports | Python 3.9+ standard library |
 | `xlsx` | reading `.xlsx` / `.xlsm` | `openpyxl` |
+| `aws` | `--from-aws` | `boto3` |
 
 ## Use
 
@@ -40,7 +43,29 @@ ipam-infoblox plan ipam-export.xlsx --wapi https://gm.example.net \
 
 Exit status is `0` when the import is clean, `1` when the report lists something to fix first, and `2` on errors, so it can gate a pipeline. The import file is still written with exit status `1`, holding only the ranges that can go in.
 
+Or skip the export and read the IPAM itself:
+
+```sh
+ipam-infoblox plan --from-aws --aws-profile ipam-admin --aws-region us-east-1 \
+    --network-view 'aws-{account}' --ea "AWS Account=account" \
+    --save-export ipam-snapshot.csv -o import.csv --report report.md --wapi https://gm.example.net
+```
+
 The sample export in [`tests/fixtures/ipam-export.csv`](tests/fixtures/ipam-export.csv) shows the shape it expects; `ipam-infoblox inspect` on it is a quick way to see what each step does.
+
+### Reading the IPAM from AWS (`--from-aws`)
+
+Instead of an export file, `--from-aws` asks the IPAM itself. Nothing is guessed: the fields come straight from the IPAM API.
+
+- **Where:** run it with credentials for the account that owns the IPAM (or its delegated administrator account, when the IPAM is integrated with AWS Organizations), in the IPAM's home region: `--aws-region`, or the profile's region. `--aws-profile` picks a profile; otherwise boto3's usual credential chain applies. `--ipam-id` chooses when the region has several IPAMs.
+- **Scope:** the default private scope, or `--ipam-scope public`, or a scope by ID for a custom scope.
+- **What is read:**
+  - every pool in the scope with each provisioned CIDR (type `pool`, named by its Name tag or description, with its locale as the region);
+  - each pool's custom allocations, the ranges reserved for things IPAM can't see (type `allocation`);
+  - every resource CIDR IPAM monitors in the scope: VPCs, subnets, public IPv4 and IPv6 pools, Elastic IPs and ENIs, across all the accounts and operating regions the IPAM covers.
+- **Tags** become `tag:KEY` columns, so `--ea "Owner=column:tag:Owner"` sets an extensible attribute from a resource tag. `ipam-infoblox inspect --from-aws` lists the columns there are.
+- **`--save-export FILE`** writes what was read as CSV (mode 0600). It's a snapshot to review or attach to the change, and the report's row numbers point into it. `plan` can read it back later, unchanged, like any export.
+- **Read-only:** only `Describe`/`Get`/`List` calls can be made, and anything else is refused before a request is built. It needs `ec2:DescribeIpams`, `DescribeIpamScopes`, `DescribeIpamPools`, `GetIpamPoolCidrs`, `GetIpamPoolAllocations` and `GetIpamResourceCidrs`, all in the AWS-managed `AmazonEC2ReadOnlyAccess` policy.
 
 ### Reading the export
 
@@ -99,7 +124,8 @@ The export, the import file and the report describe a real address plan. Output 
 ## Limits
 
 - **Tested against a fake Grid**, a local WAPI server in the tests that follows the documented paging and errors, not against a real NIOS appliance. The import format follows the NIOS CSV Import Reference; please report anything your NIOS version rejects.
-- **The AWS console's export columns aren't documented,** so the column names come from the IPAM API and common spellings. If a column isn't picked up, `--column` fixes it; please report the header so it can be added.
+- **The AWS console's export columns aren't documented,** so the column names come from the IPAM API and common spellings. If a column isn't picked up, `--column` fixes it (or use `--from-aws`, which doesn't depend on them); please report the header so it can be added.
+- **`--from-aws` is tested against botocore's Stubber,** which checks every request and answer against the real EC2 API model, not against a real IPAM yet.
 - **Not handled:** DHCP ranges, fixed addresses and DNS records; attributes on ranges that already exist aren't updated (they're left out, not merged); and Infoblox's mandatory-attribute settings aren't read, so a Grid that requires an attribute on every network needs it passed with `--ea`.
 
 ## Development

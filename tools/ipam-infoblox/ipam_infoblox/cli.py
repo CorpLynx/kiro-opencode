@@ -3,6 +3,8 @@
     ipam-infoblox inspect EXPORT            what the export holds and how it is read
     ipam-infoblox plan EXPORT -o FILE       write the Infoblox import (and --report)
 
+Either command reads the IPAM itself instead of an export with --from-aws.
+
 Exit status: 0 when the import is clean, 1 when something must be fixed
 first (conflicts, missing network views or attributes), 2 on errors.
 """
@@ -48,7 +50,8 @@ def _ea(text: str) -> Tuple[str, str]:
 
 
 def _add_input(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("export", metavar="EXPORT", help="the AWS IPAM export (.csv or .xlsx)")
+    parser.add_argument("export", metavar="EXPORT", nargs="?",
+                        help="the AWS IPAM export (.csv or .xlsx); or use --from-aws")
     parser.add_argument("--sheet", help="the Excel sheet to read (default: the first with a CIDR column)")
     parser.add_argument("--column", action="append", type=_column, default=[],
                         metavar="FIELD=HEADER",
@@ -57,6 +60,18 @@ def _add_input(parser: argparse.ArgumentParser) -> None:
                         help="keep rows of this type, which would be left out (eip, eni)")
     parser.add_argument("--drop-type", action="append", default=[], metavar="TYPE",
                         help="leave out rows of this type (such as pool)")
+    aws = parser.add_argument_group("reading the IPAM from AWS instead (read-only)")
+    aws.add_argument("--from-aws", action="store_true",
+                     help="read pools, custom allocations and resource CIDRs from the IPAM itself")
+    aws.add_argument("--aws-profile", metavar="NAME",
+                     help="AWS profile (default: boto3's credential chain)")
+    aws.add_argument("--aws-region", metavar="REGION",
+                     help="the IPAM's home region (default: the profile's)")
+    aws.add_argument("--ipam-id", metavar="ID", help="the IPAM, when the region has several")
+    aws.add_argument("--ipam-scope", default="private", metavar="SCOPE",
+                     help="private (default), public, or a scope ID")
+    aws.add_argument("--save-export", metavar="FILE",
+                     help="also write what was read as CSV; the report's row numbers point into it")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -109,7 +124,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _load(args: argparse.Namespace):
     columns = dict(args.column)
-    table = read_table(args.export, args.sheet, columns.get("cidr"))
+    if args.from_aws:
+        if args.export or args.sheet or columns:
+            raise ValueError("--from-aws reads the IPAM itself: drop the export file, --sheet "
+                             "and --column")
+        from . import aws_source
+        table = aws_source.fetch(aws_source.ec2_client(args.aws_profile, args.aws_region),
+                                 args.ipam_id, args.ipam_scope)
+        if args.save_export:
+            write_private(args.save_export, aws_source.to_csv(table))
+            table.path = f"{table.path}, saved as {args.save_export}"
+    elif not args.export:
+        raise ValueError("give an export file, or --from-aws to read the IPAM itself")
+    elif args.save_export or args.ipam_id or args.aws_profile or args.aws_region:
+        raise ValueError("--save-export, --ipam-id, --aws-profile and --aws-region go with --from-aws")
+    else:
+        table = read_table(args.export, args.sheet, columns.get("cidr"))
     map_columns(table, columns)
     records, issues = load_records(table, args.keep_type, args.drop_type)
     return table, records, issues
@@ -118,7 +148,8 @@ def _load(args: argparse.Namespace):
 def _inspect(args: argparse.Namespace) -> int:
     table, records, issues = _load(args)
     print(f"{table.path}" + (f", sheet {table.sheet!r}" if table.sheet else "")
-          + f": header on row {table.header_row}, {len(table.rows)} data rows"
+          + (f": {len(table.rows)} rows (row numbers match --save-export)" if args.from_aws else
+             f": header on row {table.header_row}, {len(table.rows)} data rows")
           + (f", read as {table.encoding}" if table.encoding not in ("", "utf-8") else ""))
     print("columns:")
     for name in FIELDS:

@@ -30,11 +30,12 @@ TYPES = {
     "eni": "eni", "networkinterface": "eni",
     "publicipv4pool": "public-ipv4-pool", "byoip": "public-ipv4-pool",
     "ipv6pool": "ipv6-pool",
+    "anycastiplist": "anycast-ip-list",
     "pool": "pool", "ipampool": "pool", "toplevelpool": "pool", "regionalpool": "pool",
     "allocation": "allocation", "customallocation": "allocation",
 }
 CONTAINER_TYPES = frozenset({"pool", "vpc", "public-ipv4-pool", "ipv6-pool"})
-ADDRESS_TYPES = frozenset({"eip", "eni"})
+ADDRESS_TYPES = frozenset({"eip", "eni", "anycast-ip-list"})
 _SPLIT = re.compile(r"[\s,;]+")
 
 
