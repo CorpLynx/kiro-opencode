@@ -1,11 +1,11 @@
-# A cheap, throwaway AWS estate that `topomap aws` gathers.
+# A cheap, throwaway AWS estate that `topomapper aws` gathers.
 #
 # Everything here is free or near-free: VPC, subnets, route tables and the
 # internet gateway cost nothing; the S3 gateway VPC endpoint costs nothing;
 # the single EC2 instance is t3.micro (free-tier eligible for 12 months,
 # roughly $8/month afterward) or t4g.nano (roughly $3/month). NAT gateways,
 # transit gateways, VPN and Direct Connect are deliberately left out - they
-# cost money and topomap can draw them if you ever add them.
+# cost money and topomapper can draw them if you ever add them.
 #
 # All addresses are RFC 1918. No credentials, account IDs or real network
 # data are in this file. Review the plan before applying:
@@ -41,7 +41,7 @@ resource "aws_vpc" "main" {
   }
 }
 
-# Public subnet: it gets a route to the internet gateway, so topomap marks
+# Public subnet: it gets a route to the internet gateway, so topomapper marks
 # it public.
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
@@ -55,7 +55,7 @@ resource "aws_subnet" "public" {
   }
 }
 
-# Private subnet: no route to an internet gateway, so topomap marks it
+# Private subnet: no route to an internet gateway, so topomapper marks it
 # private.
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
@@ -97,7 +97,7 @@ resource "aws_route_table_association" "public" {
 }
 
 # The private route table has only the implicit local route, so instances in
-# the private subnet cannot reach the internet - exactly what topomap's
+# the private subnet cannot reach the internet - exactly what topomapper's
 # public/private detection looks for.
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
@@ -149,7 +149,7 @@ resource "aws_instance" "web" {
   vpc_security_group_ids      = [aws_security_group.ssh.id]
   associate_public_ip_address = true
 
-  # No key pair: this instance exists to appear in a topomap graph, not to
+  # No key pair: this instance exists to appear in a topomapper graph, not to
   # log in to. If you need to connect, use AWS Systems Manager Session
   # Manager with an instance role, or add a key pair.
 
@@ -159,7 +159,7 @@ resource "aws_instance" "web" {
   }
 }
 
-# Gateway VPC endpoint for S3. Free, and collected by topomap as
+# Gateway VPC endpoint for S3. Free, and collected by topomapper as
 # aws:vpce:vpce-... when you pass --include endpoints.
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id

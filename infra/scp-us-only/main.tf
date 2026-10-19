@@ -14,7 +14,7 @@
 #   - It never applies to the management account. SCPs don't, by design, so
 #     that account can always repair a bad policy. Keep that in mind: this is
 #     how you stay in control, and also why the management account still
-#     shows all 17 regions to topomap.
+#     shows all 17 regions to topomapper.
 #   - Control Tower governs us-east-1 and us-west-2 here, both allowed.
 #
 # Attached to the organization root by default, so it covers every current

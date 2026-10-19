@@ -1,13 +1,13 @@
-# infra: a cheap AWS estate for topomap
+# infra: a cheap AWS estate for topomapper
 
 This folder holds a tiny Terraform estate (VPC, public and private subnets,
 an internet gateway, one small EC2 instance and a free S3 gateway VPC
-endpoint) built on purpose to be gathered by [`tools/topomap`](../tools/topomap)'s
-`topomap aws`.
+endpoint) built on purpose to be gathered by [`tools/topomapper`](../tools/topomapper)'s
+`topomapper aws`.
 
-## What topomap catches here
+## What topomapper catches here
 
-| Resource | Terraform | Collected by topomap | Cost |
+| Resource | Terraform | Collected by topomapper | Cost |
 |---|---|---|---|
 | VPC | `aws_vpc.main` | Always, as `aws:vpc:vpc-...` | Free |
 | Public subnet | `aws_subnet.public` | Always, marked public (route to IGW) | Free |
@@ -17,7 +17,7 @@ endpoint) built on purpose to be gathered by [`tools/topomap`](../tools/topomap)
 | S3 VPC endpoint (gateway) | `aws_vpc_endpoint.s3` | With `--include endpoints` | Free |
 
 NAT gateways, transit gateways, VPN and Direct Connect are deliberately not
-included: they cost money. Add them later if you want topomap to draw TGW
+included: they cost money. Add them later if you want topomapper to draw TGW
 attachments, VPN tunnels or DX VIFs.
 
 ## How to use
@@ -34,9 +34,9 @@ terraform apply
 Then collect it with topomap:
 
 ```sh
-topomap aws --profile default --region us-east-1 \
+topomapper aws --profile default --region us-east-1 \
     --include instances,endpoints -o aws.json
-topomap render aws.json -o aws.drawio
+topomapper render aws.json -o aws.drawio
 ```
 
 When you're done:

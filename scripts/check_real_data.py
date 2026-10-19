@@ -14,7 +14,7 @@ Public IPv4 addresses are deliberately not checked: versions, multicast
 groups and the redactor's own examples make that too noisy to be useful.
 
 "Obviously fake" means few distinct digits (`111122223333`), the usual
-`123456789012`, what `topomap anonymize` generates (`100000NNNNNN`,
+`123456789012`, what `topomapper anonymize` generates (`100000NNNNNN`,
 `o-0000000001`), or a value containing `EXAMPLE`. Anything else that is
 legitimate goes in `scripts/real-data-allowlist.txt`, one exact token per
 line (`#` starts a comment).
@@ -181,7 +181,7 @@ def main(argv: List[str]) -> int:
               + ", ".join(skipped[:10]) + (" ..." if len(skipped) > 10 else ""), file=sys.stderr)
     if problems:
         print(f"\n{len(problems)} value(s) look like real data or secrets. Replace them with "
-              "made-up ones (or run `topomap anonymize`), or list a legitimate token in "
+              "made-up ones (or run `topomapper anonymize`), or list a legitimate token in "
               "scripts/real-data-allowlist.txt.", file=sys.stderr)
         return 1
     return 1 if skipped and "--fail-on-skipped" in flags else 0

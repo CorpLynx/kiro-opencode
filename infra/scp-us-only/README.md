@@ -31,9 +31,9 @@ terraform apply          # takes effect within about a minute
 
 Undo it at once with `terraform destroy`.
 
-## Seeing it in topomap
+## Seeing it in topomapper
 
-`topomap aws-org` shows the policy by name on the root. `topomap aws` marks
+`topomapper aws-org` shows the policy by name on the root. `topomapper aws` marks
 every region it blocks, labelled `SCP blocks EC2, EKS`, and prints one
 warning per blocked service and region. `filter --hide-empty` leaves those
 regions off a diagram.

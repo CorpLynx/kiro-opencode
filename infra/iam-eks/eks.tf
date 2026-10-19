@@ -1,5 +1,5 @@
-# The cheapest EKS cluster that still has everything topomap's
-# `topomap aws --eks` reads. Only the control plane is billed (about
+# The cheapest EKS cluster that still has everything topomapper's
+# `topomapper aws --eks` reads. Only the control plane is billed (about
 # $0.10/hour, ~$2.40/day); set create_eks = false to tear it down.
 #
 #   VPC         two private subnets, no internet gateway and no NAT (free)
@@ -9,7 +9,7 @@
 #   Fargate     a profile for one namespace; no pods, so no charge
 #   add-on      kube-proxy (managed), so the add-on list isn't empty
 #   IRSA        the cluster's OIDC provider and a role trusting it, which
-#               topomap shows as a federated trust
+#               topomapper shows as a federated trust
 #
 # Control-plane logging and secrets encryption are left off: both would add
 # CloudWatch or KMS charges. Scaling the node group up won't work as-is,
