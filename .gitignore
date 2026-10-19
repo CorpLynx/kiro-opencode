@@ -20,11 +20,14 @@ node_modules/
 *.key
 .env
 
-# Output from real runs of topomap (account IDs, hostnames, addresses).
-# Write snapshots and diagrams under topomap-out/ and they stay out of commits.
+# Output from real runs of topomapper (account IDs, hostnames, addresses).
+# Write snapshots and diagrams under topomapper-out/ and they stay out of commits.
+# (The topomap-* lines cover folders from before the tool was renamed.)
+topomapper-out/
 topomap-out/
-tools/topomap/*.json
-tools/topomap/*.drawio
-tools/topomap/*.mmd
-tools/topomap/*.svg
-tools/topomap/*.dot
+tools/topomapper/*.json
+tools/topomapper/*.drawio
+tools/topomapper/*.mmd
+tools/topomapper/*.svg
+tools/topomapper/*.dot
+tools/topomap/

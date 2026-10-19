@@ -1,4 +1,4 @@
-# IAM roles and users for `topomap aws --iam`. All of it is free.
+# IAM roles and users for `topomapper aws --iam`. All of it is free.
 #
 # What each piece exercises in topomap:
 #
@@ -112,9 +112,9 @@ resource "aws_iam_group_policy_attachment" "readers" {
 }
 
 # No password and no access keys: the user can't sign in or call AWS. It
-# exists so topomap has a user with a group and no MFA to report. An access
+# exists so topomapper has a user with a group and no MFA to report. An access
 # key is left out on purpose, because Terraform would keep its secret in
-# state; create and deactivate one by hand to see key age in topomap.
+# state; create and deactivate one by hand to see key age in topomapper.
 resource "aws_iam_user" "lab" {
   name = "topomap-lab-user"
 }

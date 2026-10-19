@@ -17,17 +17,14 @@ jobs:
         # One entry per Python project. "test" installs every optional extra;
         # "core" installs none, proving the stdlib-only core still works and
         # that extra-dependent tests skip cleanly.
-        project: [tools/ip-redactor, tools/ipam-infoblox, tools/topomap]
+        project: [tools/ip-redactor, tools/topomapper]
         python: ["3.9", "3.13"]
         install: [test]
         include:
           - project: tools/ip-redactor
             python: "3.13"
             install: core
-          - project: tools/ipam-infoblox
-            python: "3.13"
-            install: core
-          - project: tools/topomap
+          - project: tools/topomapper
             python: "3.13"
             install: core
     defaults:
@@ -45,8 +42,8 @@ jobs:
           else
             python -m pip install ".[${{ matrix.install }}]"
           fi
-      - name: Install ip-redactor (topomap's anonymize calls its CLI)
-        if: matrix.project == 'tools/topomap' && matrix.install == 'test'
+      - name: Install ip-redactor (topomapper's anonymize calls its CLI)
+        if: matrix.project == 'tools/topomapper' && matrix.install == 'test'
         working-directory: tools/ip-redactor
         run: python -m pip install .
       - name: Test

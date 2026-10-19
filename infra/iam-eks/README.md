@@ -1,14 +1,14 @@
-# infra/iam-eks: IAM and EKS for topomap's `--iam` and `--eks`
+# infra/iam-eks: IAM and EKS for topomapper's `--iam` and `--eks`
 
 A small Terraform stack, separate from the network lab in `../` (its own
-state), that gives [`tools/topomap`](../../tools/topomap) something to find
-with `topomap aws --iam --eks`. It spans the management account and two
+state), that gives [`tools/topomapper`](../../tools/topomapper) something to find
+with `topomapper aws --iam --eks`. It spans the management account and two
 member accounts of an AWS Organization (built for a Control Tower landing
 zone's Audit and Log Archive accounts).
 
 ## What it builds
 
-| Account | Resource | What topomap shows | Cost |
+| Account | Resource | What topomapper shows | Cost |
 |---|---|---|---|
 | management | `topomap-lab-fenced-admin` role: AdministratorAccess behind a deny-all permissions boundary | `admin access`, the boundary; the role itself can do nothing | Free |
 | management | `topomap-lab-user` in group `topomap-lab-readers`, no password, no access keys | a user with a group and `no MFA` | Free |
@@ -18,7 +18,7 @@ zone's Audit and Log Archive accounts).
 | management | node group scaled to 0 (SPOT t3.small), Fargate profile, kube-proxy add-on | node group, Fargate profile and add-on lists | Free: no nodes or pods run |
 | management | EKS cluster, node and Fargate roles; OIDC provider; IRSA role | service and federated trust | Free |
 
-EKS also creates its service-linked roles, which topomap hides unless you
+EKS also creates its service-linked roles, which topomapper hides unless you
 pass `--iam-all`.
 
 ## Safety
@@ -45,9 +45,9 @@ terraform apply                                # the cluster takes ~10-15 minute
 Collect it (`terraform output topomap_command` prints this with your values):
 
 ```sh
-topomap aws --profile default --org-role-name AWSControlTowerExecution \
-    --region us-east-1 --iam --eks --skip-network -o topomap-out/iam-eks.json
-topomap render topomap-out/iam-eks.json -o topomap-out/iam-eks.svg
+topomapper aws --profile default --org-role-name AWSControlTowerExecution \
+    --region us-east-1 --iam --eks --skip-network -o topomapper-out/iam-eks.json
+topomapper render topomapper-out/iam-eks.json -o topomapper-out/iam-eks.svg
 ```
 
 ## Tearing down

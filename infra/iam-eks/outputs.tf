@@ -1,6 +1,6 @@
 output "eks_cluster" {
   value       = var.create_eks ? aws_eks_cluster.lab[0].name : null
-  description = "EKS cluster topomap collects with --eks."
+  description = "EKS cluster topomapper collects with --eks."
 }
 
 output "iam_roles" {
@@ -9,10 +9,10 @@ output "iam_roles" {
     audit       = [aws_iam_role.auditor.name]
     log_archive = [aws_iam_role.chained.name]
   }
-  description = "Custom roles topomap collects with --iam."
+  description = "Custom roles topomapper collects with --iam."
 }
 
 output "topomap_command" {
-  value       = "topomap aws --profile ${var.profile} --org-role-name ${var.member_role_name} --region ${var.region} --iam --eks --skip-network -o topomap-out/iam-eks.json"
+  value       = "topomapper aws --profile ${var.profile} --org-role-name ${var.member_role_name} --region ${var.region} --iam --eks --skip-network -o topomapper-out/iam-eks.json"
   description = "Collects the management account directly and every member account through the member role."
 }
