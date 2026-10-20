@@ -201,7 +201,7 @@ topomapper topology filter topomapper-out/everything.json --max-per-type 10 topo
 | `mermaid` | Paste into GitHub or GitLab Markdown, Notion, etc. |
 | `dot` | For Graphviz (`dot -Tpng`). |
 
-- **Layout:** read top to bottom: the internet and on-premises ends (customer gateways, Direct Connect), then transit and Direct Connect gateways, then the VPCs, with public subnets above private ones and AZs side by side.
+- **Layout:** read top to bottom: the internet and on-premises ends (customer gateways, Direct Connect), then transit and Direct Connect gateways, then the VPCs, with public subnets above private ones and AZs side by side. Boxes with no lines between them (service boxes from `resources`, regions, OUs) are packed around the network like tiles, biggest first, so an account with dozens of services stays compact. The IAM box always sits in the account's top-right corner.
 - **Output is deterministic:** the same input gives byte-identical output.
 - **Options:** `--direction LR` reads left to right, `--title` adds a title, and `--no-link-labels` drops port and subnet labels.
 

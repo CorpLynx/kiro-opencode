@@ -15,10 +15,15 @@ How a container arranges its children:
   its most "outside" members (internet, then customer gateways and Direct
   Connect, then AWS gateways, then what sits in the VPCs), with a few
   barycenter sweeps to reduce crossings and an isotonic-regression pass to
-  centre blocks over their neighbours. Unlinked children go in a grid.
+  centre blocks over their neighbours. Unlinked icons go in a grid.
+  Unlinked boxes (service boxes, regions, OUs) vary too much in size for a
+  grid, whose rows and columns leave holes, so they are packed instead
+  (MaxRects): the linked group first, top-left, then the boxes tallest
+  first, each as high and then as far left as it fits, trying a few strip
+  widths and keeping the most compact, preferably landscape, result.
 * **Account:** the `iam` box (roles and users) is pinned to the top-right
-  corner, with everything else arranged to its left, so IAM is always in
-  the same place whatever else the account holds.
+  corner, with everything else packed to its left and below it, so IAM is
+  always in the same place whatever else the account holds.
 * **VPC:** gateways and endpoints in a row along the top, then the AZs as
   side-by-side columns. Subnets are stacked in their AZ, public above
   private, and aligned into rows across AZs so the VPC reads as a table.
@@ -56,6 +61,8 @@ TITLE_H = 36
 PARALLEL_SPREAD = 18
 MIN_CONTAINER_W = 140
 MAX_ROW = 1200      # a layer wider than this (and than it is tall) wraps
+PACK_ASPECTS = (0.75, 1.0, 1.3, 1.6, 2.0, 2.6)   # width:height shapes tried when packing mixed sizes
+PACK_TARGET = 1.5    # ...and the one preferred: screens are wide
 EDGE_ROW_KINDS = ("internet-gateway", "egress-only-internet-gateway", "vpn-gateway", "vpc-endpoint")
 
 Point = Tuple[int, int]
@@ -269,8 +276,10 @@ class _Engine:
 
     # -- generic arrangement -------------------------------------------------------
 
-    def _arrange_generic(self, container: Optional[str], kids: Sequence[str]
-                         ) -> Tuple[Dict[str, Point], int, int]:
+    def _arrange_generic(self, container: Optional[str], kids: Sequence[str],
+                         corner: Optional[str] = None) -> Tuple[Dict[str, Point], int, int]:
+        """`corner`, if given, is pinned to the top-right corner (the IAM
+        box in an account) and the rest is laid out around it."""
         members = set(kids)
         adj: Dict[str, Set[str]] = {k: set() for k in kids}
         for a, b in self.block_edges.get(container, []):
@@ -290,8 +299,14 @@ class _Engine:
             parts.append(self._shelf(laid))
         elif edge:
             parts.append(self._grid(edge))
+        if loose and any(self.is_container(k) for k in loose):
+            # Boxes of mixed sizes (service boxes, regions, OUs) leave holes
+            # in a table, so they are packed around the linked group instead.
+            return self._pack(parts, loose, corner)
         if loose:
             parts.append(self._grid(loose))
+        if corner:
+            return self._pack(parts, [], corner)
         return self._stack(parts, GAP)
 
     def _stack(self, parts: List[Tuple[Dict[str, Point], int, int]], gap: int
@@ -465,21 +480,61 @@ class _Engine:
             pos[item] = (col_x[c] + (col_w[c] - self.size[item][0]) // 2, row_y[r])
         return pos, col_x[-1] + col_w[-1], row_y[-1] + row_h[-1]
 
+    def _pack(self, fixed: List[Tuple[Dict[str, Point], int, int]], items: Sequence[str],
+              corner: Optional[str] = None) -> Tuple[Dict[str, Point], int, int]:
+        """Pack `fixed` parts (the linked group, placed first, so it sits
+        top-left) and then `items`, tallest first, into the most compact of
+        a few strip widths. Each block goes as high, then as far left, as it
+        fits, so small boxes fill the space beside big ones. A `corner`
+        block is pinned top-right first and the rest flows around it."""
+        blocks = list(fixed) + [({k: (0, 0)}, *self.size[k]) for k in
+                                sorted(items, key=lambda k: (-self.size[k][1], -self.size[k][0],
+                                                             self.sort_key(k)))]
+        cw, ch = self.size[corner] if corner else (0, 0)
+        if not blocks:
+            return {corner: (0, 0)}, cw, ch
+        area = sum((w + GAP) * (h + GAP) for _, w, h in blocks)
+        if corner:
+            area += (cw + GAP) * (ch + GAP)
+        widest = max(w for _, w, _ in blocks)
+        # The linked group, when there is one, must fit beside the corner box.
+        least = max(widest, blocks[0][1] + GAP + cw) if corner and fixed else widest
+        widths = {max(least, int(math.sqrt(area * a))) for a in PACK_ASPECTS}
+        # Also the widths that fit exactly the first few blocks side by side,
+        # so a row isn't left a little short of the corner box.
+        row = cw + GAP if corner else 0
+        for _, w, _ in blocks[:8]:
+            row += w
+            widths.add(max(least, row))
+            row += GAP
+        best = None
+        for width in sorted(widths):
+            pinned = [(width - cw, 0, cw, ch)] if corner else []
+            spots = _maxrects([(w, h) for _, w, h in blocks], width, pinned)
+            used_w = max([x + w for (x, _), (_, w, _) in zip(spots, blocks)] + [width if corner else 0])
+            used_h = max([y + h for (_, y), (_, _, h) in zip(spots, blocks)] + [ch])
+            # Smallest area, but a tall thin strip reads worse than a slightly
+            # larger landscape block.
+            shape = abs(math.log(used_w / max(used_h, 1) / PACK_TARGET))
+            score = (used_w * used_h * (1 + 0.5 * shape), used_w)
+            if best is None or score < best[0]:
+                best = (score, spots, used_w, used_h)
+        _, spots, used_w, used_h = best
+        pos: Dict[str, Point] = {}
+        for (bx, by), (ppos, _, _) in zip(spots, blocks):
+            for k, (x, y) in ppos.items():
+                pos[k] = (bx + x, by + y)
+        if corner:
+            pos[corner] = (used_w - cw, 0)
+        return pos, used_w, used_h
+
     # -- AWS conventions -------------------------------------------------------
 
     def _arrange_account(self, account: str, kids: Sequence[str]
                          ) -> Tuple[Dict[str, Point], int, int]:
-        """Regions and the rest to the left, the IAM box in the top-right corner."""
-        boxes = [k for k in kids if self.kind(k) == AWS_IAM and self.is_container(k)]
-        rest = [k for k in kids if k not in boxes]
-        iam = boxes[0]
-        iam_w, iam_h = self.size[iam]
-        if not rest:
-            return {iam: (0, 0)}, iam_w, iam_h
-        pos, w, h = self._arrange_generic(account, rest)
-        pos = dict(pos)
-        pos[iam] = (w + GAP, 0)
-        return pos, w + GAP + iam_w, max(h, iam_h)
+        """The IAM box in the top-right corner, regions and the rest around it."""
+        iam = next(k for k in kids if self.kind(k) == AWS_IAM and self.is_container(k))
+        return self._arrange_generic(account, [k for k in kids if k != iam], corner=iam)
 
     def _arrange_vpc(self, vpc: str, kids: Sequence[str]) -> Tuple[Dict[str, Point], int, int]:
         edge = [k for k in kids if not self.is_container(k) and self.kind(k) in EDGE_ROW_KINDS]
@@ -698,6 +753,49 @@ def _place_row(row: List[str], want: Dict[str, float], size: Dict[str, int], gap
         values.extend([mean] * int(count))
     for n, v, o in zip(row, values, offsets):
         center[n] = v + o
+
+
+def _maxrects(sizes: Sequence[Tuple[int, int]], width: int, pinned: Sequence[Rect] = ()
+              ) -> List[Point]:
+    """Top-left corners for blocks of `sizes`, packed in that order into a
+    strip `width` wide around the `pinned` rectangles (MaxRects, preferring
+    the highest then leftmost spot). Blocks keep GAP from each other."""
+    tall = 1 << 30
+    free: List[Rect] = [(0, 0, width + GAP, tall)]
+    out: List[Point] = []
+    for px, py, pw, ph in pinned:   # blocks carry their own gap on the right
+        free = _carve(free, px, py, pw + GAP, ph + GAP)
+    for w, h in sizes:
+        w, h = w + GAP, h + GAP
+        fits = [(fy, fx) for fx, fy, fw, fh in free if fw >= w and fh >= h]
+        y, x = min(fits)
+        out.append((x, y))
+        free = _carve(free, x, y, w, h)
+    return out
+
+
+def _carve(free: List[Rect], x: int, y: int, w: int, h: int) -> List[Rect]:
+    """The free rectangles left once (x, y, w, h) is taken."""
+    split: List[Rect] = []
+    for fx, fy, fw, fh in free:
+        if fx >= x + w or fx + fw <= x or fy >= y + h or fy + fh <= y:
+            split.append((fx, fy, fw, fh))
+            continue
+        if fx < x:
+            split.append((fx, fy, x - fx, fh))
+        if fx + fw > x + w:
+            split.append((x + w, fy, fx + fw - x - w, fh))
+        if fy < y:
+            split.append((fx, fy, fw, y - fy))
+        if fy + fh > y + h:
+            split.append((fx, y + h, fw, fy + fh - y - h))
+    split = sorted(set(split))
+    return [r for i, r in enumerate(split)
+            if not any(j != i and _inside(r, o) for j, o in enumerate(split))]
+
+
+def _inside(r: Rect, o: Rect) -> bool:
+    return o[0] <= r[0] and o[1] <= r[1] and r[0] + r[2] <= o[0] + o[2] and r[1] + r[3] <= o[1] + o[3]
 
 
 def _center(r: Rect) -> Tuple[float, float]:

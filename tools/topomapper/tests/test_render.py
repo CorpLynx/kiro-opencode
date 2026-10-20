@@ -457,6 +457,50 @@ class RenderTest(unittest.TestCase):
                                                  "TOPOMAPPER_REGEN_FIXTURES=1")
 
 
+class PackTest(unittest.TestCase):
+    """Boxes of mixed sizes (service boxes, regions, OUs) are packed, not
+    put in a table whose rows and columns leave holes."""
+
+    def services(self, counts):
+        t = Topology()
+        t.add_node(f"aws:account:{ACCT}", "account", "a")
+        region = t.add_node(REGION, "region", "us-east-1", f"aws:account:{ACCT}").id
+        for name, n in counts:
+            group = t.add_node(f"aws:service:{ACCT}:us-east-1:{name}", "aws-service", name, region).id
+            for i in range(n):
+                t.add_node(f"aws:resource:{name}{i}", "aws-resource", f"{name}-res-{i}", group)
+        return t
+
+    def test_mixed_service_boxes_fill_their_region(self):
+        t = self.services((("big", 30), ("mid", 8), ("a", 1), ("b", 2), ("c", 1), ("d", 3), ("e", 1)))
+        boxes = RenderTest.assert_geometry(self, t)
+        boxes = layout(t).boxes
+        region = boxes[REGION]
+        inside = sum(b.w * b.h for b in boxes.values() if b.parent == REGION)
+        self.assertGreater(inside / (region.w * region.h), 0.6)   # a table filled 0.39
+
+    def test_packed_layout_is_deterministic_and_landscape(self):
+        t = self.services([(f"s{i:02d}", (i * 7) % 13 + 1) for i in range(20)])
+        first = layout(t)
+        self.assertEqual([(b.id, b.x, b.y) for b in first.boxes.values()],
+                         [(b.id, b.x, b.y) for b in layout(t).boxes.values()])
+        region = first.boxes[REGION]
+        self.assertGreater(region.w, region.h)
+
+    def test_maxrects_never_overlaps_or_overflows(self):
+        from topomapper.render.layout import GAP, _maxrects
+        sizes = [((i * 37) % 300 + 40, (i * 53) % 200 + 30) for i in range(40)]
+        for width, pinned in ((400, []), (900, [(700, 0, 200, 150)])):
+            spots = _maxrects(sizes, width, pinned)
+            rects = [(x, y, w, h) for (x, y), (w, h) in zip(spots, sizes)] + list(pinned)
+            for i, (x, y, w, h) in enumerate(rects):
+                self.assertLessEqual(x + w, width)
+                for x2, y2, w2, h2 in rects[i + 1:]:
+                    apart = (x + w + GAP <= x2 or x2 + w2 + GAP <= x or
+                             y + h + GAP <= y2 or y2 + h2 + GAP <= y)
+                    self.assertTrue(apart, ((x, y, w, h), (x2, y2, w2, h2)))
+
+
 def ai_topology() -> Topology:
     """An organization with Bedrock, IAM and EKS in two accounts."""
     t = Topology({"collector": "test"})
@@ -604,8 +648,26 @@ class AiRenderTest(unittest.TestCase):
                 self.assertEqual(iam.y, min(b.y for b in boxes.values() if b.parent == acct.id))
                 self.assertEqual(iam.x, max(b.x for b in boxes.values() if b.parent == acct.id))
                 others = [b for b in boxes.values() if b.parent == acct.id and b.id != iam.id]
-                for b in others:
-                    self.assertLessEqual(b.x + b.w, iam.x)
+                for b in others:  # left of the IAM box, or in the space below it
+                    self.assertTrue(b.x + b.w <= iam.x or b.y >= iam.y + iam.h, b.id)
+
+    def test_account_with_iam_and_regions_is_packed_tightly(self):
+        t = Topology()
+        acct = t.add_node(f"aws:account:{ACCT}", "account", "a").id
+        box = t.add_node(f"aws:iam:{ACCT}", "iam", "IAM", acct).id
+        t.add_node(f"aws:iam-role:{ACCT}:r", "iam-role", "r", box)
+        for r in ("us-east-1", "eu-west-1", "ap-south-1", "sa-east-1"):
+            region = t.add_node(f"aws:region:{ACCT}:{r}", "region", r, acct).id
+            for s in range(3):
+                group = t.add_node(f"aws:service:{ACCT}:{r}:s{s}", "aws-service", f"s{s}", region).id
+                for i in range(4):
+                    t.add_node(f"aws:resource:{r}-{s}-{i}", "aws-resource", f"res-{i}", group)
+        boxes = layout(t).boxes
+        account, iam = boxes[acct], boxes[box]
+        kids = [b for b in boxes.values() if b.parent == acct]
+        self.assertEqual((iam.x + iam.w, iam.y), (max(b.x + b.w for b in kids), min(b.y for b in kids)))
+        inner = (account.w - 2 * 16) * (account.h - account.header - 8 - 16)
+        self.assertGreater(sum(b.w * b.h for b in kids) / inner, 0.75)
 
     def test_iam_box_text_and_roles_inside(self):
         svg = render(ai_topology(), "svg")
