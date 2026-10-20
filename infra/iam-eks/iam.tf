@@ -1,4 +1,4 @@
-# IAM roles and users for `topomapper aws --iam`. All of it is free.
+# IAM roles and users for `topomapper account collect iam`. All of it is free.
 #
 # What each piece exercises in topomap:
 #

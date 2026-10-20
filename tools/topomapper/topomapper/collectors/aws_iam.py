@@ -1,11 +1,11 @@
 """Custom IAM roles and users in an account (read-only).
 
-`topomapper aws --iam` adds one `iam-role` node per role and one `iam-user`
+`topomapper account collect iam` adds one `iam-role` node per role and one `iam-user`
 node per user. They sit in an `iam` box, one per account, which the
 renderers pin to the account's top-right corner so IAM is always in the
 same place. Roles that AWS owns (service-linked
 roles and the roles IAM Identity Center creates) are left out unless
-`--iam-all` is given, since every account has dozens and they say nothing
+`--all-roles` is given, since every account has dozens and they say nothing
 about how it is run.
 
 What is recorded is what answers "who can get in and with what": for a role

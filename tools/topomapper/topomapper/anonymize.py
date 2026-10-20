@@ -35,6 +35,7 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .cli import OUTPUT_HELP
 from .merge import read_topology
 from .model import NODE_KINDS, Topology
 
@@ -448,8 +449,9 @@ def _ipredact(text: str, key_file: Optional[str]) -> str:
 
 
 def add_arguments(parser) -> None:
-    parser.add_argument("input", nargs="?", default="-", metavar="TOPOLOGY",
-                        help="topology JSON to anonymize (default: stdin)")
+    parser.add_argument("input", metavar="TOPOLOGY",
+                        help="topology JSON to anonymize ('-' for stdin)")
+    parser.add_argument("output", nargs="*", metavar="FILE", help=OUTPUT_HELP)
     parser.add_argument("--ips", choices=IPS_MODES, default="ipredact",
                         help="addresses: ipredact (structure-preserving, needs the ipredact tool), "
                              "public (only public addresses, into documentation ranges) or keep "

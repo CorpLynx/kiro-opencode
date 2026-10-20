@@ -14,19 +14,21 @@ snapshot draws each account, with its VPCs, inside its OU.
 
 from __future__ import annotations
 
-import argparse
-from typing import Any, Dict, List, Optional, Tuple
+import os
+from typing import Any, Dict, List, Tuple
 
+from ..cli import OUTPUT_HELP
 from ..model import (AWS_ACCOUNT, AWS_ORG, AWS_ORG_POLICY, AWS_ORG_ROOT, AWS_OU, LINK_POLICY,
                      Topology, node_id)
 from .aws import (ReadOnlyClient, _boto_errors, _error_code, _label,
                   _new_client, _now, _paginate, _require_boto3, _role_arn, probe_home)
 
-HELP = ("Collect an AWS Organization: OUs, accounts, policies (SCPs, RCPs, tag, backup, ...) and "
-        "delegated administrators. Run against the management account (read-only).")
+HELP = ("Collect the AWS Organization: OUs, accounts, policies (SCPs, RCPs, tag, backup, ...) "
+        "and delegated administrators. Run against the management account (read-only).")
 PRODUCES_TOPOLOGY = True
 
 EXTRAS = ("tags", "emails", "aws-managed-policies")
+POLICY_VIEWS = {"policy-nodes": "nodes", "no-policies": "none"}  # default: attributes
 
 # Organization policy types, and the short names used in node attributes.
 POLICY_TYPES = {
@@ -43,16 +45,13 @@ _WHO_CAN = ("run topomapper with credentials for the management account, or for 
             "a delegated administrator for AWS Organizations")
 
 
-def _include_list(value: str) -> List[str]:
-    items = [v.strip() for v in value.split(",") if v.strip()]
-    unknown = [v for v in items if v not in EXTRAS]
-    if unknown:
-        raise argparse.ArgumentTypeError(
-            f"unknown --include value {', '.join(unknown)} (choose from {', '.join(EXTRAS)})")
-    return items
-
-
 def add_arguments(parser) -> None:
+    parser.add_argument("output", nargs="*", metavar="EXTRA|FILE",
+                        help="extras to collect, then the files to write. Extras: tags (one call "
+                             "per account), emails (account e-mail addresses; personal data), "
+                             "aws-managed-policies (FullAWSAccess and friends, attached "
+                             "everywhere), policy-nodes (draw policies as nodes linked to their "
+                             "targets, not only as attributes), no-policies. Then the " + OUTPUT_HELP)
     parser.add_argument("--profile", metavar="NAME",
                         help="AWS profile for the management account (default: boto3's default "
                              "credential chain)")
@@ -61,18 +60,25 @@ def add_arguments(parser) -> None:
     parser.add_argument("--external-id", help="external ID to pass when assuming the role")
     parser.add_argument("--role-session-name", default="topomapper",
                         help="session name for the assumed role (default: topomapper)")
-    parser.add_argument("--policies", choices=("attrs", "nodes", "none"), default="attrs",
-                        help="how to show organization policies: as attributes of the root, OUs "
-                             "and accounts they're attached to (default), also as policy nodes "
-                             "linked to their targets, or not at all")
-    parser.add_argument("--include", action="extend", type=_include_list, default=[],
-                        metavar="LIST",
-                        help="comma-separated extras: tags (one call per account), emails (account "
-                             "email addresses; personal data, off by default), aws-managed-policies "
-                             "(FullAWSAccess and friends, which are attached everywhere)")
 
 
-# -- credentials -------------------------------------------------------------------
+def prepare(args: Any) -> None:
+    """Split the words into extras and files to write."""
+    words = list(args.output or [])
+    known = (*EXTRAS, *POLICY_VIEWS)
+    args.output = [w for w in words if w not in known]
+    for word in args.output:
+        if word != "-" and not os.path.splitext(word)[1]:
+            raise ValueError(f"{word}: not an extra ({', '.join(known)}) or a file to write "
+                             f"(.json, .drawio, .svg, .mmd, .dot)")
+    views = [POLICY_VIEWS[w] for w in dict.fromkeys(words) if w in POLICY_VIEWS]
+    if len(views) > 1:
+        raise ValueError("policy-nodes and no-policies exclude each other")
+    args.policies = views[0] if views else "attrs"
+    args.include = sorted({w for w in words if w in EXTRAS})
+
+
+# -- credentials# -- credentials -------------------------------------------------------------------
 
 def _organizations_client(boto3: Any, args: Any) -> ReadOnlyClient:
     from botocore.exceptions import ProfileNotFound

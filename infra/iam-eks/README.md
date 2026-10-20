@@ -1,8 +1,8 @@
-# infra/iam-eks: IAM and EKS for topomapper's `--iam` and `--eks`
+# infra/iam-eks: IAM and EKS for topomapper's `iam` and `eks` parts
 
 A small Terraform stack, separate from the network lab in `../` (its own
 state), that gives [`tools/topomapper`](../../tools/topomapper) something to find
-with `topomapper aws --iam --eks`. It spans the management account and two
+with `topomapper account collect iam eks`. It spans the management account and two
 member accounts of an AWS Organization (built for a Control Tower landing
 zone's Audit and Log Archive accounts).
 
@@ -19,7 +19,7 @@ zone's Audit and Log Archive accounts).
 | management | EKS cluster, node and Fargate roles; OIDC provider; IRSA role | service and federated trust | Free |
 
 EKS also creates its service-linked roles, which topomapper hides unless you
-pass `--iam-all`.
+pass `--all-roles`.
 
 ## Safety
 
@@ -45,9 +45,8 @@ terraform apply                                # the cluster takes ~10-15 minute
 Collect it (`terraform output topomap_command` prints this with your values):
 
 ```sh
-topomapper aws --profile default --org-role-name AWSControlTowerExecution \
-    --region us-east-1 --iam --eks --skip-network -o topomapper-out/iam-eks.json
-topomapper render topomapper-out/iam-eks.json -o topomapper-out/iam-eks.svg
+topomapper account collect iam eks --profile default --org-role-name AWSControlTowerExecution \
+    --region us-east-1 topomapper-out/iam-eks.json topomapper-out/iam-eks.svg
 ```
 
 ## Tearing down

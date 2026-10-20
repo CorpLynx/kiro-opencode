@@ -98,6 +98,10 @@ def _warn_conflicts(topologies: List[Topology], merged: Topology) -> None:
 def add_arguments(parser) -> None:
     parser.add_argument("inputs", nargs="+", metavar="TOPOLOGY",
                         help="topology JSON files to merge ('-' reads stdin, once)")
+    parser.add_argument("--to", dest="output", action="extend", nargs="+", metavar="FILE",
+                        help="the files to write, last on the line, by extension: .json for the "
+                             "topology, or .drawio, .svg, .mmd or .dot to draw it (default: "
+                             "topology JSON on stdout)")
 
 
 def run(args) -> Topology:

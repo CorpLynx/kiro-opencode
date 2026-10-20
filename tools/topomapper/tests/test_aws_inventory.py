@@ -1,4 +1,4 @@
-"""--all-resources. moto runs the VPCs that resources sit in, but its Config
+"""`account collect resources`. moto runs the VPCs that resources sit in, but its Config
 `SelectResourceConfig` returns nothing and it has no Resource Explorer or
 Cloud Control, so those answers come from Overlays."""
 
@@ -74,8 +74,9 @@ class InventoryTestCase(AwsTestCase):
             return answer()
         return {"ResourceDescriptions": answer}
 
-    def inventory(self, *extra):
-        return self.collect("--region", REGION, "--all-resources", *extra)
+    def inventory(self, *extra, network=True):
+        return self.collect("--region", REGION, "resources", *(("network",) if network else ()),
+                            *extra)
 
 
 class ConfigEstate:
@@ -125,7 +126,7 @@ class ConfigTest(ConfigEstate, InventoryTestCase):
         self.assertEqual(bucket.parent, f"aws:service:{ACCOUNT}:{REGION}:s3")
         self.assertEqual(nodes[bucket.parent].label, "S3")
         self.assertEqual(nodes[bucket.parent].attrs["resources"], 1)
-        self.assertNotIn("tags", bucket.attrs)  # tags only with --include tags
+        self.assertNotIn("tags", bucket.attrs)  # tags only with the tags word
         role = nodes[f"aws:resource:{ROLE_ARN}"]
         self.assertEqual(role.parent, f"aws:service:{ACCOUNT}:global:iam")
         self.assertEqual(nodes[role.parent].parent, f"aws:account:{ACCOUNT}")
@@ -154,7 +155,7 @@ class ConfigTest(ConfigEstate, InventoryTestCase):
     def test_relationships_on_request(self):
         self.build()
         self.assertFalse([l for l in self.inventory().links.values() if l.kind == "related"])
-        topo = self.inventory("--include", "relationships")
+        topo = self.inventory("relationships")
         related = sorted((l.source.split(":")[-1], l.attrs["relation"], l.target.split("/")[-1])
                          for l in topo.links.values() if l.kind == "related")
         # The subnets placed the function, so they aren't drawn as links too.
@@ -163,7 +164,7 @@ class ConfigTest(ConfigEstate, InventoryTestCase):
 
     def test_tags_and_skip_network(self):
         ids, sg = self.build()
-        topo = self.inventory("--include", "tags", "--skip-network")
+        topo = self.inventory("tags", network=False)
         self.assertEqual(topo.nodes["aws:resource:arn:aws:s3:::acme-data"].attrs["tags"],
                          {"team": "data"})
         # Without the network collection the VPC is the inventory's, with its own kind.
@@ -194,7 +195,7 @@ class SkipNetworkStructureTest(InventoryTestCase):
             ci(f"arn:aws:ec2:{REGION}:{ACCOUNT}:instance/{instance}", "AWS::EC2::Instance",
                instance, rels=[("Is contained in Subnet", "AWS::EC2::Subnet", subnet)]),
         ])
-        topo = self.inventory("--skip-network")
+        topo = self.inventory(network=False)
         self.assertEqual(topo.nodes[f"aws:vpc:{vpc}"].label, f"prod ({vpc})")
         self.assertEqual(topo.nodes[f"aws:subnet:{subnet}"].parent, f"aws:vpc:{vpc}")
         self.assertEqual(topo.nodes[f"aws:instance:{instance}"].kind, "instance")
@@ -228,7 +229,7 @@ class ResourceExplorerTest(InventoryTestCase):
         self.overrides[("resource-explorer-2", None)] = lambda c: Overlay(
             c, get_index={"State": "ACTIVE"},
             get_default_view=denied("GetDefaultView", "ResourceNotFoundException"))
-        topo = self.inventory("--skip-network")
+        topo = self.inventory(network=False)
         self.assertTrue(any("no default view" in w for w in topo.meta["warnings"]))
 
 
@@ -270,8 +271,7 @@ class FallbackTest(InventoryTestCase):
         self.overrides[("cloudcontrol", None)] = lambda c: Overlay(
             c, list_resources=lambda TypeName, **kw: asked.append((c.meta.region_name, TypeName))
             or {"ResourceDescriptions": []})
-        self.collect("--region", REGION, "--region", "eu-west-1", "--all-resources",
-                     "--skip-network")
+        self.collect("--region", REGION, "--region", "eu-west-1", "resources")
         iam = [r for r, t in asked if t == "AWS::IAM::Role"]
         self.assertEqual(iam, [REGION])
         self.assertEqual(len([r for r, t in asked if t == "AWS::Lambda::Function"]), 2)
@@ -280,7 +280,7 @@ class FallbackTest(InventoryTestCase):
         self.listed = {"AWS::SNS::Topic": [{"Identifier": f"arn:aws:sns:{REGION}:{ACCOUNT}:alerts"}]}
         self.overrides[("resourcegroupstaggingapi", None)] = lambda c: Overlay(
             c, get_resources=lambda **kw: {}["unexpected shape"])
-        topo = self.inventory("--skip-network")
+        topo = self.inventory(network=False)
         self.assertIn(f"aws:resource:arn:aws:sns:{REGION}:{ACCOUNT}:alerts", topo.nodes)
         self.assertTrue(any("tagging: skipped after unexpected KeyError" in w
                             for w in topo.meta["warnings"]))
@@ -288,7 +288,7 @@ class FallbackTest(InventoryTestCase):
     def test_denied_config_falls_back(self):
         self.overrides[("config", None)] = lambda c: Overlay(
             c, describe_configuration_recorder_status=denied("DescribeConfigurationRecorderStatus"))
-        topo = self.inventory("--skip-network")
+        topo = self.inventory(network=False)
         self.assertTrue(any("cannot read config (AccessDenied)" in w for w in topo.meta["warnings"]))
         self.assertEqual(topo.nodes[f"aws:region:{ACCOUNT}:{REGION}"].attrs["inventory_sources"],
                          ["cloud-control", "tagging"])
@@ -303,7 +303,7 @@ class DedupeTest(InventoryTestCase):
         )["Role"]["Arn"]
         self.overrides[("config", None)] = config([
             ci(arn, "AWS::IAM::Role", ROLE_ID, "app-runtime", region="global")])
-        topo = self.inventory("--iam", "--skip-network")
+        topo = self.inventory("iam", network=False)
         self.assertNotIn(f"aws:resource:{arn}", topo.nodes)
         self.assertEqual(len([n for n in topo.nodes.values() if n.attrs.get("arn") == arn]), 1)
         self.assertNotIn(f"aws:service:{ACCOUNT}:global:iam", topo.nodes)
@@ -312,7 +312,7 @@ class DedupeTest(InventoryTestCase):
 class RenderTest(ConfigEstate, InventoryTestCase):
     def test_formats(self):
         self.build()
-        topo = self.inventory("--include", "relationships")
+        topo = self.inventory("relationships")
         drawio = render(topo, "drawio")
         ET.fromstring(drawio)
         self.assertIn("resIcon=mxgraph.aws4.lambda", drawio)

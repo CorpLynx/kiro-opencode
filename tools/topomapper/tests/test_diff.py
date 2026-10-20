@@ -177,28 +177,28 @@ class DiffCliTest(unittest.TestCase):
         changed.nodes[CORE].attrs["asn"] = 64513
         new = self.save("new.json", changed)
 
-        status, out, _ = run_cli(["diff", old, same])
+        status, out, _ = run_cli(["topology", "diff", old, same])
         self.assertEqual((status, out), (0, "no differences\n"))
-        status, out, _ = run_cli(["diff", old, new])
+        status, out, _ = run_cli(["topology", "diff", old, new])
         self.assertEqual(status, 1)
         self.assertIn("asn: 64512 → 64513", out)
-        status, out, _ = run_cli(["diff", old, new, "--format", "json", "--summary"])
+        status, out, _ = run_cli(["topology", "diff", old, new, "--format", "json", "--summary"])
         self.assertEqual(status, 1)
         self.assertEqual(json.loads(out)["counts"]["nodes"]["changed"], 1)
-        status, out, _ = run_cli(["diff", old, new, "--summary"])
+        status, out, _ = run_cli(["topology", "diff", old, new, "--summary"])
         self.assertEqual(out.count("\n"), 1)
-        status, _, _ = run_cli(["diff", old, new, "--ignore-attr", "asn"])
+        status, _, _ = run_cli(["topology", "diff", old, new, "--ignore-attr", "asn"])
         self.assertEqual(status, 0)
 
     def test_errors_exit_2(self):
         old = self.save("old.json", snapshot())
-        status, _, err = run_cli(["diff", old, os.path.join(self.tmp.name, "missing.json")])
+        status, _, err = run_cli(["topology", "diff", old, os.path.join(self.tmp.name, "missing.json")])
         self.assertEqual(status, 2)
         self.assertIn("topomapper: error:", err)
         bad = os.path.join(self.tmp.name, "bad.json")
         with open(bad, "w", encoding="utf-8") as f:
             f.write("{not json")
-        status, _, err = run_cli(["diff", old, bad])
+        status, _, err = run_cli(["topology", "diff", old, bad])
         self.assertEqual(status, 2)
         self.assertIn("bad.json", err)
 

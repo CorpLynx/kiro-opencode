@@ -186,7 +186,7 @@ class FilterCliTest(unittest.TestCase):
         return status, out.getvalue(), err.getvalue()
 
     def test_cli_from_stdin(self):
-        status, out, _ = self.run_cli(["filter", "--collapse", "vpc", "--exclude-kind", "az",
+        status, out, _ = self.run_cli(["topology", "filter", "-", "--collapse", "vpc", "--exclude-kind", "az",
                                        "--aws-only"], stdin=merged().dumps())
         self.assertEqual(status, 0)
         topo = Topology.loads(out)
@@ -195,15 +195,15 @@ class FilterCliTest(unittest.TestCase):
         self.assertEqual(topo.meta["filters"][0]["collapse"], ["vpc"])
 
     def test_cli_around_and_errors(self):
-        status, out, _ = self.run_cli(["filter", "-", "--around", TGW, "--depth", "1"],
+        status, out, _ = self.run_cli(["topology", "filter", "-", "--around", TGW, "--depth", "1"],
                                       stdin=merged().dumps())
         self.assertEqual(status, 0)
         self.assertIn(CGW_HQ, Topology.loads(out).nodes)
-        status, _, err = self.run_cli(["filter", "--depth", "2"], stdin=merged().dumps())
+        status, _, err = self.run_cli(["topology", "filter", "-", "--depth", "2"], stdin=merged().dumps())
         self.assertEqual(status, 2)
         self.assertIn("--depth needs --around", err)
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
-            cli.main(["filter", "--network-only"])  # gone with the LAN scanner
+            cli.main(["topology", "filter", "-", "--network-only"])  # gone with the LAN scanner
 
 
 class HideEmptyTest(unittest.TestCase):

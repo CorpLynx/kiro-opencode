@@ -64,9 +64,12 @@ NO_DX = {"describe_virtual_interfaces": {"virtualInterfaces": []},
 
 
 def parse(*argv):
+    """`topomapper account collect ARGV`, as far as the collector sees it."""
     parser = argparse.ArgumentParser()
     aws.add_arguments(parser)
-    return parser.parse_args(list(argv))
+    args = parser.parse_intermixed_args(list(argv))
+    aws.prepare(args)
+    return args
 
 
 @unittest.skipIf(boto3 is None, "needs boto3 and moto: pip install 'topomapper[test]'")
@@ -147,7 +150,7 @@ class CoreTest(AwsTestCase):
         self.assertEqual(vpc.attrs["cidrs"], ["10.0.0.0/16", "10.1.0.0/16"])
         self.assertEqual(vpc.attrs["account_id"], ACCOUNT)
         self.assertNotIn("tags", vpc.attrs)  # tags are opt-in; the Name tag still labels it
-        tagged = self.collect("--include", "tags")
+        tagged = self.collect("tags")
         self.assertEqual(tagged.nodes[vpc.id].attrs["tags"], {"Name": "prod"})
         az = f"aws:az:{ids['vpc']}:{REGION}a"
         self.assertEqual(topo.nodes[az].parent, vpc.id)
@@ -184,7 +187,7 @@ class CoreTest(AwsTestCase):
                                 VpcEndpointType="Gateway")
         plain = self.collect("--region", REGION)
         self.assertEqual(plain.by_kind("instance", "vpc-endpoint"), [])
-        full = self.collect("--region", REGION, "--include", "instances,endpoints")
+        full = self.collect("--region", REGION, "instances", "endpoints")
         instance, = full.by_kind("instance")
         self.assertEqual(instance.parent, f"aws:subnet:{ids['app']}")
         self.assertTrue(instance.label.startswith("app1 (i-"))
@@ -195,9 +198,9 @@ class CoreTest(AwsTestCase):
         self.assertEqual(endpoint.attrs["service"], f"com.amazonaws.{REGION}.s3")
         self.assertEqual(endpoint.attrs["endpoint_type"], "Gateway")
 
-    def test_include_rejects_unknown(self):
-        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
-            parse("--include", "instances,lambdas")
+    def test_unknown_words_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "lambdas: not a part"):
+            parse("instances", "lambdas")
 
     def test_multi_region_and_deterministic(self):
         self.build_vpc(REGION)
@@ -335,7 +338,7 @@ class ReadOnlyTest(AwsTestCase):
                                lambda s, svc, r: Recorder(Overlay(real(s, svc, r), **NO_DX)
                                                           if svc == "directconnect"
                                                           else real(s, svc, r), svc)):
-            self.collect("--region", REGION, "--include", "instances,endpoints",
+            self.collect("--region", REGION, "instances", "endpoints",
                          "--role-arn", f"arn:aws:iam::{OTHER}:role/topomapper")
         calls = {name for _, name in used if name not in ("meta", "can_paginate", "get_paginator")}
         self.assertIn("describe_vpcs", calls)
@@ -555,7 +558,7 @@ class DirectConnectTest(AwsTestCase):
                 stubbed.append(self.stub_dx(client))
             return stubbed[0]
         self.overrides[("directconnect", None)] = one_stubbed_client
-        topo = self.collect("--region", REGION, "--include", "tags")
+        topo = self.collect("--region", REGION, "tags")
         self.assertEqual(topo.meta.get("warnings"), None)
 
         gateway = topo.nodes[f"aws:dx-gateway:{DXGW}"]
@@ -718,7 +721,7 @@ class CliTest(AwsTestCase):
         ids = self.build_vpc()
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "aws.json")
-            self.assertEqual(cli.main(["collect", "aws", "--region", REGION, "-o", path]), 0)
+            self.assertEqual(cli.main(["account", "collect", "--region", REGION, path]), 0)
             topo = Topology.load(path)
         self.assertEqual(topo.validate(), [])
         self.assertEqual(topo.meta["collector"], "aws")

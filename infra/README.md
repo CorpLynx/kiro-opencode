@@ -3,7 +3,7 @@
 This folder holds a tiny Terraform estate (VPC, public and private subnets,
 an internet gateway, one small EC2 instance and a free S3 gateway VPC
 endpoint) built on purpose to be gathered by [`tools/topomapper`](../tools/topomapper)'s
-`topomapper aws`.
+`topomapper account collect`.
 
 ## What topomapper catches here
 
@@ -13,8 +13,8 @@ endpoint) built on purpose to be gathered by [`tools/topomapper`](../tools/topom
 | Public subnet | `aws_subnet.public` | Always, marked public (route to IGW) | Free |
 | Private subnet | `aws_subnet.private` | Always, marked private | Free |
 | Internet gateway | `aws_internet_gateway.igw` | Always | Free |
-| EC2 instance | `aws_instance.web` | With `--include instances` | t3.micro: free tier for 12 months, ~$8/month after; t4g.nano: ~$3/month |
-| S3 VPC endpoint (gateway) | `aws_vpc_endpoint.s3` | With `--include endpoints` | Free |
+| EC2 instance | `aws_instance.web` | With the `instances` word | t3.micro: free tier for 12 months, ~$8/month after; t4g.nano: ~$3/month |
+| S3 VPC endpoint (gateway) | `aws_vpc_endpoint.s3` | With the `endpoints` word | Free |
 
 NAT gateways, transit gateways, VPN and Direct Connect are deliberately not
 included: they cost money. Add them later if you want topomapper to draw TGW
@@ -31,12 +31,11 @@ terraform plan
 terraform apply
 ```
 
-Then collect it with topomap:
+Then collect it with topomapper:
 
 ```sh
-topomapper aws --profile default --region us-east-1 \
-    --include instances,endpoints -o aws.json
-topomapper render aws.json -o aws.drawio
+topomapper account collect network instances endpoints --profile default \
+    --region us-east-1 aws.json aws.drawio
 ```
 
 When you're done:

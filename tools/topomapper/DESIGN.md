@@ -3,9 +3,9 @@
 `topomapper` gathers AWS topology automatically, merges the pieces, and draws them.
 
 ```
-aws      boto3, read-only API calls         ─┐
-aws-org  the AWS Organization: OUs, accounts ─┴─▶ topomap/1 JSON ─▶ merge ─▶ filter ─▶ render
-                                                                └─▶ diff (drift between snapshots)
+account collect  boto3, read-only API calls         ─┐
+org collect      the AWS Organization: OUs, accounts ─┴─▶ topomap/1 JSON ─▶ topology merge ─▶ topology filter ─▶ diagram draw
+                                                                        └─▶ topology diff (drift between snapshots)
 ```
 
 Every stage reads and writes the same JSON graph (`topomapper/model.py`), so stages compose with files or pipes, and snapshots can be committed and diffed.
@@ -23,7 +23,7 @@ Every stage reads and writes the same JSON graph (`topomapper/model.py`), so sta
   - Use documentation ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32`) or RFC 1918 space.
   - Hostnames go under `example.net`, AWS account IDs are `123456789012` or `111122223333`, and serial numbers are made up.
 - **Tests** use `unittest`, live in `tests/test_<area>.py`, and keep their fixtures in `tests/fixtures/<area>/`. They must skip, not fail, when an optional dependency is missing.
-- **Exit status:** 0 for success, 1 only from `diff` ("differences found"), 2 for errors (like argparse).
+- **Exit status:** 0 for success, 1 only from `topology diff` ("differences found"), 2 for errors (like argparse).
 
 ## Module contract
 
@@ -34,7 +34,7 @@ Each command module exposes:
 - `add_arguments(parser)`
 - `run(args)`
 
-`cli.py` wires them up as top-level commands (`topomapper aws`; the older `topomapper collect aws` is an unlisted alias). To every command that produces a topology it adds a repeatable `-o/--output`, whose extension picks the output (`.json` for the topology, `.drawio`/`.svg`/`.mmd`/`.dot` to draw it, refused before `run()` otherwise), and the drawing options `render` has. Modules don't handle output themselves. See the docstring in `cli.py`.
+`cli.py` wires them up as `topomapper GROUP VERB`, like the AWS CLI: `account collect`, `org collect`, `topology merge|filter|diff|anonymize` and `diagram draw`. What to collect is said in words (`account collect network iam`), not flags; a module with words also exposes `prepare(args)`, which sorts them from the files to write and refuses anything unknown before `run()`. The files to write are plain arguments (dest `output`; `topology merge`, which takes any number of inputs, names them with `--to`), and each one's extension picks what's written (`.json` for the topology, `.drawio`/`.svg`/`.mmd`/`.dot` to draw it, refused before `run()` otherwise). To every command that produces a topology the CLI adds the drawing options `diagram draw` has. Modules don't write output themselves. See the docstring in `cli.py`.
 
 ## IDs
 
@@ -54,23 +54,23 @@ IDs are deterministic, so the same thing collected twice, or from two sources, g
 | iam-role, iam-user | `aws:iam-role:<account-id>:<name>`, `aws:iam-user:<account-id>:<name>` |
 | eks-cluster | `aws:eks-cluster:<account-id>:<region>:<name>` |
 | organization, org-root, ou, org-policy | `aws:organization:<o-id>`, `aws:org-root:<r-id>`, `aws:ou:<ou-id>`, `aws:org-policy:<p-id>` |
-| aws-resource | `aws:resource:<arn>` (from `--all-resources`). A resource the fallback found without an ARN is `aws:resource:<account-id>:<region>:<CloudFormation type>:<identifier>`. EC2 network resources keep the IDs above instead. A summary from `filter --max-per-type` is `aws:resource:<parent>/<type>`. |
+| aws-resource | `aws:resource:<arn>` (from the `resources` part). A resource the fallback found without an ARN is `aws:resource:<account-id>:<region>:<CloudFormation type>:<identifier>`. EC2 network resources keep the IDs above instead. A summary from `topology filter --max-per-type` is `aws:resource:<parent>/<type>`. |
 | aws-service | `aws:service:<account-id>:<region or "global">:<ARN service name>` (the box holding one service's resources) |
 | external | `ext:external:<what>`, e.g. `ext:external:internet` |
 
-`topomapper aws` and `topomapper aws-org` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
+`account collect` and `org collect` give an account the same ID, so merging the two snapshots puts each account, with its regions and VPCs, inside its OU.
 
-Both collectors describe themselves in `meta` the same way: `collector`, `collected_at`, and `accounts` (and, for `aws-org`, `ous`) as sorted lists of IDs. `topomapper aws` also records `regions` and `region_source`.
+Both collectors describe themselves in `meta` the same way: `collector`, `collected_at`, and `accounts` (and, for `org collect`, `ous`) as sorted lists of IDs. `account collect` also records `regions` and `region_source`.
 
 Link IDs come from `model.link_id()`, which `Topology.add_link()` calls for you. Undirected links are stored with `source < target`, and their ports are swapped to match.
 
 ## Containment (`parent`)
 
-- **AWS:** `[organization > org-root > ou > … > ] account > region > vpc > az > subnet > (nat-gateway | instance)`. The organization levels come from `topomapper aws-org`; OUs nest to any depth. Organization policy nodes sit in the organization.
+- **AWS:** `[organization > org-root > ou > … > ] account > region > vpc > az > subnet > (nat-gateway | instance)`. The organization levels come from `org collect`; OUs nest to any depth. Organization policy nodes sit in the organization.
   - An internet gateway, egress-only gateway, VPC endpoint or VPN gateway attached to a VPC has that VPC as its parent.
   - Transit gateways, customer gateways, DX gateways and DX connections sit in their region.
   - A DX gateway is global, so it sits in its account.
-  - With `--all-resources`, a resource sits in its subnet when AWS Config relates it to exactly one, in its VPC when it spans several subnets or names only a VPC, and otherwise in an `aws-service` box in its region (or in the account, for global services).
+  - With the `resources` part, a resource sits in its subnet when AWS Config relates it to exactly one, in its VPC when it spans several subnets or names only a VPC, and otherwise in an `aws-service` box in its region (or in the account, for global services).
   - IAM roles and users are global, so they sit in one `iam` box per account, which the renderers draw in the account's top-right corner. A Bedrock group sits in its region, with its models inside it. An EKS cluster sits in its VPC, or in the region when that VPC wasn't collected.
 
 ## Node attributes (by kind)
@@ -83,9 +83,9 @@ Every attribute is optional, but renderers and merge rely on these names:
 | org-root | `root_id`, `arn`, `policy_types` (enabled, short names: `scp`, `rcp`, `tag`, `backup`, `ai-opt-out`, `chatbot`, `declarative-ec2`), `policies` |
 | ou | `ou_id`, `arn`, `path` (`Root/Workloads/Prod`), `policies`, `empty` (true when it holds no OUs or accounts) |
 | org-policy | `policy_id`, `type` (short name), `aws_managed`, `description` |
-| account | `account_id`, `name`, `collected` (true when `topomapper aws` reached it; after a merge, false for accounts only the organization listed); from `aws-org` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and with `--include` `tags` and `email` |
-| region | `region`, `empty` (true when nothing was found in it), `bedrock_models_shown`, `bedrock_models_offered`, `scp_denied` (services a service control policy blocks there, such as `["EC2"]`), `inventory_sources` (with `--all-resources`: which of `config`, `resource-explorer`, `cloud-control`, `tagging` it was read through) |
-| vpc | `vpc_id`, `cidrs` (list), `ipv6_cidrs`, `is_default`, `account_id`, `region`, `tags` (dict, only with `--include tags`; this goes for every kind that has `tags`) |
+| account | `account_id`, `name`, `collected` (true when `account collect` reached it; after a merge, false for accounts only the organization listed); from `org collect` also `status`, `joined_method`, `joined`, `management` (true for the management account), `delegated_admin_for` (service principals), `path`, `policies` (`{"scp": ["DenyRegions"], ...}`), and `tags` and `email` (with the `tags` and `emails` extras) |
+| region | `region`, `empty` (true when nothing was found in it), `bedrock_models_shown`, `bedrock_models_offered`, `scp_denied` (services a service control policy blocks there, such as `["EC2"]`), `inventory_sources` (with the `resources` part: which of `config`, `resource-explorer`, `cloud-control`, `tagging` it was read through) |
+| vpc | `vpc_id`, `cidrs` (list), `ipv6_cidrs`, `is_default`, `account_id`, `region`, `tags` (dict, only with the `tags` word; this goes for every kind that has `tags`) |
 | subnet | `subnet_id`, `cidr`, `ipv6_cidrs`, `az`, `public` (bool: its route table has a route to an internet gateway), `routes` (list of `{"destination", "target"}`), `tags` |
 | internet-gateway, egress-only-internet-gateway | `gateway_id` |
 | nat-gateway | `nat_gateway_id`, `public_ips`, `private_ips`, `connectivity` (`public`/`private`) |
@@ -119,18 +119,18 @@ Labels should be what a person calls the thing: the Name tag if present (`prod-v
 | `dx-vif` | dx-connection → dx-gateway / vpn-gateway / `ext:external:aws-public` (directed) | `vif_id`, `vif_type` (`private`/`transit`/`public`), `vlan`, `customer_address`, `amazon_address`, `asn`, `amazon_asn`, `state` |
 | `dxgw-association` | dx-gateway ↔ transit-gateway / vpn-gateway | `association_id`, `state`, `allowed_prefixes` |
 | `policy-attachment` | org-policy → org-root / ou / account (directed) | `type` |
-| `related` | aws-resource → any node (directed), keyed by the relation | `relation`: an AWS Config relationship such as `Is associated with Role`. Only with `--include relationships`; ones that placed the resource, and the reverse `Contains …` ones, aren't drawn. |
+| `related` | aws-resource → any node (directed), keyed by the relation | `relation`: an AWS Config relationship such as `Is associated with Role`. Only with the `relationships` word; ones that placed the resource, and the reverse `Contains …` ones, aren't drawn. |
 | `iam-trust` | account / iam-role / iam-user → iam-role (directed) | `principal` (`root`, `role`, `user`): the role's trust policy lets that principal assume it. Only drawn when the trusted account was collected too. |
 
 A DX gateway attached to a transit gateway appears twice: as a `tgw-attachment` (from the TGW's side) and a `dxgw-association` (from the DX side). Both are kept, because each carries its own state.
 
-`filter --collapse` adds `collapsed: {kind: count}` to a node it folded children into, and `collapsed_links: N` to a link that several links were merged into.
+`topology filter --collapse` adds `collapsed: {kind: count}` to a node it folded children into, and `collapsed_links: N` to a link that several links were merged into.
 
 A peer that wasn't collected (a VPC in another account, a TGW peer in another region) still gets a node, with `external: true` in its attributes, so the link has somewhere to go.
 
 ## Merge
 
-`merge` unions topologies by ID, so an account from `aws-org` and the same account from `aws` become one node, and its regions land inside its OU. Where two inputs disagree about a node's kind or parent, the first wins and a warning names the node.
+`topology merge` unions topologies by ID, so an account from `org collect` and the same account from `account collect` become one node, and its regions land inside its OU. Where two inputs disagree about a node's kind or parent, the first wins and a warning names the node.
 
 ## Rendering
 
@@ -144,7 +144,7 @@ A peer that wasn't collected (a VPC in another account, a TGW peer in another re
 | Area | Files |
 | --- | --- |
 | Core | `model.py`, `cli.py` |
-| AWS collector | `collectors/aws.py`; `collectors/aws_inventory.py` for `--all-resources`, and `aws_services.py` (service names and icons, shared with the renderers) |
+| AWS collector | `collectors/aws.py`; `collectors/aws_inventory.py` for the `resources` part, and `aws_services.py` (service names and icons, shared with the renderers) |
 | AWS Organizations collector | `collectors/aws_org.py` (shares the read-only client and sessions with `aws.py`) |
 | Merge, diff, filter | `merge.py`, `diff.py`, `filter.py` |
 | Layout and renderers | `render/*` |

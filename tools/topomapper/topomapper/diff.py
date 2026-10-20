@@ -8,7 +8,7 @@ things (interfaces, route tables) are matched by name so one interface's
 change reads as that, not as one item removed and another added.
 
 Exit status follows diff(1): 0 identical, 1 different, 2 trouble. That lets
-`topomapper diff` gate CI or detect drift between scheduled collections.
+`topomapper topology diff` gate CI or detect drift between scheduled collections.
 """
 
 from __future__ import annotations

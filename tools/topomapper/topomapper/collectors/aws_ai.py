@@ -1,6 +1,6 @@
 """Which Bedrock models an account actually uses or grants, per region (read-only).
 
-`topomapper aws --ai` adds, for each account and region where Bedrock exists,
+`topomapper account collect bedrock` adds, for each account and region where Bedrock exists,
 a `bedrock` group holding one `bedrock-model` node per model that has
 evidence behind it, plus the account's custom and imported models. A
 foundation model is drawn when either:

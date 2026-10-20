@@ -20,6 +20,7 @@ boto3 is imported lazily, so `topomapper --help` works without it.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -27,17 +28,20 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
+from ..cli import OUTPUT_HELP
 from ..model import (AWS_ACCOUNT, AWS_AZ, AWS_CGW, AWS_DX_CONNECTION, AWS_DX_GATEWAY, AWS_EIGW,
                      AWS_ENDPOINT, AWS_IGW, AWS_INSTANCE, AWS_NAT, AWS_REGION, AWS_SUBNET, AWS_TGW,
                      AWS_VGW, AWS_VPC, LINK_DX_VIF, LINK_DXGW_ASSOCIATION, LINK_TGW_ATTACHMENT,
                      LINK_TGW_PEERING, LINK_VGW_ATTACHMENT, LINK_VPC_PEERING, LINK_VPN,
                      NET_EXTERNAL, Topology, node_id, union)
 
-HELP = ("Collect VPCs, subnets, gateways, TGWs, VPNs, peering and Direct Connect from AWS "
-        "(read-only), and with --ai, --iam and --eks Bedrock models, IAM roles and users, and "
-        "EKS clusters; --all-resources adds every resource in the account.")
+HELP = ("Collect from AWS accounts (read-only): their networks by default, or the parts you "
+        "name: network, iam, eks, bedrock, resources.")
 PRODUCES_TOPOLOGY = True
 
+# What `account collect` can be told to collect, and the name each one has
+# in `include` (None: the network, which is collected unless left out).
+PARTS = {"network": None, "iam": "iam", "eks": "eks", "bedrock": "ai", "resources": "all-resources"}
 EXTRAS = ("instances", "endpoints", "tags", "relationships")
 READ_ONLY_PREFIXES = ("describe_", "list_", "get_", "search_")
 FALLBACK_REGION = "us-east-1"
@@ -182,15 +186,6 @@ def _paginate(client: Any, operation: str, key: str, **kwargs: Any) -> List[dict
 
 # -- CLI -----------------------------------------------------------------------
 
-def _include_list(value: str) -> List[str]:
-    items = [v.strip() for v in value.split(",") if v.strip()]
-    unknown = [v for v in items if v not in EXTRAS]
-    if unknown:
-        raise argparse.ArgumentTypeError(
-            f"unknown --include value {', '.join(unknown)} (choose from {', '.join(EXTRAS)})")
-    return items
-
-
 def _role_arn(value: str) -> str:
     if not _ROLE_ARN.match(value):
         raise argparse.ArgumentTypeError(f"not an IAM role ARN: {value}")
@@ -208,6 +203,14 @@ def _positive_int(value: str) -> int:
 
 
 def add_arguments(parser) -> None:
+    parser.add_argument("output", nargs="*", metavar="PART|FILE",
+                        help="what to collect, then the files to write. Parts: network (the "
+                             "default: VPCs, subnets, gateways, TGWs, VPNs, peering, Direct "
+                             "Connect), iam (custom roles and users), eks (clusters), bedrock "
+                             "(the models each account can use), resources (every resource, "
+                             "from AWS Config and Resource Explorer). Details: instances and "
+                             "endpoints (with network), tags, relationships (with resources). "
+                             "Then the " + OUTPUT_HELP)
     parser.add_argument("--profile", action="append", metavar="NAME",
                         help="AWS profile to use; repeat for several (default: boto3's default "
                              "credential chain)")
@@ -225,36 +228,38 @@ def add_arguments(parser) -> None:
                         help="list the organization's accounts and assume "
                              "arn:aws:iam::<id>:role/NAME in each (the caller's own account is "
                              "collected directly)")
-    parser.add_argument("--include", action="extend", type=_include_list, default=[],
-                        metavar="LIST",
-                        help=f"comma-separated extras beyond the core: {', '.join(EXTRAS)}")
-    parser.add_argument("--ai", action="store_true",
-                        help="also collect the Bedrock models each account can use, per region "
-                             "(foundation models it is authorized for, plus custom and imported "
-                             "ones)")
-    parser.add_argument("--iam", action="store_true",
-                        help="also collect each account's custom IAM roles and users: trust, "
-                             "policy names, MFA and access-key age (no credentials or policy "
-                             "documents)")
-    parser.add_argument("--iam-all", action="store_true",
-                        help="with --iam, include service-linked and IAM Identity Center roles too")
-    parser.add_argument("--eks", action="store_true",
-                        help="also collect EKS clusters: version, endpoint access, node groups, "
-                             "Fargate profiles and add-ons")
-    parser.add_argument("--all-resources", action="store_true",
-                        help="also collect every resource in the account, from AWS Config and "
-                             "Resource Explorer (or, where neither is on, Cloud Control and the "
-                             "tagging API), each in its VPC or subnet when known and otherwise "
-                             "in a box for its service; --include relationships draws Config's "
-                             "relationships between them")
-    parser.add_argument("--skip-network", action="store_true",
-                        help="don't collect VPCs, gateways, TGWs, VPNs and Direct Connect; for "
-                             "a faster run when you only want --ai, --iam or --eks")
+    parser.add_argument("--all-roles", action="store_true",
+                        help="with iam, include service-linked and IAM Identity Center roles too")
     parser.add_argument("--workers", type=_positive_int, default=8, metavar="N",
                         help="(account, region) pairs collected in parallel (default: 8)")
 
 
-# -- accounts and sessions -----------------------------------------------------
+def prepare(args: Any) -> None:
+    """Split the words into parts to collect and files to write, and turn
+    the parts into the names `include` carries. Naming no part collects the
+    network; naming others without `network` leaves it out, unless a
+    network detail (instances, endpoints) asks for it."""
+    words = list(args.output or [])
+    args.output = [w for w in words if w not in PARTS and w not in EXTRAS]
+    for word in args.output:
+        if word != "-" and not os.path.splitext(word)[1]:
+            raise ValueError(f"{word}: not a part ({', '.join([*PARTS, *EXTRAS])}) or a file "
+                             f"to write (.json, .drawio, .svg, .mmd, .dot)")
+    parts = {w for w in words if w in PARTS}
+    include = {w for w in words if w in EXTRAS}
+    include |= {PARTS[p] for p in parts if PARTS[p]}
+    if getattr(args, "all_roles", False):
+        if "iam" not in parts:
+            raise ValueError("--all-roles needs the iam part")
+        include.add("iam-all")
+    if parts and "network" not in parts and not include & {"instances", "endpoints"}:
+        include.add("skip-network")
+    if "relationships" in include and "resources" not in parts:
+        raise ValueError("relationships needs the resources part")
+    args.include = sorted(include)
+
+
+# -- accounts and sessions# -- accounts and sessions -----------------------------------------------------
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -1006,13 +1011,6 @@ def _enabled_regions(scope: _Scope, account: _Account) -> List[str]:
     return sorted(r["RegionName"] for r in regions) or [fallback_region(account.home_region)]
 
 
-def _wanted(args: Any) -> frozenset:
-    """The optional collections asked for, as the names `include` carries."""
-    flags = {"ai": "ai", "iam": "iam", "iam_all": "iam-all", "eks": "eks",
-             "all_resources": "all-resources", "skip_network": "skip-network"}
-    return frozenset(name for attr, name in flags.items() if getattr(args, attr, False))
-
-
 def _needs_regions(include: Iterable[str]) -> bool:
     include = set(include)
     return "skip-network" not in include or bool(include & {"ai", "eks", "all-resources"})
@@ -1195,7 +1193,7 @@ def _assemble(scopes: List[_Scope], warnings: List[str], accounts: List[str],
 
 def run(args) -> Topology:
     boto3 = _require_boto3()
-    include = sorted(set(args.include or []) | _wanted(args))
+    include = list(args.include)
     warnings: List[str] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         accounts = _accounts(boto3, args, pool, warnings)

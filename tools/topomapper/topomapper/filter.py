@@ -13,7 +13,7 @@ three parts, applied in this order:
    which is how `--exclude-kind az` gives a flatter VPC.
 3. **Collapse.** `--collapse vpc` folds everything inside each VPC into it,
    re-pointing links that ended inside at the VPC. `--max-per-type N` folds
-   the resources `topomapper aws --all-resources` found, where one box holds
+   the resources `topomapper account collect resources` found, where one box holds
    more than N of a type, into one "286 × certificate" node.
 
 Links survive only if both ends do, so the result always passes
@@ -26,6 +26,7 @@ import copy
 import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+from .cli import OUTPUT_HELP
 from .merge import find_node, read_topology
 from .model import AWS_RESOURCE, NODE_KINDS, Link, Node, Topology, link_id
 
@@ -284,8 +285,8 @@ def _common_attrs(attr_sets: List[Dict[str, Any]]) -> Dict[str, Any]:
 # -- CLI -----------------------------------------------------------------------
 
 def add_arguments(parser) -> None:
-    parser.add_argument("input", nargs="?", default="-", metavar="TOPOLOGY",
-                        help="topology JSON to filter (default: stdin)")
+    parser.add_argument("input", metavar="TOPOLOGY", help="topology JSON to filter ('-' for stdin)")
+    parser.add_argument("output", nargs="*", metavar="FILE", help=OUTPUT_HELP)
     parser.add_argument("--kind", action="append", default=[], metavar="KIND",
                         help="keep only nodes of this kind, plus their ancestors; repeatable")
     parser.add_argument("--exclude-kind", action="append", default=[], metavar="KIND",
@@ -296,7 +297,7 @@ def add_arguments(parser) -> None:
                              " links (e.g. --collapse vpc); repeatable")
     parser.add_argument("--max-per-type", type=int, metavar="N",
                         help="where a box holds more than N resources of one type (from topomapper "
-                             "aws --all-resources), draw them as one node that counts them")
+                             "account collect resources), draw them as one node that counts them")
     parser.add_argument("--around", metavar="NODE",
                         help="keep only what is within --depth link hops of this node (ID or"
                              " exact label) or of its contents")

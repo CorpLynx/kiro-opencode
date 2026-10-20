@@ -176,7 +176,7 @@ class OrgTest(unittest.TestCase):
             org.save(os.path.join(d, "org.json"))
             net.save(os.path.join(d, "net.json"))
             for order in (("org.json", "net.json"), ("net.json", "org.json")):
-                status, out, err = run("merge", *(os.path.join(d, f) for f in order))
+                status, out, err = run("topology", "merge", *(os.path.join(d, f) for f in order))
                 self.assertEqual(status, 0, err)
                 merged = Topology.loads(out)
                 account = merged.nodes[f"aws:account:{aid}"]
@@ -205,16 +205,17 @@ class OrgTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out = os.path.join(d, "org.json")
             with mock.patch.object(aws_org, "_new_client", lambda *a, **k: self.client):
-                status, _, err = run("collect", "aws-org", "--policies", "nodes",
-                                     "--include", "tags", "-o", out)
+                status, _, err = run("org", "collect", "policy-nodes", "tags", out)
             self.assertEqual(status, 0, err)
             topo = Topology.load(out)
             self.assertEqual(len(topo.meta["accounts"]), 4)
             err = io.StringIO()
             with redirect_stderr(err), self.assertRaises(SystemExit) as exit_:
-                main(["collect", "aws-org", "--include", "passwords"])
+                main(["org", "collect", "passwords"])
             self.assertEqual(exit_.exception.code, 2)
-            self.assertIn("unknown --include value", err.getvalue())
+            self.assertIn("passwords: not an extra (tags, emails", err.getvalue())
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                main(["org", "collect", "policy-nodes", "no-policies"])
 
 
 @unittest.skipIf(boto3 is None, "needs boto3 and moto")

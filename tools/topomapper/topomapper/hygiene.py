@@ -33,7 +33,7 @@ def untracked_hint(path: str) -> Optional[str]:
         return None
     return (f"{path} is inside a git repository and isn't ignored. It holds real account IDs, "
             "names and addresses: keep it out of commits (write it under an ignored folder such "
-            "as topomapper-out/) or share a copy made with `topomapper anonymize`")
+            "as topomapper-out/) or share a copy made with `topomapper topology anonymize`")
 
 
 def write_private(path: str, text: str) -> None:

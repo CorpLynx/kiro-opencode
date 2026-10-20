@@ -24,7 +24,7 @@ AWS_JSON = os.path.join(MERGE, "aws.json")
 
 
 def fake_aws(args):
-    """`topomapper aws` without AWS: the saved account in the merge fixtures."""
+    """`topomapper account collect` without AWS: the saved account in the merge fixtures."""
     return Topology.load(AWS_JSON)
 
 
@@ -48,21 +48,12 @@ class CommandsTest(unittest.TestCase):
 
     def collect(self, *argv):
         with mock.patch.object(aws, "run", side_effect=fake_aws):
-            return run(*argv)
-
-    def test_flat_command_and_old_form_agree(self):
-        status, flat, err = self.collect("aws")
-        self.assertEqual(status, 0, err)
-        status, old, err = self.collect("collect", "aws")
-        self.assertEqual(status, 0, err)
-        strip = lambda text: {k: v for k, v in json.loads(text).items() if k != "meta"}  # noqa: E731
-        self.assertEqual(strip(flat), strip(old))
-        self.assertTrue(json.loads(flat)["nodes"])
+            return run("account", "collect", *argv)
 
     def test_one_run_writes_the_topology_and_diagrams(self):
-        status, out, err = self.collect("aws", "-o", self.path("net.json"),
-                               "-o", self.path("net.drawio"), "-o", self.path("net.svg"),
-                               "-o", self.path("net.mmd"), "--title", "Lab", "--direction", "LR")
+        status, out, err = self.collect("network", self.path("net.json"), self.path("net.drawio"),
+                                        "--title", "Lab", self.path("net.svg"), self.path("net.mmd"),
+                                        "--direction", "LR")
         self.assertEqual(status, 0, err)
         self.assertEqual(out, "")  # nothing on stdout when every output is a file
         with open(self.path("net.json"), encoding="utf-8") as f:
@@ -76,40 +67,58 @@ class CommandsTest(unittest.TestCase):
         for name in ("net.json", "net.drawio", "net.svg", "net.mmd"):  # real data: owner only
             self.assertEqual(stat.S_IMODE(os.stat(self.path(name)).st_mode), 0o600, name)
 
-    def test_merge_and_filter_draw_too(self):
-        self.collect("aws", "-o", self.path("net.json"))
-        status, _, err = run("merge", self.path("net.json"), "-o", self.path("all.svg"))
+    def test_merge_filter_and_draw(self):
+        self.collect(self.path("net.json"))
+        status, _, err = run("topology", "merge", self.path("net.json"), "--to", self.path("all.svg"),
+                             self.path("all.json"))
         self.assertEqual(status, 0, err)
         self.assertTrue(os.path.getsize(self.path("all.svg")))
-        status, _, err = run("filter", self.path("net.json"), "--aws-only",
-                             "-o", self.path("view.dot"), "--no-link-labels")
+        self.assertTrue(os.path.getsize(self.path("all.json")))
+        status, _, err = run("topology", "filter", self.path("all.json"), "--aws-only",
+                             self.path("view.dot"), "--no-link-labels")
         self.assertEqual(status, 0, err)
         with open(self.path("view.dot"), encoding="utf-8") as f:
             self.assertIn("graph topomapper {", f.read())
+        status, out, err = run("diagram", "draw", self.path("all.json"), "--format", "mermaid")
+        self.assertEqual(status, 0, err)
+        self.assertTrue(out.startswith("flowchart TB"))
 
-    def test_unknown_extension_is_refused_before_collecting(self):
+    def test_bad_words_are_refused_before_collecting(self):
         with mock.patch.object(aws, "run", side_effect=AssertionError("collected")):
-            status, _, err = run("aws", "-o", self.path("net.png"))
-        self.assertEqual(status, 2)
-        self.assertIn("say what to write with the extension: .json for the topology", err)
+            for argv, message in (
+                    (("net.png",), "say what to write with the extension: .json for the topology"),
+                    (("netwrk",), "netwrk: not a part (network, iam"),
+                    (("--bogus",), "unrecognized arguments: --bogus")):
+                status, _, err = run("account", "collect", *argv)
+                self.assertEqual(status, 2, argv)
+                self.assertIn(message, err)
+        status, _, err = run("diagram", "draw", "x.json", "x.json")
+        self.assertIn("name the diagram format with the extension", err)
 
-    def test_stdout_still_default_and_help_lists_flat_commands(self):
-        status, out, _ = self.collect("aws")
+    def test_stdout_is_the_default_and_help_lists_the_groups(self):
+        status, out, _ = self.collect()
         self.assertEqual(status, 0)
         self.assertTrue(out.startswith("{"))
         status, out, _ = run("--help")
         self.assertEqual(status, 0)
-        for name in ("aws", "aws-org", "merge", "render"):
-            self.assertIn(f"    {name} ", out)
-        self.assertNotIn("collect", out)
-        self.assertNotIn("SUPPRESS", out)
+        for name in ("account", "org", "topology", "diagram"):
+            self.assertRegex(out, rf"(?m)^    {name}\s")
+        status, out, _ = run("topology", "--help")
+        for verb in ("merge", "filter", "diff", "anonymize"):  # 3.9 wraps long names onto a line of their own
+            self.assertRegex(out, rf"(?m)^    {verb}\s")
+
+    def test_old_commands_are_gone(self):
+        for old in ("aws", "aws-org", "merge", "render", "collect"):
+            status, _, err = run(old, "--help")
+            self.assertEqual(status, 2, old)
+            self.assertIn("invalid choice", err)
 
 
 class ReadmeReferenceTest(unittest.TestCase):
-    """The README's command reference lists every flag the parser has, so
-    adding a flag without documenting it fails here."""
+    """The README's command reference lists every flag and word the parser
+    takes, so adding one without documenting it fails here."""
 
-    SHARED = ("--output", "--direction", "--title", "--no-link-labels")
+    SHARED = ("--direction", "--title", "--no-link-labels")
 
     def sections(self):
         path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "README.md")
@@ -120,25 +129,37 @@ class ReadmeReferenceTest(unittest.TestCase):
         out = {}
         for part in parts:
             title, _, body = part.partition("\n")
-            m = re.fullmatch(r"`topomapper ([a-z-]+)`", title.strip())
+            m = re.fullmatch(r"`topomapper ([a-z]+ [a-z]+)`", title.strip())
             out[m.group(1) if m else "shared"] = body
         return out
 
+    def commands(self):
+        groups = next(a for a in cli.build_parser()._actions
+                      if isinstance(a, argparse._SubParsersAction))
+        for group, g in groups.choices.items():
+            verbs = next(a for a in g._actions if isinstance(a, argparse._SubParsersAction))
+            for verb, sub in verbs.choices.items():
+                yield f"{group} {verb}", sub
+
     def test_every_flag_is_documented(self):
         sections = self.sections()
-        parser = cli.build_parser()
-        commands = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
-        for name, sub in commands.choices.items():
-            if name == "collect":
-                continue
+        for name, sub in self.commands():
             self.assertIn(name, sections, f"no README section for topomapper {name}")
             for action in sub._actions:
                 longs = [o for o in action.option_strings if o.startswith("--") and o != "--help"]
                 for flag in longs:
-                    where = sections["shared"] if (flag in self.SHARED and name != "render") \
+                    where = sections["shared"] if (flag in self.SHARED and name != "diagram draw") \
                         else sections[name]
                     self.assertRegex(where, rf"`[^`\n]*(?<![\w-]){re.escape(flag)}[ `]",
                                      f"topomapper {name} {flag} isn't in the README's reference")
+
+    def test_every_word_is_documented(self):
+        sections = self.sections()
+        from topomapper.collectors import aws_org
+        for name, words in (("account collect", [*aws.PARTS, *aws.EXTRAS]),
+                            ("org collect", [*aws_org.EXTRAS, *aws_org.POLICY_VIEWS])):
+            for word in words:
+                self.assertIn(f"`{word}`", sections[name], f"topomapper {name} {word}")
 
 
 if __name__ == "__main__":

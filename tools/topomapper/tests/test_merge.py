@@ -104,7 +104,7 @@ class MergeTest(unittest.TestCase):
 
 class MergeCliTest(unittest.TestCase):
     def test_cli_merges(self):
-        status, out, err = run_cli(["merge", ORG, AWS])
+        status, out, err = run_cli(["topology", "merge", ORG, AWS])
         self.assertEqual(status, 0, err)
         m = Topology.loads(out)
         self.assertEqual(m.validate(), [])
@@ -113,16 +113,16 @@ class MergeCliTest(unittest.TestCase):
     def test_cli_reads_stdin(self):
         with open(ORG, encoding="utf-8") as f:
             org = f.read()
-        status, out, _ = run_cli(["merge", "-", AWS], stdin=org)
+        status, out, _ = run_cli(["topology", "merge", "-", AWS], stdin=org)
         self.assertEqual(status, 0)
         self.assertEqual(Topology.loads(out).nodes[PROD].parent, OU)
 
     def test_cli_errors(self):
-        status, _, err = run_cli(["merge", os.path.join(FIXTURES, "does-not-exist.json")])
+        status, _, err = run_cli(["topology", "merge", os.path.join(FIXTURES, "does-not-exist.json")])
         self.assertEqual(status, 2)
         err = io.StringIO()
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as exit_:
-            cli.main(["merge", AWS, "--no-such-flag"])
+            cli.main(["topology", "merge", AWS, "--no-such-flag"])
         self.assertEqual(exit_.exception.code, 2)
         self.assertIn("unrecognized arguments: --no-such-flag", err.getvalue())
 

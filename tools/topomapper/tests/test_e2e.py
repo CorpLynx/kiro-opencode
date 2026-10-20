@@ -76,13 +76,13 @@ class EndToEndTest(unittest.TestCase):
     def test_collect_merge_filter_render(self):
         with mock.patch.dict(os.environ, FAKE_AWS), mock_aws():
             cgw, vpc, ou = build_aws()
-            status, _, err = run("collect", "aws", "--region", "us-east-1", "-o", self.path("aws.json"))
+            status, _, err = run("account", "collect", "--region", "us-east-1", self.path("aws.json"))
             self.assertEqual(status, 0, err)
-            status, _, err = run("aws-org", "-o", self.path("org.json"))
+            status, _, err = run("org", "collect", self.path("org.json"))
             self.assertEqual(status, 0, err)
 
-        status, _, err = run("merge", self.path("org.json"), self.path("aws.json"),
-                             "-o", self.path("all.json"))
+        status, _, err = run("topology", "merge", self.path("org.json"), self.path("aws.json"),
+                             "--to", self.path("all.json"))
         self.assertEqual(status, 0, err)
         merged = Topology.load(self.path("all.json"))
         self.assertEqual(merged.validate(), [])
@@ -92,19 +92,20 @@ class EndToEndTest(unittest.TestCase):
         self.assertTrue(any(l.kind == "vpn" for l in merged.links.values()))
 
         # Simplify for a diagram: drop AZ containers, keep everything else.
-        status, _, err = run("filter", self.path("all.json"), "--exclude-kind", "az",
-                             "-o", self.path("view.json"))
+        status, _, err = run("topology", "filter", self.path("all.json"), "--exclude-kind", "az",
+                             self.path("view.json"))
         self.assertEqual(status, 0, err)
         view = Topology.load(self.path("view.json"))
         self.assertFalse(view.by_kind("az"))
         self.assertEqual(view.validate(), [])
 
+        exts = ("drawio", "svg", "mmd", "dot")
+        status, _, err = run("diagram", "draw", self.path("view.json"),
+                             *(self.path(f"view.{ext}") for ext in exts))
+        self.assertEqual(status, 0, err)
         outputs = {}
-        for ext in ("drawio", "svg", "mmd", "dot"):
-            out = self.path(f"view.{ext}")
-            status, _, err = run("render", self.path("view.json"), "-o", out)
-            self.assertEqual(status, 0, err)
-            with open(out, encoding="utf-8") as f:
+        for ext in exts:
+            with open(self.path(f"view.{ext}"), encoding="utf-8") as f:
                 outputs[ext] = f.read()
 
         drawio = ET.fromstring(outputs["drawio"])
@@ -123,10 +124,10 @@ class EndToEndTest(unittest.TestCase):
                 node["attrs"]["cidrs"].append("10.51.0.0/16")
         with open(self.path("next.json"), "w", encoding="utf-8") as f:
             json.dump(changed, f)
-        status, out, _ = run("diff", self.path("view.json"), self.path("next.json"))
+        status, out, _ = run("topology", "diff", self.path("view.json"), self.path("next.json"))
         self.assertEqual(status, 1)
         self.assertIn("+10.51.0.0/16", out)
-        status, _, _ = run("diff", self.path("view.json"), self.path("view.json"))
+        status, _, _ = run("topology", "diff", self.path("view.json"), self.path("view.json"))
         self.assertEqual(status, 0)
 
 

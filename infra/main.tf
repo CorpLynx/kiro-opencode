@@ -1,4 +1,4 @@
-# A cheap, throwaway AWS estate that `topomapper aws` gathers.
+# A cheap, throwaway AWS estate that `topomapper account collect` gathers.
 #
 # Everything here is free or near-free: VPC, subnets, route tables and the
 # internet gateway cost nothing; the S3 gateway VPC endpoint costs nothing;
@@ -160,7 +160,7 @@ resource "aws_instance" "web" {
 }
 
 # Gateway VPC endpoint for S3. Free, and collected by topomapper as
-# aws:vpce:vpce-... when you pass --include endpoints.
+# aws:vpce:vpce-... when you add the endpoints word.
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.region}.s3"

@@ -1,6 +1,6 @@
 output "policy_id" {
   value       = aws_organizations_policy.us_only.id
-  description = "The SCP; `topomapper aws-org` shows it by name on whatever it is attached to."
+  description = "The SCP; `topomapper org collect` shows it by name on whatever it is attached to."
 }
 
 output "attached_to" {

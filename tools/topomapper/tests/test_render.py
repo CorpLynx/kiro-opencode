@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import re
 import subprocess
@@ -82,7 +84,7 @@ def aws_topology() -> Topology:
 
 def org_topology() -> Topology:
     """The organization `aws_topology`'s account belongs to, the way
-    `topomapper aws-org` sees it: OUs, a second account and policies."""
+    `topomapper org collect` sees it: OUs, a second account and policies."""
     t = Topology({"collector": "test"})
     org = t.add_node("aws:organization:o-example0001", "organization", "Organization (o-example0001)",
                      org_id="o-example0001").id
@@ -101,7 +103,7 @@ def org_topology() -> Topology:
 
 
 def estate_topology() -> Topology:
-    """An account's networks inside its organization: what `topomapper merge`
+    """An account's networks inside its organization: what `topomapper topology merge`
     makes of `aws-org` and `aws` snapshots."""
     t = union([org_topology(), aws_topology()])
     t.meta = {"collector": "test"}
@@ -425,17 +427,17 @@ class RenderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             src = os.path.join(tmp, "in.json")
             estate_topology().save(src)
-            for fmt in FORMATS:
-                out = os.path.join(tmp, f"out.{EXT[fmt]}")
-                self.assertEqual(main(["render", src, "-o", out, "--title", "Prod & AWS"]), 0)
+            outs = {fmt: os.path.join(tmp, f"out.{EXT[fmt]}") for fmt in FORMATS}
+            self.assertEqual(main(["diagram", "draw", src, *outs.values(), "--title", "Prod & AWS"]), 0)
+            for fmt, out in outs.items():
                 with open(out, encoding="utf-8") as f:
                     text = f.read()
                 self.assertEqual(text, render(Topology.load(src), fmt, title="Prod & AWS"))
-            out = os.path.join(tmp, "forced.svg")
-            self.assertEqual(main(["render", src, "-f", "dot", "-o", out, "--direction", "LR",
-                                   "--no-link-labels"]), 0)
-            with open(out, encoding="utf-8") as f:
-                self.assertIn("rankdir=LR;", f.read())
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(main(["diagram", "draw", src, "--format", "dot", "--direction", "LR",
+                                       "--no-link-labels"]), 0)
+            self.assertIn("rankdir=LR;", stdout.getvalue())
 
     def test_fixtures(self):
         """Example outputs kept for people to open and eyeball. Regenerate

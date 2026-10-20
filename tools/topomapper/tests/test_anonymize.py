@@ -310,8 +310,8 @@ class PrivateOutputTest(unittest.TestCase):
             src = os.path.join(d, "in.json")
             sample().save(src)
             real, shared = os.path.join(d, "out", "real.json"), os.path.join(d, "shared.json")
-            self.assertEqual(self.run_cli("filter", src, "-o", real)[0], 0)
-            self.assertEqual(self.run_cli("anonymize", src, "--ips", "keep", "-o", shared)[0], 0)
+            self.assertEqual(self.run_cli("topology", "filter", src, real)[0], 0)
+            self.assertEqual(self.run_cli("topology", "anonymize", src, "--ips", "keep", shared)[0], 0)
             mode = lambda p: os.stat(p).st_mode & 0o777  # noqa: E731
             self.assertEqual(mode(real), 0o600)
             self.assertEqual(mode(os.path.dirname(real)), 0o700)
@@ -319,7 +319,7 @@ class PrivateOutputTest(unittest.TestCase):
             with open(real, "w") as f:  # an old, looser file is tightened on rewrite
                 f.write("x")
             os.chmod(real, 0o644)
-            self.run_cli("filter", src, "-o", real)
+            self.run_cli("topology", "filter", src, real)
             self.assertEqual(mode(real), 0o600)
 
     @unittest.skipUnless(shutil.which("git") and sys.platform in ("darwin", "linux"), "needs git")
@@ -330,7 +330,7 @@ class PrivateOutputTest(unittest.TestCase):
             sample().save(src)
             root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             with open(os.path.join(d, "out.json"), "w") as out:
-                done = subprocess.run([sys.executable, "-m", "topomapper", "filter", src],
+                done = subprocess.run([sys.executable, "-m", "topomapper", "topology", "filter", src],
                                       cwd=root, stdout=out, stderr=subprocess.PIPE, text=True)
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn("out.json", done.stderr)
@@ -348,7 +348,7 @@ class CliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             src, dst = os.path.join(d, "in.json"), os.path.join(d, "out.json")
             sample().save(src)
-            status, _, err = self.run_cli("anonymize", src, "--ips", "public", "-o", dst)
+            status, _, err = self.run_cli("topology", "anonymize", src, "--ips", "public", dst)
             self.assertEqual(status, 0, err)
             with open(dst) as f:
                 text = f.read()
@@ -360,9 +360,9 @@ class CliTest(unittest.TestCase):
             src = os.path.join(d, "in.json")
             sample().save(src)
             out = os.path.join(d, "topomapper-out", "nested", "a.json")
-            self.assertEqual(self.run_cli("filter", src, "-o", out)[0], 0)
+            self.assertEqual(self.run_cli("topology", "filter", src, out)[0], 0)
             svg = os.path.join(d, "topomapper-out", "a.svg")
-            self.assertEqual(self.run_cli("render", out, "-o", svg)[0], 0)
+            self.assertEqual(self.run_cli("diagram", "draw", out, svg)[0], 0)
             self.assertTrue(os.path.exists(svg))
 
     def test_missing_ipredact_is_a_clear_error(self):
@@ -371,12 +371,12 @@ class CliTest(unittest.TestCase):
             sample().save(src)
             with mock.patch("shutil.which", return_value=None), \
                     mock.patch("importlib.util.find_spec", return_value=None):
-                status, _, err = self.run_cli("anonymize", src, "-o", os.path.join(d, "o.json"))
+                status, _, err = self.run_cli("topology", "anonymize", src, os.path.join(d, "o.json"))
             self.assertEqual(status, 2)
             self.assertIn("pip install ./tools/ip-redactor", err)
 
     def test_key_file_needs_ipredact_mode(self):
-        status, _, err = self.run_cli("anonymize", "-", "--ips", "keep", "--ip-key-file", "k")
+        status, _, err = self.run_cli("topology", "anonymize", "-", "--ips", "keep", "--ip-key-file", "k")
         self.assertEqual(status, 2)
         self.assertIn("--ip-key-file", err)
 
@@ -401,11 +401,11 @@ class HygieneTest(unittest.TestCase):
             sample().save(src)
             err = io.StringIO()
             with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
-                cli.main(["filter", src, "-o", os.path.join(d, "f.json")])
+                cli.main(["topology", "filter", src, os.path.join(d, "f.json")])
                 noted = err.getvalue()
                 err.truncate(0)
                 err.seek(0)
-                cli.main(["anonymize", src, "--ips", "public", "-o", os.path.join(d, "a.json")])
+                cli.main(["topology", "anonymize", src, "--ips", "public", os.path.join(d, "a.json")])
             self.assertIn("note:", noted)
             self.assertNotIn("note:", err.getvalue())
 
@@ -415,7 +415,7 @@ if __name__ == "__main__":
 
 
 class InventoryTest(unittest.TestCase):
-    """What `topomapper aws --all-resources` adds: ARNs in IDs, IAM unique IDs
+    """What `topomapper account collect resources` adds: ARNs in IDs, IAM unique IDs
     and UUIDs as resource IDs."""
 
     def test_arns_unique_ids_and_uuids_are_replaced(self):

@@ -1,7 +1,7 @@
 """Draw a topology as draw.io, SVG, Mermaid or Graphviz DOT.
 
-    topomapper render estate.json -o estate.drawio       # format from the extension
-    topomapper render - -f mermaid < estate.json          # stdin to stdout
+    topomapper diagram draw estate.json estate.drawio estate.svg   # formats from the extensions
+    topomapper diagram draw - --format mermaid < estate.json        # stdin to stdout
 
 draw.io and SVG share one layout engine (`layout.py`); Mermaid and DOT
 are text that their own tools lay out. All four are deterministic: the
@@ -27,16 +27,27 @@ EXTENSIONS = {".drawio": "drawio", ".xml": "drawio", ".svg": "svg", ".mmd": "mer
 
 
 def add_arguments(parser) -> None:
-    parser.add_argument("input", help="topology JSON file, or - for stdin")
-    parser.add_argument("-f", "--format", choices=FORMATS,
-                        help="output format (default: from the -o extension, else drawio)")
-    parser.add_argument("-o", "--output", default="-",
-                        help="where to write the diagram (default: stdout)")
+    parser.add_argument("input", metavar="TOPOLOGY", help="topology JSON file, or - for stdin")
+    parser.add_argument("output", nargs="*", metavar="FILE",
+                        help="diagrams to write, each in the format its extension names: .drawio, "
+                             ".svg, .mmd or .dot (default: stdout)")
+    parser.add_argument("--format", choices=FORMATS,
+                        help="format for stdout (default: drawio)")
     parser.add_argument("--direction", choices=("TB", "LR"), default="TB",
                         help="top-to-bottom (default) or left-to-right reading order")
     parser.add_argument("--title", default="", help="title drawn above the diagram")
     parser.add_argument("--no-link-labels", action="store_true",
                         help="leave ports, subnets and VPN/VIF IDs off the links")
+
+
+def prepare(args: Any) -> None:
+    """Every output must name a diagram format, refused before anything is read."""
+    for path in args.output:
+        if os.path.splitext(path)[1].lower() not in EXTENSIONS:
+            raise ValueError(f"{path}: name the diagram format with the extension: "
+                             f"{', '.join(sorted(EXTENSIONS))}")
+    if args.format and args.output:
+        raise ValueError("--format is for stdout; with files, their extensions say the format")
 
 
 def infer_format(path: Optional[str]) -> str:
@@ -73,22 +84,22 @@ def run(args) -> int:
         topo = Topology.loads(sys.stdin.read())
     else:
         topo = Topology.load(args.input)
-    fmt = args.format or infer_format(args.output)
-    text = render(topo, fmt, direction=args.direction, title=args.title,
-                  link_labels=not args.no_link_labels)
+    options = dict(direction=args.direction, title=args.title, link_labels=not args.no_link_labels)
     anonymized = bool(topo.meta.get("anonymized"))
-    if not args.output or args.output == "-":
-        sys.stdout.write(text)
-        path = None if anonymized else stdout_file()
-    elif anonymized:
-        os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
-        with open(args.output, "w", encoding="utf-8") as f:
-            f.write(text)
-        path = None
-    else:
-        write_private(args.output, text)
-        path = args.output
-    hint = untracked_hint(path) if path else None
-    if hint:
-        print(f"topomapper: note: {hint}", file=sys.stderr)
+    targets = [(p, infer_format(p)) for p in args.output] or [("-", args.format or "drawio")]
+    for path, fmt in targets:
+        text = render(topo, fmt, **options)
+        if path == "-":
+            sys.stdout.write(text)
+            path = None if anonymized else stdout_file()
+        elif anonymized:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            path = None
+        else:
+            write_private(path, text)
+        hint = untracked_hint(path) if path else None
+        if hint:
+            print(f"topomapper: note: {hint}", file=sys.stderr)
     return 0

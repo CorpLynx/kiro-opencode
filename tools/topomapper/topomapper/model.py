@@ -52,7 +52,7 @@ AWS_IAM_ROLE = "iam-role"
 AWS_IAM_USER = "iam-user"
 AWS_EKS = "eks-cluster"
 AWS_SERVICE = "aws-service"           # one service's resources in a region (or account-wide)
-AWS_RESOURCE = "aws-resource"         # any resource --all-resources found, by ARN
+AWS_RESOURCE = "aws-resource"         # any resource the resources part found, by ARN
 
 NET_EXTERNAL = "external"    # something outside the collected estate (internet, a peer)
 

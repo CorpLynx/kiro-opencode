@@ -1,4 +1,4 @@
-"""--ai (Bedrock), --iam and --eks. moto has no Bedrock, so those answers are
+"""The bedrock, iam and eks parts of `account collect`. moto has no Bedrock, so those answers are
 supplied by an Overlay; IAM and EKS run against moto itself."""
 
 import json
@@ -75,7 +75,7 @@ class AiTest(AwsTestCase):
         self.overrides[("bedrock", None)] = lambda c: bedrock(c, **over)
         self.overrides[("cloudwatch", None)] = lambda c: Overlay(
             c, list_metrics=cloudwatch or used(*usage))
-        return self.collect("--region", REGION, "--ai", "--skip-network")
+        return self.collect("--region", REGION, "bedrock")
 
     def grant(self, role, document, name="bedrock-invoke"):
         iam = boto3.client("iam", region_name=REGION)
@@ -149,7 +149,7 @@ class AiTest(AwsTestCase):
     def test_nothing_in_use_or_granted_draws_no_group_but_records_the_count(self):
         self.overrides[("bedrock", None)] = lambda c: bedrock(c)
         self.overrides[("cloudwatch", None)] = lambda c: Overlay(c, list_metrics=used())
-        topo = self.collect("--region", REGION, "--ai")      # with the network, the region stays
+        topo = self.collect("--region", REGION, "network", "bedrock")      # with the network, the region stays
         self.assertEqual(topo.by_kind("bedrock"), [])
         region = topo.nodes[f"aws:region:{ACCOUNT}:{REGION}"]
         self.assertEqual((region.attrs["bedrock_models_shown"],
@@ -181,7 +181,7 @@ class AiTest(AwsTestCase):
         asked = []
         self.overrides[("bedrock", None)] = lambda c: asked.append(1) or bedrock(c)
         with mock.patch.object(aws_ai, "service_regions", return_value=frozenset({REGION})):
-            topo = self.collect("--region", "eu-north-1", "--ai", "--skip-network")
+            topo = self.collect("--region", "eu-north-1", "bedrock")
         self.assertEqual(asked, [])
         self.assertEqual(topo.by_kind("bedrock"), [])
 
@@ -269,7 +269,7 @@ class IamTest(AwsTestCase):
 
     def collect_iam(self, *extra):
         self.build()
-        return self.collect("--region", REGION, "--iam", "--skip-network", *extra)
+        return self.collect("--region", REGION, "iam", *extra)
 
     def test_custom_roles_and_users(self):
         topo = self.collect_iam()
@@ -302,7 +302,7 @@ class IamTest(AwsTestCase):
         self.assertNotIn("AccessKeyId", json.dumps(topo.to_dict()))
 
     def test_tags_and_aws_owned_roles_on_request(self):
-        topo = self.collect_iam("--iam-all", "--include", "tags")
+        topo = self.collect_iam("--all-roles", "tags")
         names = sorted(n.label for n in topo.by_kind("iam-role"))
         self.assertEqual(names, ["AWSReservedSSO_Admin_abc", "AWSServiceRoleForThing", "deploy",
                                  "open"])
@@ -431,7 +431,7 @@ class EksTest(AwsTestCase):
     def test_cluster_sits_in_its_vpc_with_its_facts(self):
         vpc, subnets = self.build()
         self.with_vpc_id(vpc)
-        topo = self.collect("--region", REGION, "--eks")
+        topo = self.collect("--region", REGION, "network", "eks")
         cluster = topo.nodes[f"aws:eks-cluster:{ACCOUNT}:{REGION}:platform"]
         self.assertEqual(cluster.parent, f"aws:vpc:{vpc}")
         self.assertEqual(cluster.label, "platform")
@@ -448,7 +448,7 @@ class EksTest(AwsTestCase):
 
     def test_tags_on_request_and_off_by_default(self):
         self.build()
-        topo = self.collect("--region", REGION, "--eks", "--include", "tags")
+        topo = self.collect("--region", REGION, "network", "eks", "tags")
         cluster = topo.nodes[f"aws:eks-cluster:{ACCOUNT}:{REGION}:platform"]
         self.assertEqual(cluster.attrs["tags"], {"team": "platform"})
 
@@ -460,7 +460,7 @@ class EksTest(AwsTestCase):
         self.build()
         self.overrides[("eks", None)] = lambda c: Overlay(
             c, list_clusters=denied("ListClusters"))
-        topo = self.collect("--region", REGION, "--eks")
+        topo = self.collect("--region", REGION, "network", "eks")
         self.assertEqual(topo.by_kind("eks-cluster"), [])
         self.assertEqual(sum("EKS" in w for w in topo.meta["warnings"]), 1)
 
@@ -468,7 +468,7 @@ class EksTest(AwsTestCase):
         self.build()
         self.overrides[("eks", None)] = lambda c: Overlay(
             c, describe_cluster=denied("DescribeCluster"))
-        topo = self.collect("--region", REGION, "--eks")
+        topo = self.collect("--region", REGION, "network", "eks")
         self.assertEqual(topo.by_kind("eks-cluster"), [])
         self.assertTrue(any("cannot describe EKS cluster platform" in w
                             for w in topo.meta["warnings"]))
@@ -481,18 +481,25 @@ class FlagsTest(AwsTestCase):
         out = io.StringIO()
         with redirect_stdout(out), self.assertRaises(SystemExit):
             parse("--help")
-        for flag in ("--ai", "--iam", "--iam-all", "--eks", "--skip-network"):
-            self.assertIn(flag, out.getvalue())
+        for word in ("network", "bedrock", "iam", "--all-roles", "eks", "resources", "tags"):
+            self.assertIn(word, out.getvalue())
 
-    def test_wanted_flags(self):
-        self.assertEqual(aws._wanted(parse()), frozenset())
-        self.assertEqual(aws._wanted(parse("--ai", "--iam", "--iam-all", "--eks",
-                                           "--skip-network")),
-                         frozenset({"ai", "iam", "iam-all", "eks", "skip-network"}))
+    def test_parts_become_include_names(self):
+        self.assertEqual(parse().include, [])
+        self.assertEqual(parse("network", "bedrock", "iam", "--all-roles", "eks").include,
+                         ["ai", "eks", "iam", "iam-all"])
+        self.assertEqual(parse("bedrock", "iam").include, ["ai", "iam", "skip-network"])
+        self.assertEqual(parse("iam", "instances").include, ["iam", "instances"])  # needs network
+        self.assertEqual(parse("resources", "relationships", "tags", "x.json").output, ["x.json"])
+        for bad, message in ((("--all-roles",), "needs the iam part"),
+                             (("relationships",), "needs the resources part"),
+                             (("netwrk",), "not a part")):
+            with self.assertRaisesRegex(ValueError, message):
+                parse(*bad)
 
     def test_skip_network_leaves_out_vpcs(self):
         self.build_vpc()
-        topo = self.collect("--region", REGION, "--skip-network", "--iam")
+        topo = self.collect("--region", REGION, "iam")
         self.assertEqual(topo.by_kind("vpc"), [])
         topo = self.collect("--region", REGION)
         self.assertEqual(len(topo.by_kind("vpc")), 2)   # the built one and the default
@@ -530,7 +537,7 @@ class PartitionTest(AwsTestCase):
     def test_collects_in_a_govcloud_region(self):
         ec2 = boto3.client("ec2", region_name="us-gov-west-1")
         vpc = ec2.create_vpc(CidrBlock="10.7.0.0/16")["Vpc"]["VpcId"]
-        topo = self.collect("--region", "us-gov-west-1", "--iam", "--eks")
+        topo = self.collect("--region", "us-gov-west-1", "network", "iam", "eks")
         self.assertEqual(topo.meta["regions"], ["us-gov-west-1"])
         self.assertEqual(topo.nodes[f"aws:vpc:{vpc}"].parent, f"aws:region:{ACCOUNT}:us-gov-west-1")
         self.assertNotIn("warnings", topo.meta)

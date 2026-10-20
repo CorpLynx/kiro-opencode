@@ -20,7 +20,7 @@ output "internet_gateway_id" {
 
 output "instance_id" {
   value       = aws_instance.web[0].id
-  description = "EC2 instance; collected by topomapper with --include instances."
+  description = "EC2 instance; collected by topomapper with the instances word."
   sensitive   = false
 }
 
@@ -32,5 +32,5 @@ output "instance_public_ip" {
 
 output "vpc_endpoint_id" {
   value       = aws_vpc_endpoint.s3.id
-  description = "S3 gateway VPC endpoint; collected by topomapper with --include endpoints."
+  description = "S3 gateway VPC endpoint; collected by topomapper with the endpoints word."
 }
